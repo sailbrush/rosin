@@ -8,8 +8,8 @@ documentation = "https://github.com/timtom-dev/rosin"
 homepage = "https://www.rosin.rs/"
 repository = "https://github.com/timtom-dev/rosin"
 readme = "README.md"
-keywords = [""]
-categories = [""]
+keywords = ["GUI"]
+categories = ["gui"]
 license = "MIT"
 
 [dependencies]
