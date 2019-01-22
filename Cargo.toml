@@ -1,0 +1,15 @@
+[package]
+name = "rosin"
+version = "0.1.0"
+authors = ["TimTom <timtom.business@gmail.com>"]
+edition = "2018"
+description = "Rosin is a GUI library for Rust that aims to be extremely easy to use."
+documentation = "https://github.com/timtom-dev/rosin"
+homepage = "https://www.rosin.rs/"
+repository = "https://github.com/timtom-dev/rosin"
+readme = "README.md"
+keywords = [""]
+categories = [""]
+license = "MIT"
+
+[dependencies]
