@@ -1,0 +1,19 @@
+[package]
+name = "calculator"
+version = "0.1.0"
+authors = ["TimTom <timtom.business@gmail.com>"]
+edition = "2018"
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["rlib", "dylib"]
+
+[[bin]]
+name = "calculator"
+path = "src/main.rs"
+
+[profile.release]
+lto = true
+
+[dependencies]
+rosin = { path = "../../" }
