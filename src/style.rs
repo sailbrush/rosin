@@ -1,12 +1,273 @@
 #![allow(clippy::cognitive_complexity)]
 
-use std::{cmp::Ordering, fs};
+use std::time::SystemTime;
+use std::{cmp::Ordering, fmt, fs};
 
-use cssparser::*;
-use rayon::prelude::*;
+use cssparser::{Parser, ParserInput, RuleListParser};
+use druid_shell::piet;
 
-use crate::dom::*;
 use crate::parser::*;
+use crate::tree::*;
+
+macro_rules! apply {
+    (@color, $value:expr, $style:expr, $par_style:ident, $attr:ident) => {
+        match $value {
+            PropertyValue::Initial => {
+                $style.$attr = Style::default().$attr.clone();
+            }
+            PropertyValue::Inherit => {
+                if let Some(parent) = &$par_style {
+                    $style.$attr = parent.$attr.clone();
+                }
+            }
+            PropertyValue::Exact(color) => match color {
+                cssparser::Color::CurrentColor => {
+                    $style.$attr = $style.color.clone();
+                }
+                cssparser::Color::RGBA(rgba) => {
+                    $style.$attr = piet::Color::rgba8(rgba.red, rgba.green, rgba.blue, rgba.alpha);
+                }
+            },
+            _ => debug_assert!(false),
+        };
+    };
+    (@generic, $value:expr, $style:expr, $par_style:ident, $attr:ident) => {
+        match $value {
+            PropertyValue::Initial => {
+                $style.$attr = Style::default().$attr;
+            }
+            PropertyValue::Inherit => {
+                if let Some(parent) = &$par_style {
+                    $style.$attr = parent.$attr;
+                }
+            }
+            PropertyValue::Exact(value) => {
+                $style.$attr = *value;
+            }
+            _ => debug_assert!(false),
+        };
+    };
+    (@generic_opt, $value:expr, $style:expr, $par_style:ident, $attr:ident) => {
+        match $value {
+            PropertyValue::Initial => {
+                $style.$attr = Style::default().$attr;
+            }
+            PropertyValue::Inherit => {
+                if let Some(parent) = &$par_style {
+                    $style.$attr = parent.$attr;
+                }
+            }
+            PropertyValue::Exact(value) => {
+                $style.$attr = Some(*value);
+            }
+            _ => debug_assert!(false),
+        };
+    };
+    (@length, $value:expr, $style:expr, $par_style:ident, $attr:ident) => {
+        match $value {
+            PropertyValue::Initial => {
+                $style.$attr = Style::default().$attr;
+            }
+            PropertyValue::Inherit => {
+                if let Some(parent) = &$par_style {
+                    $style.$attr = parent.$attr;
+                }
+            }
+            PropertyValue::Exact(value) => match value {
+                Length::Em(value) => {
+                    $style.$attr = $style.font_size * value;
+                }
+                Length::Px(value) => {
+                    $style.$attr = *value;
+                }
+            },
+            _ => debug_assert!(false),
+        };
+    };
+    (@length_opt, $value:expr, $style:expr, $par_style:ident, $attr:ident) => {
+        match $value {
+            PropertyValue::Auto => $style.$attr = None,
+            PropertyValue::Initial => {
+                $style.$attr = Style::default().$attr;
+            }
+            PropertyValue::Inherit => {
+                if let Some(parent) = &$par_style {
+                    $style.$attr = parent.$attr;
+                }
+            }
+            PropertyValue::Exact(value) => match value {
+                Length::Em(value) => {
+                    $style.$attr = Some($style.font_size * value);
+                }
+                Length::Px(value) => {
+                    $style.$attr = Some(*value);
+                }
+            },
+        };
+    };
+}
+
+#[macro_export]
+macro_rules! style_new {
+    ($path:expr) => {
+        if cfg!(debug_assertions) {
+            Stylesheet::new_dynamic(concat!(env!("CARGO_MANIFEST_DIR"), $path))
+        } else {
+            Stylesheet::new_static(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), $path)))
+        }
+    };
+}
+
+pub type StyleDefault = fn() -> Style;
+
+#[derive(Debug, Default, Copy, Clone)]
+pub struct Rect {
+    pub top: f32,
+    pub right: f32,
+    pub bottom: f32,
+    pub left: f32,
+}
+
+#[derive(Debug, Default, Copy, Clone)]
+pub struct Size {
+    pub width: f32,
+    pub height: f32,
+}
+
+#[derive(Debug, Default, Copy, Clone)]
+pub struct Point {
+    pub x: f32,
+    pub y: f32,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum AlignContent {
+    Stretch,
+    Center,
+    FlexStart,
+    FlexEnd,
+    SpaceBetween,
+    SpaceAround,
+}
+
+impl AlignContent {
+    pub(crate) fn from_css_token(token: &str) -> Result<Self, ()> {
+        match token {
+            "stretch" => Ok(AlignContent::Stretch),
+            "center" => Ok(AlignContent::Center),
+            "flex-start" => Ok(AlignContent::FlexStart),
+            "flex-end" => Ok(AlignContent::FlexEnd),
+            "space-between" => Ok(AlignContent::SpaceBetween),
+            "space-around" => Ok(AlignContent::SpaceAround),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum AlignItems {
+    Stretch,
+    Center,
+    FlexStart,
+    FlexEnd,
+    Baseline,
+}
+
+impl AlignItems {
+    pub(crate) fn from_css_token(token: &str) -> Result<Self, ()> {
+        match token {
+            "stretch" => Ok(AlignItems::Stretch),
+            "center" => Ok(AlignItems::Center),
+            "flex-start" => Ok(AlignItems::FlexStart),
+            "flex-end" => Ok(AlignItems::FlexEnd),
+            "baseline" => Ok(AlignItems::Baseline),
+            _ => Err(()),
+        }
+    }
+}
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, Clone, Copy)]
+pub enum Cursor {
+    Default,
+    None,
+    ContextMenu,
+    Help,
+    Pointer,
+    Progress,
+    Wait,
+    Cell,
+    Crosshair,
+    Text,
+    VerticalText,
+    Alias,
+    Copy,
+    Move,
+    NoDrop,
+    NotAllowed,
+    Grab,
+    Grabbing,
+    E_Resize,
+    N_Resize,
+    NE_Resize,
+    NW_Resize,
+    S_Resize,
+    SE_Resize,
+    SW_Resize,
+    W_Resize,
+    WE_Resize,
+    NS_Resize,
+    NESW_Resize,
+    NWSE_Resize,
+    ColResize,
+    RowResize,
+    AllScroll,
+    ZoomIn,
+    ZoomOut,
+}
+
+impl Cursor {
+    pub(crate) fn from_css_token(token: &str) -> Result<Self, ()> {
+        match token {
+            "default" => Ok(Cursor::Default),
+            "none" => Ok(Cursor::None),
+            "context-menu" => Ok(Cursor::ContextMenu),
+            "help" => Ok(Cursor::Help),
+            "pointer" => Ok(Cursor::Pointer),
+            "progress" => Ok(Cursor::Progress),
+            "wait" => Ok(Cursor::Wait),
+            "cell" => Ok(Cursor::Cell),
+            "crosshair" => Ok(Cursor::Crosshair),
+            "text" => Ok(Cursor::Text),
+            "vertical-text" => Ok(Cursor::VerticalText),
+            "alias" => Ok(Cursor::Alias),
+            "copy" => Ok(Cursor::Copy),
+            "move" => Ok(Cursor::Move),
+            "no-drop" => Ok(Cursor::NoDrop),
+            "not-allowed" => Ok(Cursor::NotAllowed),
+            "grab" => Ok(Cursor::Grab),
+            "grabbing" => Ok(Cursor::Grabbing),
+            "e-resize" => Ok(Cursor::E_Resize),
+            "n-resize" => Ok(Cursor::N_Resize),
+            "ne-resize" => Ok(Cursor::NE_Resize),
+            "nw-resize" => Ok(Cursor::NW_Resize),
+            "s-resize" => Ok(Cursor::S_Resize),
+            "se-resize" => Ok(Cursor::SE_Resize),
+            "sw-resize" => Ok(Cursor::SW_Resize),
+            "w-resize" => Ok(Cursor::W_Resize),
+            "we-resize" => Ok(Cursor::WE_Resize),
+            "ns-resize" => Ok(Cursor::NS_Resize),
+            "nesw-resize" => Ok(Cursor::NESW_Resize),
+            "nwse-resize" => Ok(Cursor::NWSE_Resize),
+            "col-resize" => Ok(Cursor::ColResize),
+            "row-resize" => Ok(Cursor::RowResize),
+            "all-scroll" => Ok(Cursor::AllScroll),
+            "zoom-in" => Ok(Cursor::ZoomIn),
+            "zoom-out" => Ok(Cursor::ZoomOut),
+            _ => Err(()),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 pub enum FlexDirection {
@@ -16,50 +277,198 @@ pub enum FlexDirection {
     ColumnReverse,
 }
 
-#[derive(Debug, Default, Clone, Copy)]
-pub struct Style {
-    pub color: PropertyValue<cssparser::Color>,
-    pub font_size: PropertyValue<Dimension>,
-
-    pub width: Option<f32>,
-    pub max_width: Option<f32>,
-    pub min_width: Option<f32>,
-
-    pub height: Option<f32>,
-    pub max_height: Option<f32>,
-    pub min_height: Option<f32>,
-
-    pub top: PropertyValue<Dimension>,
-    pub right: PropertyValue<Dimension>,
-    pub bottom: PropertyValue<Dimension>,
-    pub left: PropertyValue<Dimension>,
-
-    pub flex_direction: PropertyValue<FlexDirection>,
-    pub flex_grow: f32,
-
-    pub padding_top: PropertyValue<Dimension>,
-    pub padding_right: PropertyValue<Dimension>,
-    pub padding_bottom: PropertyValue<Dimension>,
-    pub padding_left: PropertyValue<Dimension>,
-
-    pub margin_top: PropertyValue<Dimension>,
-    pub margin_right: PropertyValue<Dimension>,
-    pub margin_bottom: PropertyValue<Dimension>,
-    pub margin_left: PropertyValue<Dimension>,
-
-    pub background_color: PropertyValue<cssparser::Color>,
-    pub border_top_color: PropertyValue<cssparser::Color>,
-    pub border_right_color: PropertyValue<cssparser::Color>,
-    pub border_bottom_color: PropertyValue<cssparser::Color>,
-    pub border_left_color: PropertyValue<cssparser::Color>,
-
-    pub border_top_width: PropertyValue<Dimension>,
-    pub border_right_width: PropertyValue<Dimension>,
-    pub border_bottom_width: PropertyValue<Dimension>,
-    pub border_left_width: PropertyValue<Dimension>,
+impl FlexDirection {
+    pub(crate) fn from_css_token(token: &str) -> Result<Self, ()> {
+        match token {
+            "row" => Ok(FlexDirection::Row),
+            "row-reverse" => Ok(FlexDirection::RowReverse),
+            "column" => Ok(FlexDirection::Column),
+            "column-reverse" => Ok(FlexDirection::ColumnReverse),
+            _ => Err(()),
+        }
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
+pub enum FlexWrap {
+    NoWrap,
+    Wrap,
+    WrapReverse,
+}
+
+impl FlexWrap {
+    pub(crate) fn from_css_token(token: &str) -> Result<Self, ()> {
+        match token {
+            "no-wrap" => Ok(FlexWrap::NoWrap),
+            "wrap" => Ok(FlexWrap::Wrap),
+            "wrap-reverse" => Ok(FlexWrap::WrapReverse),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum JustifyContent {
+    FlexStart,
+    FlexEnd,
+    Center,
+    SpaceBetween,
+    SpaceAround,
+}
+
+impl JustifyContent {
+    pub(crate) fn from_css_token(token: &str) -> Result<Self, ()> {
+        match token {
+            "flex-start" => Ok(JustifyContent::FlexStart),
+            "flex-end" => Ok(JustifyContent::FlexEnd),
+            "center" => Ok(JustifyContent::Center),
+            "space-between" => Ok(JustifyContent::SpaceBetween),
+            "space-around" => Ok(JustifyContent::SpaceAround),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Position {
+    Static,
+    Relative,
+    Fixed,
+}
+
+impl Position {
+    pub(crate) fn from_css_token(token: &str) -> Result<Self, ()> {
+        match token {
+            "static" => Ok(Position::Static),
+            "relative" => Ok(Position::Relative),
+            "fixed" => Ok(Position::Fixed),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Style {
+    pub align_content: AlignContent,
+    pub align_items: AlignItems,
+    pub align_self: AlignItems,
+    pub background_color: piet::Color,
+    pub background_image: Option<piet::FixedGradient>,
+    pub border_bottom_color: piet::Color,
+    pub border_bottom_left_radius: f32,
+    pub border_bottom_right_radius: f32,
+    pub border_bottom_width: f32,
+    pub border_left_color: piet::Color,
+    pub border_left_width: f32,
+    pub border_right_color: piet::Color,
+    pub border_right_width: f32,
+    pub border_top_color: piet::Color,
+    pub border_top_left_radius: f32,
+    pub border_top_right_radius: f32,
+    pub border_top_width: f32,
+    pub bottom: Option<f32>,
+    pub box_shadow_offset_x: f32,
+    pub box_shadow_offset_y: f32,
+    pub box_shadow_blur: f32,
+    pub box_shadow_color: piet::Color,
+    pub box_shadow_inset: Option<bool>,
+    pub color: piet::Color,
+    pub cursor: Cursor,
+    pub flex_basis: Option<f32>,
+    pub flex_direction: FlexDirection,
+    pub flex_grow: f32,
+    pub flex_shrink: f32,
+    pub flex_wrap: FlexWrap,
+    pub font_family: usize,
+    pub font_size: f32,
+    pub font_weight: u32,
+    pub height: Option<f32>,
+    pub justify_content: JustifyContent,
+    pub left: Option<f32>,
+    pub margin_bottom: Option<f32>,
+    pub margin_left: Option<f32>,
+    pub margin_right: Option<f32>,
+    pub margin_top: Option<f32>,
+    pub max_height: Option<f32>,
+    pub max_width: Option<f32>,
+    pub min_height: Option<f32>,
+    pub min_width: Option<f32>,
+    pub opacity: f32,
+    pub order: i32,
+    pub padding_bottom: f32,
+    pub padding_left: f32,
+    pub padding_right: f32,
+    pub padding_top: f32,
+    pub position: Position,
+    pub right: Option<f32>,
+    pub top: Option<f32>,
+    pub width: Option<f32>,
+    pub z_index: i32,
+}
+
+impl Default for Style {
+    fn default() -> Self {
+        Self {
+            align_content: AlignContent::Stretch,
+            align_items: AlignItems::Stretch,
+            align_self: AlignItems::Stretch,
+            background_color: piet::Color::WHITE.with_alpha(0.0),
+            background_image: None,
+            border_bottom_color: piet::Color::BLACK,
+            border_bottom_left_radius: 0.0,
+            border_bottom_right_radius: 0.0,
+            border_bottom_width: 0.0,
+            border_left_color: piet::Color::BLACK,
+            border_left_width: 0.0,
+            border_right_color: piet::Color::BLACK,
+            border_right_width: 0.0,
+            border_top_color: piet::Color::BLACK,
+            border_top_left_radius: 0.0,
+            border_top_right_radius: 0.0,
+            border_top_width: 0.0,
+            bottom: None,
+            box_shadow_offset_x: 0.0,
+            box_shadow_offset_y: 0.0,
+            box_shadow_blur: 0.0,
+            box_shadow_color: piet::Color::BLACK,
+            box_shadow_inset: None,
+            color: piet::Color::BLACK,
+            cursor: Cursor::Default,
+            flex_basis: None,
+            flex_direction: FlexDirection::Row,
+            flex_grow: 0.0,
+            flex_shrink: 1.0,
+            flex_wrap: FlexWrap::NoWrap,
+            font_family: 0,
+            font_size: 0.0,
+            font_weight: 400,
+            height: None,
+            justify_content: JustifyContent::FlexStart,
+            left: None,
+            margin_bottom: Some(0.0),
+            margin_left: Some(0.0),
+            margin_right: Some(0.0),
+            margin_top: Some(0.0),
+            max_height: None,
+            max_width: None,
+            min_height: None,
+            min_width: None,
+            opacity: 1.0,
+            order: 0,
+            padding_bottom: 0.0,
+            padding_left: 0.0,
+            padding_right: 0.0,
+            padding_top: 0.0,
+            position: Position::Static,
+            right: None,
+            top: None,
+            width: None,
+            z_index: 0,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum Selector {
     /// Represents a `*` selector
     Wildcard,
@@ -79,207 +488,23 @@ pub enum Selector {
 
 impl Selector {
     /// Check if this selector applies to a node
-    pub fn check<T>(&self, node: &Node<T>) -> bool {
+    pub(crate) fn check<T>(&self, node: &Node<T>) -> bool {
         match self {
+            Selector::Wildcard => true,
             Selector::Id(selector) => {
-                if let Some(node_id) = &node.css_id {
-                    *selector == *node_id
+                if let Some(id) = node.data.id {
+                    id == selector
                 } else {
                     false
                 }
             }
-            Selector::Class(selector) => {
-                for class in &node.css_classes {
-                    if *selector == *class {
-                        return true;
-                    }
-                }
-                false
-            }
+            Selector::Class(selector) => node.data.css_classes.iter().any(|class| class == selector),
             _ => false,
         }
     }
 }
 
-#[derive(Debug, Copy, Clone)]
-pub enum Unit {
-    None,
-    Px,
-    Em,
-    Pt,
-    Percent,
-}
-
-#[derive(Debug, Copy, Clone)]
-pub enum Either {
-    Float(f32),
-    Int(i32),
-}
-
-#[derive(Debug, Copy, Clone)]
-pub struct Dimension {
-    pub value: Either,
-    pub unit: Unit,
-}
-
-impl Default for Dimension {
-    fn default() -> Self {
-        Dimension {
-            value: Either::Int(0),
-            unit: Unit::None,
-        }
-    }
-}
-
-impl From<&Token<'_>> for Dimension {
-    fn from(token: &Token) -> Self {
-        match token {
-            Token::Number {
-                value, int_value, ..
-            } => {
-                if let Some(int) = int_value {
-                    Dimension {
-                        value: Either::Int(*int),
-                        unit: Unit::None,
-                    }
-                } else {
-                    Dimension {
-                        value: Either::Float(*value),
-                        unit: Unit::None,
-                    }
-                }
-            }
-            Token::Percentage { unit_value, .. } => Dimension {
-                value: Either::Float(*unit_value),
-                unit: Unit::Percent,
-            },
-            Token::Dimension {
-                value,
-                int_value,
-                unit,
-                ..
-            } => {
-                let new_unit = match unit.to_lowercase().as_ref() {
-                    "px" => Unit::Px,
-                    "em" => Unit::Em,
-                    "pt" => Unit::Pt,
-                    "%" => Unit::Percent,
-                    _ => Unit::None,
-                };
-
-                if let Some(int) = int_value {
-                    Dimension {
-                        value: Either::Int(*int),
-                        unit: new_unit,
-                    }
-                } else {
-                    Dimension {
-                        value: Either::Float(*value),
-                        unit: new_unit,
-                    }
-                }
-            }
-            _ => panic!(),
-        }
-    }
-}
-
-#[derive(Debug, Copy, Clone)]
-pub enum PropertyValue<T> {
-    Auto,
-    None,
-    Initial,
-    Inherit,
-    Exact(T),
-}
-
-impl<T> Default for PropertyValue<T> {
-    fn default() -> Self {
-        PropertyValue::None
-    }
-}
-
-#[derive(Debug)]
-pub enum Property {
-    Color(PropertyValue<cssparser::Color>),
-    FontSize(PropertyValue<Dimension>),
-    //FontFamily,
-    //TextAlign,
-
-    //LetterSpacing,
-    //LineHeight,
-    //WordSpacing,
-    //TabWidth,
-    //Cursor,
-
-    //Display,
-    //Float,
-    //BoxSizing,
-    Width(PropertyValue<Dimension>),
-    MaxWidth(PropertyValue<Dimension>),
-    MinWidth(PropertyValue<Dimension>),
-
-    Height(PropertyValue<Dimension>),
-    MaxHeight(PropertyValue<Dimension>),
-    MinHeight(PropertyValue<Dimension>),
-
-    //Position,
-    Top(PropertyValue<Dimension>),
-    Right(PropertyValue<Dimension>),
-    Bottom(PropertyValue<Dimension>),
-    Left(PropertyValue<Dimension>),
-
-    //FlexWrap,
-    FlexDirection(PropertyValue<FlexDirection>),
-    FlexGrow(PropertyValue<Dimension>),
-    //FlexShrink,
-    //JustifyContent,
-    //AlignItems,
-    //AlignContent,
-
-    //OverflowX,
-    //OverflowY,
-    PaddingTop(PropertyValue<Dimension>),
-    PaddingRight(PropertyValue<Dimension>),
-    PaddingBottom(PropertyValue<Dimension>),
-    PaddingLeft(PropertyValue<Dimension>),
-
-    MarginTop(PropertyValue<Dimension>),
-    MarginRight(PropertyValue<Dimension>),
-    MarginBottom(PropertyValue<Dimension>),
-    MarginLeft(PropertyValue<Dimension>),
-
-    //Background,
-    //BackgroundImage,
-    BackgroundColor(PropertyValue<cssparser::Color>),
-    //BackgroundPosition,
-    //BackgroundSize,
-    //BackgroundRepeat,
-
-    //BorderTopLeftRadius,
-    //BorderTopRightRadius,
-    //BorderBottomLeftRadius,
-    //BorderBottomRightRadius,
-    BorderTopColor(PropertyValue<cssparser::Color>),
-    BorderRightColor(PropertyValue<cssparser::Color>),
-    BorderBottomColor(PropertyValue<cssparser::Color>),
-    BorderLeftColor(PropertyValue<cssparser::Color>),
-
-    //BorderTopStyle,
-    //BorderRightStyle,
-    //BorderBottomStyle,
-    //BorderLeftStyle,
-    BorderTopWidth(PropertyValue<Dimension>),
-    BorderRightWidth(PropertyValue<Dimension>),
-    BorderBottomWidth(PropertyValue<Dimension>),
-    BorderLeftWidth(PropertyValue<Dimension>),
-    //BoxShadowTop,
-    //BoxShadowRight,
-    //BoxShadowBottom,
-    //BoxShadowLeft,
-}
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Rule {
     pub specificity: u32,
     pub selectors: Vec<Selector>,
@@ -306,36 +531,18 @@ impl PartialOrd for Rule {
     }
 }
 
-#[macro_export]
-macro_rules! style_new {
-    ($path:expr) => {
-        if cfg!(debug_assertions) {
-            Stylesheet::new_dynamic(concat!(env!("CARGO_MANIFEST_DIR"), $path))
-        } else {
-            Stylesheet::new_static(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), $path)))
-        }
-    };
-}
-
-#[derive(Debug)]
+#[derive(Debug, Default, Clone)]
 pub struct Stylesheet {
-    pub path: Option<&'static str>,
-    pub rules: Vec<Rule>,
-}
-
-impl Default for Stylesheet {
-    fn default() -> Self {
-        Self {
-            path: None,
-            rules: Vec::with_capacity(0),
-        }
-    }
+    path: Option<&'static str>,
+    last_modified: Option<SystemTime>,
+    pub(crate) rules: Vec<Rule>,
 }
 
 impl Stylesheet {
     pub fn new_static(text: &'static str) -> Self {
         Self {
             path: None,
+            last_modified: None,
             rules: Self::parse(text),
         }
     }
@@ -343,16 +550,39 @@ impl Stylesheet {
     pub fn new_dynamic(path: &'static str) -> Self {
         let mut new = Self {
             path: Some(path),
-            rules: Vec::with_capacity(0),
+            last_modified: None,
+            rules: Vec::new(),
         };
         new.reload();
         new
     }
 
-    pub fn reload(&mut self) {
-        let path = self.path.unwrap();
-        let contents = fs::read_to_string(path).expect("[Rosin] Failed to read stylesheet.");
-        self.rules = Self::parse(&contents);
+    // TODO right now it defaults to reloading, but should probably switch to poll() like libloader. Maybe?
+    pub fn reload(&mut self) -> bool {
+        if let Some(path) = self.path {
+            let mut should_reload = true;
+
+            if let Ok(metadata) = fs::metadata(&path) {
+                if let Ok(last_modified) = metadata.modified() {
+                    if let Some(prev_last_modified) = self.last_modified {
+                        if last_modified <= prev_last_modified {
+                            should_reload = false;
+                        }
+                    }
+                    self.last_modified = Some(last_modified);
+                }
+            }
+
+            if should_reload {
+                // TODO consider just printing an error instead of panicing
+                let contents = fs::read_to_string(path).expect("[Rosin] Failed to read stylesheet");
+                self.rules = Self::parse(&contents);
+            }
+
+            should_reload
+        } else {
+            false
+        }
     }
 
     /// Parse CSS text into rule list
@@ -369,309 +599,317 @@ impl Stylesheet {
         rules_list
     }
 
-    /// Perform selector matching for a Dom tree
-    pub fn style<T>(&self, dom: &Dom<T>) -> Vec<Style> {
-        dom.arena
-            .par_iter()
-            .enumerate()
-            .map(|(id, _node)| {
-                // TODO use hashmap to store rules?
-                let mut relevant_rules = self
-                    .rules
-                    .iter()
-                    .filter(|rule| {
-                        // Find matching rules
-                        let mut direct = false;
-                        let mut cmp_node = Some(id);
-                        for (i, selector) in rule.selectors.iter().rev().enumerate() {
+    /// Perform selector matching and apply styles to a tree
+    pub(crate) fn style<T: fmt::Debug>(&self, tree: &mut [Node<T>]) {
+        for id in 0..tree.len() {
+            // TODO hash map
+            let mut relevant_rules = self
+                .rules
+                .iter()
+                .filter(|rule| {
+                    // Find matching rules
+                    let mut direct = false;
+                    let mut cmp_node = Some(id);
+                    for (i, selector) in rule.selectors.iter().rev().enumerate() {
+                        loop {
                             if let Some(n) = cmp_node {
-                                loop {
-                                    if i == 0 {
-                                        if !selector.check(&dom.arena[n]) {
-                                            return false;
-                                        } else {
-                                            cmp_node = dom.arena[n].parent;
+                                if i == 0 {
+                                    if !selector.check(&tree[n]) {
+                                        return false;
+                                    } else {
+                                        cmp_node = if n != 0 { Some(tree[n].parent) } else { None };
+                                        break; // Next selector
+                                    }
+                                } else {
+                                    match selector {
+                                        Selector::Wildcard => {
+                                            cmp_node = if n != 0 { Some(tree[n].parent) } else { None };
+                                            direct = false;
                                             break; // Next selector
                                         }
-                                    } else {
-                                        match selector {
-                                            Selector::Wildcard => {
+                                        Selector::Id(_) | Selector::Class(_) => {
+                                            cmp_node = if n != 0 { Some(tree[n].parent) } else { None };
+
+                                            if selector.check(&tree[n]) {
                                                 direct = false;
-                                                cmp_node = dom.arena[n].parent;
                                                 break; // Next selector
+                                            } else if direct {
+                                                return false; // Must match, but didn't
                                             }
-                                            Selector::Id(_) | Selector::Class(_) => {
-                                                if selector.check(&dom.arena[n]) {
-                                                    direct = false;
-                                                    cmp_node = dom.arena[n].parent;
-                                                    break; // Next selector
-                                                } else if direct {
-                                                    return false;
-                                                }
-                                            }
-                                            Selector::DirectChildren => {
-                                                direct = true;
-                                                break; // Next selector
-                                            }
-                                            Selector::Children => {
-                                                direct = false;
-                                                cmp_node = dom.arena[n].parent;
-                                                break; // Next selector
-                                            }
+
+                                            direct = false;
+                                            continue; // Don't go to the next selector, just move up the tree
+                                        }
+                                        Selector::DirectChildren => {
+                                            direct = true;
+                                            break; // Next selector
+                                        }
+                                        Selector::Children => {
+                                            direct = false;
+                                            break; // Next selector
                                         }
                                     }
                                 }
                             } else {
-                                return false; // Made it to the leftmost selector unsasitfied
-                            }
-                        }
-                        true
-                    })
-                    .collect::<Vec<&Rule>>();
-
-                // Apply rules in order of specificity
-                let mut computed_style = Style::default();
-                relevant_rules.sort();
-                relevant_rules.iter().for_each(|rule| {
-                    for property in &rule.properties {
-                        match property {
-                            Property::Color(value) => {
-                                computed_style.color = *value;
-                            }
-                            Property::FontSize(value) => {
-                                computed_style.font_size = *value;
-                            }
-
-                            //FontFamily,
-                            //TextAlign,
-
-                            //LetterSpacing,
-                            //LineHeight,
-                            //WordSpacing,
-                            //TabWidth,
-                            //Cursor,
-
-                            //Display,
-                            //Float,
-                            //BoxSizing,
-                            Property::Width(value) => {
-                                computed_style.width = match value {
-                                    PropertyValue::Auto |
-                                    PropertyValue::None |
-                                    PropertyValue::Initial => { None },
-                                    // TODO inherit properly
-                                    PropertyValue::Inherit => { Some(0.0) },
-                                    PropertyValue::Exact(flex_grow) => {
-                                        match flex_grow.value {
-                                            Either::Float(value) => { Some(value) }
-                                            Either::Int(value) => {
-                                                Some(value as f32)
-                                            }
-                                        }
-                                    },
-                                };
-                            }
-                            Property::MaxWidth(value) => {
-                                computed_style.max_width = match value {
-                                    PropertyValue::Auto |
-                                    PropertyValue::None |
-                                    PropertyValue::Initial => { None },
-                                    // TODO inherit properly
-                                    PropertyValue::Inherit => { Some(0.0) },
-                                    PropertyValue::Exact(flex_grow) => {
-                                        match flex_grow.value {
-                                            Either::Float(value) => { Some(value) }
-                                            Either::Int(value) => {
-                                                Some(value as f32)
-                                            }
-                                        }
-                                    },
-                                };
-                            }
-                            Property::MinWidth(value) => {
-                                computed_style.min_width = match value {
-                                    PropertyValue::Auto |
-                                    PropertyValue::None |
-                                    PropertyValue::Initial => { None },
-                                    // TODO inherit properly
-                                    PropertyValue::Inherit => { Some(0.0) },
-                                    PropertyValue::Exact(flex_grow) => {
-                                        match flex_grow.value {
-                                            Either::Float(value) => { Some(value) }
-                                            Either::Int(value) => {
-                                                Some(value as f32)
-                                            }
-                                        }
-                                    },
-                                };
-                            }
-                            Property::Height(value) => {
-                                computed_style.height = match value {
-                                    PropertyValue::Auto |
-                                    PropertyValue::None |
-                                    PropertyValue::Initial => { None },
-                                    // TODO inherit properly
-                                    PropertyValue::Inherit => { Some(0.0) },
-                                    PropertyValue::Exact(flex_grow) => {
-                                        match flex_grow.value {
-                                            Either::Float(value) => { Some(value) }
-                                            Either::Int(value) => {
-                                                Some(value as f32)
-                                            }
-                                        }
-                                    },
-                                };
-                            }
-                            Property::MaxHeight(value) => {
-                                computed_style.max_height  = match value {
-                                    PropertyValue::Auto |
-                                    PropertyValue::None |
-                                    PropertyValue::Initial => { None },
-                                    // TODO inherit properly
-                                    PropertyValue::Inherit => { Some(0.0) },
-                                    PropertyValue::Exact(flex_grow) => {
-                                        match flex_grow.value {
-                                            Either::Float(value) => { Some(value) }
-                                            Either::Int(value) => {
-                                                Some(value as f32)
-                                            }
-                                        }
-                                    },
-                                };
-                            }
-                            Property::MinHeight(value) => {
-                                computed_style.min_height = match value {
-                                    PropertyValue::Auto |
-                                    PropertyValue::None |
-                                    PropertyValue::Initial => { None },
-                                    // TODO inherit properly
-                                    PropertyValue::Inherit => { Some(0.0) },
-                                    PropertyValue::Exact(flex_grow) => {
-                                        match flex_grow.value {
-                                            Either::Float(value) => { Some(value) }
-                                            Either::Int(value) => {
-                                                Some(value as f32)
-                                            }
-                                        }
-                                    },
-                                };
-                            }
-
-                            //Position,
-                            Property::Top(value) => {
-                                computed_style.top = *value;
-                            }
-                            Property::Right(value) => {
-                                computed_style.right = *value;
-                            }
-                            Property::Bottom(value) => {
-                                computed_style.bottom = *value;
-                            }
-                            Property::Left(value) => {
-                                computed_style.left = *value;
-                            }
-
-                            //FlexWrap,
-                            Property::FlexDirection(value) => {
-                                computed_style.flex_direction = *value;
-                            }
-                            Property::FlexGrow(value) => {
-                                computed_style.flex_grow = match value {
-                                    PropertyValue::Auto |
-                                    PropertyValue::None |
-                                    PropertyValue::Initial => { 0.0 },
-                                    // TODO inherit properly
-                                    PropertyValue::Inherit => { 0.0 },
-                                    PropertyValue::Exact(flex_grow) => {
-                                        match flex_grow.value {
-                                            Either::Float(value) => { value }
-                                            Either::Int(value) => {
-                                                value as f32
-                                            }
-                                        }
-                                    },
-                                }
-                            }
-                            //FlexShrink,
-                            //JustifyContent,
-                            //AlignItems,
-                            //AlignContent,
-
-                            //OverflowX,
-                            //OverflowY,
-                            Property::PaddingTop(value) => {
-                                computed_style.padding_top = *value;
-                            }
-                            Property::PaddingRight(value) => {
-                                computed_style.padding_right = *value;
-                            }
-                            Property::PaddingBottom(value) => {
-                                computed_style.padding_bottom = *value;
-                            }
-                            Property::PaddingLeft(value) => {
-                                computed_style.padding_left = *value;
-                            }
-                            Property::MarginTop(value) => {
-                                computed_style.margin_top = *value;
-                            }
-                            Property::MarginRight(value) => {
-                                computed_style.margin_right = *value;
-                            }
-                            Property::MarginBottom(value) => {
-                                computed_style.margin_bottom = *value;
-                            }
-                            Property::MarginLeft(value) => {
-                                computed_style.margin_left = *value;
-                            }
-
-                            //Background,
-                            //BackgroundImage,
-                            Property::BackgroundColor(value) => {
-                                computed_style.background_color = *value;
-                            }
-
-                            //BackgroundPosition,
-                            //BackgroundSize,
-                            //BackgroundRepeat,
-
-                            //BorderTopLeftRadius,
-                            //BorderTopRightRadius,
-                            //BorderBottomLeftRadius,
-                            //BorderBottomRightRadius,
-                            Property::BorderTopColor(value) => {
-                                computed_style.border_top_color = *value;
-                            }
-                            Property::BorderRightColor(value) => {
-                                computed_style.border_right_color = *value;
-                            }
-                            Property::BorderBottomColor(value) => {
-                                computed_style.border_bottom_color = *value;
-                            }
-                            Property::BorderLeftColor(value) => {
-                                computed_style.border_left_color = *value;
-                            }
-
-                            //BorderTopStyle,
-                            //BorderRightStyle,
-                            //BorderBottomStyle,
-                            //BorderLeftStyle,
-                            Property::BorderTopWidth(value) => {
-                                computed_style.border_top_width = *value;
-                            }
-                            Property::BorderRightWidth(value) => {
-                                computed_style.border_right_width = *value;
-                            }
-                            Property::BorderBottomWidth(value) => {
-                                computed_style.border_bottom_width = *value;
-                            }
-                            Property::BorderLeftWidth(value) => {
-                                computed_style.border_left_width = *value;
+                                return false; // Made it to the root unsasitfied
                             }
                         }
                     }
-                });
-                computed_style
-            })
-            .collect::<Vec<Style>>()
+                    true // All selectors satisfied
+                })
+                .collect::<Vec<&Rule>>();
+
+            let par_style: Option<Style> = if id == 0 {
+                None
+            } else {
+                Some(tree[tree[id].parent].style.clone())
+            };
+
+            relevant_rules.sort();
+
+            // First find the font size and color (Used for relative lengths and currentColor)
+            let mut font_set = false;
+            let mut color_set = false;
+            relevant_rules.iter().for_each(|rule| {
+                if font_set && color_set {
+                    return;
+                }
+                for property in rule.properties.iter().rev() {
+                    if font_set && color_set {
+                        break;
+                    }
+                    match property {
+                        Property::FontSize(value) => {
+                            if font_set {
+                                continue;
+                            }
+                            match value {
+                                PropertyValue::Inherit => {
+                                    if let Some(parent) = &par_style {
+                                        tree[id].style.font_size = parent.font_size;
+                                    }
+                                }
+                                PropertyValue::Exact(size) => match size {
+                                    Length::Px(value) => {
+                                        tree[id].style.font_size = *value;
+                                    }
+                                    Length::Em(value) => {
+                                        if let Some(parent) = &par_style {
+                                            tree[id].style.font_size = parent.font_size * value;
+                                        } else {
+                                            tree[id].style.font_size *= value;
+                                        }
+                                    }
+                                },
+                                _ => {}
+                            };
+                            font_set = true;
+                        }
+                        Property::Color(value) => {
+                            if color_set {
+                                continue;
+                            }
+                            match value {
+                                PropertyValue::Initial => tree[id].style.color = Style::default().color,
+                                PropertyValue::Exact(color) => {
+                                    if let cssparser::Color::RGBA(rgba) = color {
+                                        tree[id].style.color =
+                                            piet::Color::rgba8(rgba.red, rgba.green, rgba.blue, rgba.alpha);
+                                    }
+                                }
+                                _ => {
+                                    // Inherited by default
+                                    if let Some(parent) = &par_style {
+                                        tree[id].style.color = parent.color.clone();
+                                    }
+                                }
+                            }
+                            color_set = true;
+                        }
+                        _ => {}
+                    }
+                }
+            });
+            if !font_set {
+                if let Some(parent) = &par_style {
+                    tree[id].style.font_size = parent.font_size;
+                }
+            }
+            if !color_set {
+                if let Some(parent) = &par_style {
+                    tree[id].style.color = parent.color.clone();
+                }
+            }
+
+            relevant_rules.iter().for_each(|rule| {
+                for property in &rule.properties {
+                    match property {
+                        Property::FontSize(_) => { /* already handled */ }
+                        Property::Color(_) => { /* already handled */ }
+
+                        Property::AlignContent(value) => {
+                            apply!(@generic, value, tree[id].style, par_style, align_content);
+                        }
+                        Property::AlignItems(value) => {
+                            apply!(@generic, value, tree[id].style, par_style, align_items);
+                        }
+                        Property::AlignSelf(value) => {
+                            apply!(@generic, value, tree[id].style, par_style, align_self);
+                        }
+                        Property::BackgroundColor(value) => {
+                            apply!(@color, value, tree[id].style, par_style, background_color);
+                        }
+                        Property::BackgroundImage(_) => {
+                            todo!();
+                            //apply!(@generic_opt, value, arena[id].style, par_style, background_image);
+                        }
+                        Property::BorderBottomColor(value) => {
+                            apply!(@color, value, tree[id].style, par_style, border_bottom_color);
+                        }
+                        Property::BorderBottomLeftRadius(value) => {
+                            apply!(@length, value, tree[id].style, par_style, border_bottom_left_radius);
+                        }
+                        Property::BorderBottomRightRadius(value) => {
+                            apply!(@length, value, tree[id].style, par_style, border_bottom_right_radius);
+                        }
+                        Property::BorderBottomWidth(value) => {
+                            apply!(@length, value, tree[id].style, par_style, border_bottom_width);
+                        }
+                        Property::BorderLeftColor(value) => {
+                            apply!(@color, value, tree[id].style, par_style, border_left_color);
+                        }
+                        Property::BorderLeftWidth(value) => {
+                            apply!(@length, value, tree[id].style, par_style, border_left_width);
+                        }
+                        Property::BorderRightColor(value) => {
+                            apply!(@color, value, tree[id].style, par_style, border_right_color);
+                        }
+                        Property::BorderRightWidth(value) => {
+                            apply!(@length, value, tree[id].style, par_style, border_right_width);
+                        }
+                        Property::BorderTopColor(value) => {
+                            apply!(@color, value, tree[id].style, par_style, border_top_color);
+                        }
+                        Property::BorderTopLeftRadius(value) => {
+                            apply!(@length, value, tree[id].style, par_style, border_top_left_radius);
+                        }
+                        Property::BorderTopRightRadius(value) => {
+                            apply!(@length, value, tree[id].style, par_style, border_top_right_radius);
+                        }
+                        Property::BorderTopWidth(value) => {
+                            apply!(@length, value, tree[id].style, par_style, border_top_width);
+                        }
+                        Property::Bottom(value) => {
+                            apply!(@length_opt, value, tree[id].style, par_style, bottom);
+                        }
+                        Property::BoxShadowOffsetX(value) => {
+                            apply!(@length, value, tree[id].style, par_style, box_shadow_offset_x);
+                        }
+                        Property::BoxShadowOffsetY(value) => {
+                            apply!(@length, value, tree[id].style, par_style, box_shadow_offset_y);
+                        }
+                        Property::BoxShadowBlur(value) => {
+                            apply!(@length, value, tree[id].style, par_style, box_shadow_blur);
+                        }
+                        Property::BoxShadowColor(value) => {
+                            apply!(@color, value, tree[id].style, par_style, box_shadow_color);
+                        }
+                        Property::BoxShadowInset(value) => {
+                            apply!(@generic_opt, value, tree[id].style, par_style, box_shadow_inset);
+                        }
+                        Property::Cursor(value) => {
+                            apply!(@generic, value, tree[id].style, par_style, cursor);
+                        }
+                        Property::FlexBasis(value) => {
+                            apply!(@length_opt, value, tree[id].style, par_style, flex_basis);
+                        }
+                        Property::FlexDirection(value) => {
+                            apply!(@generic, value, tree[id].style, par_style, flex_direction);
+                        }
+                        Property::FlexGrow(value) => {
+                            apply!(@generic, value, tree[id].style, par_style, flex_grow);
+                        }
+                        Property::FlexShrink(value) => {
+                            apply!(@generic, value, tree[id].style, par_style, flex_shrink);
+                        }
+                        Property::FlexWrap(value) => {
+                            apply!(@generic, value, tree[id].style, par_style, flex_wrap);
+                        }
+                        Property::FontFamily(value) => {
+                            apply!(@generic, value, tree[id].style, par_style, font_family);
+                        }
+                        Property::FontWeight(value) => {
+                            apply!(@generic, value, tree[id].style, par_style, font_weight);
+                        }
+                        Property::Height(value) => {
+                            apply!(@length_opt, value, tree[id].style, par_style, height);
+                        }
+                        Property::JustifyContent(value) => {
+                            apply!(@generic, value, tree[id].style, par_style, justify_content);
+                        }
+                        Property::Left(value) => {
+                            apply!(@length_opt, value, tree[id].style, par_style, left);
+                        }
+                        Property::MarginBottom(value) => {
+                            apply!(@length_opt, value, tree[id].style, par_style, margin_bottom);
+                        }
+                        Property::MarginLeft(value) => {
+                            apply!(@length_opt, value, tree[id].style, par_style, margin_left);
+                        }
+                        Property::MarginRight(value) => {
+                            apply!(@length_opt, value, tree[id].style, par_style, margin_right);
+                        }
+                        Property::MarginTop(value) => {
+                            apply!(@length_opt, value, tree[id].style, par_style, margin_top);
+                        }
+                        Property::MaxHeight(value) => {
+                            apply!(@length_opt, value, tree[id].style, par_style, max_height);
+                        }
+                        Property::MaxWidth(value) => {
+                            apply!(@length_opt, value, tree[id].style, par_style, max_width);
+                        }
+                        Property::MinHeight(value) => {
+                            apply!(@length_opt, value, tree[id].style, par_style, min_height);
+                        }
+                        Property::MinWidth(value) => {
+                            apply!(@length_opt, value, tree[id].style, par_style, min_width);
+                        }
+                        Property::Opacity(value) => {
+                            apply!(@generic, value, tree[id].style, par_style, opacity);
+                        }
+                        Property::Order(value) => {
+                            apply!(@generic, value, tree[id].style, par_style, order);
+                        }
+                        Property::PaddingBottom(value) => {
+                            apply!(@length, value, tree[id].style, par_style, padding_bottom);
+                        }
+                        Property::PaddingLeft(value) => {
+                            apply!(@length, value, tree[id].style, par_style, padding_left);
+                        }
+                        Property::PaddingRight(value) => {
+                            apply!(@length, value, tree[id].style, par_style, padding_right);
+                        }
+                        Property::PaddingTop(value) => {
+                            apply!(@length, value, tree[id].style, par_style, padding_top);
+                        }
+                        Property::Position(value) => {
+                            apply!(@generic, value, tree[id].style, par_style, position);
+                        }
+                        Property::Right(value) => {
+                            apply!(@length_opt, value, tree[id].style, par_style, right);
+                        }
+                        Property::Top(value) => {
+                            apply!(@length_opt, value, tree[id].style, par_style, top);
+                        }
+                        Property::Width(value) => {
+                            apply!(@length_opt, value, tree[id].style, par_style, width);
+                        }
+                        Property::ZIndex(value) => {
+                            apply!(@generic, value, tree[id].style, par_style, z_index);
+                        }
+                    }
+                }
+            });
+        }
     }
 }

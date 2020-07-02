@@ -1,33 +1,29 @@
-use std::{
-    cell::RefCell,
-    env,
-    error::Error,
-    fmt,
-    fmt::Debug,
-    fs,
-    path::Path,
-    rc::Rc,
-    sync::Arc,
-    sync::Weak,
-    thread,
-    thread::JoinHandle,
-    time::{Duration, Instant},
-};
+use crate::libloader::LibLoader;
+use crate::libloader::DYLIB_EXT;
+use std::any::Any;
+use std::collections::HashMap;
+use std::time::Instant;
+use std::{cell::RefCell, env, error, fmt, path::Path, rc::Rc, time::Duration};
 
-use glutin::EventsLoop;
-use libloading::Library;
+use bumpalo::{collections::Vec as BumpVec, Bump};
 
-use crate::dom::*;
+use druid_shell::kurbo::Vec2;
+use druid_shell::piet::Piet;
+use druid_shell::{Application, Cursor, KeyEvent, KeyModifiers, MouseEvent, TimerToken, WinHandler, WindowHandle};
+
+use crate::layout::Layout;
+use crate::render::render;
 use crate::style::*;
 use crate::view::*;
-use crate::window::{WindowBuilder, *};
+use crate::window::*;
 
-pub const MAX_FRAME_TIME_MICRO: u64 = 1_000_000 / 60;
-
-#[derive(Debug)]
+#[non_exhaustive]
+#[derive(Debug, PartialEq, Eq)]
 pub enum On {
-    Click,
+    MouseDown,
+    MouseUp,
     Hover,
+    Update, // Called every frame so animations can be updated
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -37,271 +33,301 @@ pub enum Redraw {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum StopDaemon {
+pub enum StopTask {
     Yes,
     No,
 }
 
-pub type Callback<T> = (fn(&mut T, app: &mut App<T>) -> Redraw);
-pub type DaemonCallback<T> = (fn(&mut T, &mut App<T>) -> (Redraw, StopDaemon));
-pub type EventCallback = (fn(&glutin::Event) -> Redraw);
+pub type TaskCallback<T> = fn(&mut T, &mut App) -> (Redraw, StopTask);
+
+struct Task<T> {
+    callback: TaskCallback<T>,
+    frequency: Duration,
+}
+
+pub struct App {
+    pub(crate) loader: Option<LibLoader>,
+    pub(crate) stylesheet: Stylesheet,
+}
+
+impl App {
+    fn new(stylesheet: Stylesheet) -> Self {
+        Self {
+            loader: None,
+            stylesheet,
+        }
+    }
+}
 
 #[derive(Default)]
-pub struct CallbackList<T> {
-    list: Vec<(On, Callback<T>)>,
+pub struct AppLauncher<T> {
+    windows: Vec<WindowDesc<T>>,
+    style: Stylesheet,
 }
 
-impl<T> fmt::Debug for CallbackList<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "CallbackList[{}]", self.list.len())
-    }
-}
-
-impl<T> CallbackList<T> {
+impl<T: std::fmt::Debug + 'static> AppLauncher<T> {
     pub fn new() -> Self {
-        CallbackList { list: Vec::new() }
-    }
-
-    pub fn insert(&mut self, event_type: On, callback: fn(&mut T, app: &mut App<T>) -> Redraw) {
-        self.list.push((event_type, callback));
-    }
-}
-
-pub struct Daemon<T> {
-    pub callback: DaemonCallback<T>,
-    pub interval: Duration,
-    pub last_run: Option<Instant>,
-    pub end_time: Option<Instant>,
-}
-
-pub struct Task {
-    pub join_flag: Weak<()>,
-    pub handle: RefCell<Option<JoinHandle<()>>>,
-}
-
-pub struct App<T> {
-    pub(crate) stylesheet: Stylesheet,
-    pub(crate) tasks: Vec<Task>,
-    pub(crate) daemons: Rc<RefCell<Vec<Daemon<T>>>>,
-    pub(crate) new_daemons: Vec<Daemon<T>>,
-    pub(crate) window_mgr: WindowManager<T>,
-    pub(crate) events_loop: EventsLoop,
-}
-
-impl<T> Default for App<T> {
-    fn default() -> Self {
         Self {
-            stylesheet: Stylesheet::default(),
-            tasks: Vec::new(),
-            daemons: Rc::new(RefCell::new(Vec::new())),
-            new_daemons: Vec::new(),
-            window_mgr: WindowManager::default(),
-            events_loop: EventsLoop::new(),
+            windows: Vec::new(),
+            style: Stylesheet::default(),
         }
+    }
+
+    pub fn add_window(mut self, desc: WindowDesc<T>) -> Self {
+        self.windows.push(desc);
+        self
+    }
+
+    pub fn use_style(mut self, style: Stylesheet) -> Self {
+        self.style = style;
+        self
+    }
+
+    pub fn launch(self, store: T) -> Result<(), Box<dyn error::Error>> {
+        let mut druid_app = Application::new(None);
+        let store_ref = Rc::new(RefCell::new(store));
+        let mut app = App::new(self.style);
+
+        if cfg!(debug_assertions) && cfg!(feature = "hot-reload") {
+            // Use the name of the current binary to find the library
+            let lib_path = env::current_dir()?.join(Path::new(&env::args().next().unwrap()).with_extension(DYLIB_EXT));
+            app.loader = Some(LibLoader::new(lib_path).expect("[Rosin] Hot-reload: Failed to init"));
+        }
+
+        let app_ref: Rc<RefCell<App>> = Rc::new(RefCell::new(app));
+
+        for mut window in self.windows {
+            let handler = Box::new(RosinHandler::new(
+                window.view,
+                Rc::clone(&store_ref),
+                Rc::clone(&app_ref),
+            ));
+            window.builder.set_handler(handler);
+            window.builder.build()?.show();
+        }
+
+        druid_app.run();
+        Ok(())
     }
 }
 
-impl<T> App<T> {
-    pub fn new() -> Self {
-        Self::default()
-    }
+struct RosinHandler<T> {
+    handle: WindowHandle,
+    size: (f64, f64),
+    tasks: HashMap<TimerToken, Task<T>>,
+    bump: Bump,
+    should_redraw: bool,
+    should_relayout: bool,
+    view: View<T>,
+    store: Rc<RefCell<T>>,
+    app: Rc<RefCell<App>>,
+}
 
-    pub fn set_style(&mut self, stylesheet: Stylesheet) {
-        self.stylesheet = stylesheet;
-    }
-
-    pub fn create_window(
-        &mut self,
-        builder: WindowBuilder<T>,
-    ) -> Result<glutin::WindowId, Box<dyn Error>> {
-        self.window_mgr.create(builder, &self.events_loop)
-    }
-
-    pub fn spawn_task<F>(&mut self, func: F)
-    where
-        F: FnOnce() + Send + 'static,
-    {
-        let thread_arc = Arc::new(());
-        let join_flag = Arc::downgrade(&thread_arc);
-
-        let join_handle = thread::spawn(move || {
-            let _ = thread_arc;
-            func();
-        });
-
-        let task_info = Task {
-            join_flag,
-            handle: RefCell::new(Some(join_handle)),
-        };
-
-        self.tasks.push(task_info);
-    }
-
-    pub fn add_daemon(
-        &mut self,
-        interval: Option<Duration>,
-        end_time: Option<Instant>,
-        callback: DaemonCallback<T>,
-    ) {
-        self.new_daemons.push(Daemon {
-            callback,
-            interval: interval.unwrap_or_else(|| Duration::new(0, 0)),
-            last_run: None,
-            end_time,
-        });
-    }
-
-    pub fn run(mut self, mut store: T) {
-        println!("{:#?}", self.stylesheet);
-        // DEBUG: Reload styles every 500 miliseconds
-        if cfg!(debug_assertions) {
-            self.add_daemon(
-                Some(Duration::from_millis(500)),
-                None,
-                |_: &mut T, app: &mut App<T>| {
-                    app.stylesheet.reload();
-                    (Redraw::Yes, StopDaemon::No)
-                },
-            );
+impl<T> RosinHandler<T> {
+    fn new(view: View<T>, store: Rc<RefCell<T>>, app: Rc<RefCell<App>>) -> Self {
+        Self {
+            handle: WindowHandle::default(),
+            size: (0.0, 0.0),
+            tasks: HashMap::new(),
+            bump: Bump::default(),
+            should_redraw: true,
+            should_relayout: true,
+            view,
+            store,
+            app,
         }
+    }
 
-        // DEBUG: Load app logic dynamically
-        let lib_path = Path::new(&env::args().next().unwrap()).with_extension(DYLIB_EXT);
-        let lib_path = env::current_dir().unwrap().join(lib_path);
-        let mut temp_ext: u32 = 0;
-        let mut temp_path = lib_path.with_extension(temp_ext.to_string());
-        let mut lib = None;
-        let mut last_modified = None;
+    fn add_task(&mut self, frequency: Duration, callback: TaskCallback<T>) {
+        let deadline = std::time::Instant::now() + frequency;
+        let token = self.handle.request_timer(deadline);
+
+        self.tasks.insert(token, Task { callback, frequency });
+    }
+}
+
+impl<T: fmt::Debug> WinHandler for RosinHandler<T> {
+    fn connect(&mut self, handle: &WindowHandle) {
+        self.handle = handle.clone();
+
         if cfg!(debug_assertions) {
-            if let Ok(metadata) = fs::metadata(&lib_path) {
-                if let Ok(modified) = metadata.modified() {
-                    last_modified = Some(modified);
-                    fs::copy(&lib_path, &temp_path).unwrap();
-                    lib = Some(Library::new(&temp_path).unwrap());
-                }
-            }
-        }
+            self.add_task(Duration::from_millis(100), |_, app| {
+                let mut redraw = if app.stylesheet.reload() {
+                    Redraw::Yes
+                } else {
+                    Redraw::No
+                };
 
-        // Main loop
-        while !self.window_mgr.is_empty() {
-            let prev_frame = Instant::now();
-            let mut redraw = Redraw::No;
-
-            // DEBUG: Reload app logic when recompiled
-            if cfg!(debug_assertions) {
-                if let Ok(metadata) = fs::metadata(&lib_path) {
-                    if let Ok(modified) = metadata.modified() {
-                        if modified > last_modified.unwrap() {
-                            let next_temp_ext = temp_ext + 1;
-                            let next_temp_path = lib_path.with_extension(next_temp_ext.to_string());
-
-                            if fs::copy(&lib_path, &next_temp_path).is_ok() {
-                                last_modified = Some(modified);
-
-                                drop(lib);
-                                fs::remove_file(&temp_path).unwrap();
-                                temp_ext = next_temp_ext;
-                                temp_path = next_temp_path;
-
-                                lib = Some(Library::new(&temp_path).unwrap());
-                                redraw = Redraw::Yes;
-                            }
+                if cfg!(feature = "hot-reload") {
+                    if let Some(loader) = &mut app.loader {
+                        if loader.poll().expect("[Rosin] Hot-reload: poll failed") {
+                            redraw = Redraw::Yes;
                         }
                     }
                 }
-            }
 
-            // Handle events
-            let windows = &mut self.window_mgr;
-            self.events_loop.poll_events(|event| {
-                match event {
-                    glutin::Event::WindowEvent { event, window_id } => {
-                        match event {
-                            glutin::WindowEvent::CloseRequested => {
-                                windows.close(window_id);
-                            }
-                            glutin::WindowEvent::Resized(logical_size) => {
-                                windows.resize(window_id, logical_size);
-                                redraw = Redraw::Yes
-                            }
-
-                            //TODO Mouse input
-                            _ => redraw = Redraw::Yes,
-                        }
-                    }
-                    _ => redraw = Redraw::Yes,
-                }
+                (redraw, StopTask::No)
             });
+        }
+    }
 
-            // Add new daemons to active list
-            let daemon_list = self.daemons.clone();
-            let mut daemon_list = daemon_list.borrow_mut();
-            daemon_list.append(&mut self.new_daemons);
+    fn paint(&mut self, piet: &mut Piet) -> bool {
+        let app = self.app.borrow();
+        let store = self.store.borrow();
 
-            // Run daemons
-            let now = Instant::now();
-            let mut finished_daemons = Vec::new();
-            for (i, daemon) in daemon_list.iter_mut().enumerate() {
-                if daemon.end_time.is_some() && daemon.end_time.unwrap() <= now {
-                    finished_daemons.push(i);
-                } else if daemon.last_run.is_none()
-                    || now.duration_since(daemon.last_run.unwrap()) >= daemon.interval
+        let time = Instant::now();
+
+        // TODO set a bool instead of just clearing it because the cache will be needed for future events
+        self.bump.reset();
+        let mut tree = self.view.get(&app.loader)(&self.bump, &store)
+            .finish(&self.bump)
+            .unwrap();
+        app.stylesheet.style(&mut tree);
+
+        let layouts = Layout::solve(&tree, self.size).unwrap();
+
+        let rosin_time = time.elapsed();
+        let time = Instant::now();
+
+        render(&tree, &layouts, piet);
+
+        let piet_time = time.elapsed();
+        //println!("{:#?}", tree);
+        println!("{:#?} - {:#?}", rosin_time, piet_time);
+
+        //println!("{:#?} b", self.size);
+        //println!("{:#?}", std::mem::size_of::<Style>());
+
+        false
+    }
+
+    fn command(&mut self, id: u32) {
+        match id {
+            0x100 => {
+                self.handle.close();
+                Application::quit();
+            }
+            _ => println!("unexpected id {}", id),
+        }
+    }
+
+    fn key_down(&mut self, event: KeyEvent) -> bool {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(500);
+        let id = self.handle.request_timer(deadline);
+        println!("keydown: {:?}, timer id = {:?}", event, id);
+        false
+    }
+
+    fn wheel(&mut self, delta: Vec2, mods: KeyModifiers) {
+        println!("mouse_wheel {:?} {:?}", delta, mods);
+    }
+
+    fn mouse_move(&mut self, event: &MouseEvent) {
+        // TODO need to keep track of something for MouseEnter and MouseLeave
+        self.handle.set_cursor(&Cursor::Arrow);
+        /*
+        if let Some(tree) = Some(&self.ui.get_tree()) {
+            if let Some(layouts) = Some(&self.ui.get_layouts()) {
+                let mut app = self.app.borrow_mut();
+                let mut store = self.store.borrow_mut();
+
+                let hit_node =
+                    Layout::hit_test(tree, layouts, (event.pos.x as f32, event.pos.y as f32));
+
+                // TODO hit_test should return a list of nodes, and if one with a :hover selector changes, then invalidate.
+                // For now, could just invalidate on any mouse_move
+
+                if tree[hit_node]
+                    .data
+                    .callbacks
+                    .trigger(On::Hover, &mut store, &mut app)
+                    == Redraw::Yes
                 {
-                    // Call callback
-                    let (r, s) = (daemon.callback)(&mut store, &mut self);
-                    daemon.last_run = Some(now);
-                    if r == Redraw::Yes {
-                        redraw = Redraw::Yes;
-                    }
-                    if s == StopDaemon::Yes {
-                        finished_daemons.push(i);
-                    }
+                    self.should_redraw = true;
+                    self.handle.invalidate();
                 }
             }
-            for i in finished_daemons {
-                daemon_list.remove(i);
-            }
+        }*/
+    }
 
-            // Join completed tasks
-            let mut finished_tasks = Vec::new();
-            for (i, task) in self.tasks.iter_mut().enumerate() {
-                if task.join_flag.upgrade().is_none() {
-                    // Get unique ownership of thread handle and join it
-                    task.handle.replace(None).unwrap().join().unwrap();
-                    redraw = Redraw::Yes;
-                    finished_tasks.push(i);
+    fn mouse_down(&mut self, event: &MouseEvent) {
+        /*if let Some(tree) = Some(&self.ui.get_tree()) {
+            if let Some(layouts) = Some(&self.ui.get_layouts()) {
+                let mut app = self.app.borrow_mut();
+                let mut store = self.store.borrow_mut();
+
+                let hit_node =
+                    Layout::hit_test(tree, layouts, (event.pos.x as f32, event.pos.y as f32));
+
+                if tree[hit_node]
+                    .data
+                    .callbacks
+                    .trigger(On::MouseDown, &mut store, &mut app)
+                    == Redraw::Yes
+                {
+                    self.should_redraw = true;
+                    self.handle.invalidate();
                 }
             }
-            for i in finished_tasks {
-                self.tasks.remove(i);
+        }*/
+    }
+
+    fn mouse_up(&mut self, event: &MouseEvent) {
+        /*if let Some(tree) = Some(&self.ui.get_tree()) {
+            if let Some(layouts) = Some(&self.ui.get_layouts()) {
+                let mut app = self.app.borrow_mut();
+                let mut store = self.store.borrow_mut();
+
+                let hit_node =
+                    Layout::hit_test(tree, layouts, (event.pos.x as f32, event.pos.y as f32));
+
+                if tree[hit_node]
+                    .data
+                    .callbacks
+                    .trigger(On::MouseUp, &mut store, &mut app)
+                    == Redraw::Yes
+                {
+                    self.should_redraw = true;
+                    self.handle.invalidate();
+                }
+            }
+        }*/
+    }
+
+    fn timer(&mut self, id: TimerToken) {
+        if let Some(task) = self.tasks.remove(&id) {
+            let (r, s) = {
+                let mut app = self.app.borrow_mut();
+                let mut store = self.store.borrow_mut();
+
+                (task.callback)(&mut store, &mut app)
+            };
+
+            if r == Redraw::Yes {
+                self.should_redraw = true;
+                self.handle.invalidate();
             }
 
-            // TODO Call callbacks to update Store
-
-            // Draw interface
-            if redraw == Redraw::Yes {
-                let mut doms: Vec<(glutin::WindowId, Dom<T>)> = Vec::new();
-                for (id, window) in self.window_mgr.window_map.iter() {
-                    let dom = (window.view.get(&lib))(&store);
-                    doms.push((*id, dom));
-                }
-                for (id, dom) in doms.iter() {
-                    self.window_mgr.draw(*id, &dom, &self.stylesheet).unwrap();
-                }
-            }
-
-            // Sleep to cap framerate
-            if let Some(time) =
-                Duration::from_micros(MAX_FRAME_TIME_MICRO).checked_sub(prev_frame.elapsed())
-            {
-                thread::sleep(time);
+            if s == StopTask::No {
+                self.add_task(task.frequency, task.callback);
             }
         }
+    }
 
-        // DEBUG: Cleanup temp dynamic library
-        if cfg!(debug_assertions) {
-            drop(lib);
-            fs::remove_file(&temp_path).unwrap();
-        }
+    fn size(&mut self, width: u32, height: u32) {
+        let dpi = self.handle.get_dpi();
+        let dpi_scale = dpi as f64 / 96.0;
+        let width_f = (width as f64) / dpi_scale;
+        let height_f = (height as f64) / dpi_scale;
+        self.size = (width_f, height_f);
+        self.should_relayout = true;
+    }
+
+    fn destroy(&mut self) {
+        Application::quit()
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        &mut self.handle
     }
 }

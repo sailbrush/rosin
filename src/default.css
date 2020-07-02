@@ -1,5 +1,0 @@
-.Wrap { flex-direction: row; flex-wrap: wrap; }
-.Row { flex-direction: row; }
-.Column { flex-direction: column; }
-.Shrink { flex-grow: 0; }
-.Expand { flex-grow: 1; }

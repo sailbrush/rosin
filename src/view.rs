@@ -1,59 +1,41 @@
-#[cfg(debug_assertions)]
-use std::marker::PhantomData;
+use bumpalo::Bump;
+use std::fmt;
 
-use libloading::Library;
+use crate::libloader::LibLoader;
+use crate::tree::UI;
 
-use crate::dom::*;
+#[macro_export]
+macro_rules! view_new {
+    ($id:ident) => {
+        View::new(stringify!($id).as_bytes(), $id)
+    };
+}
 
-#[cfg(target_os = "windows")]
-pub const DYLIB_EXT: &str = "dll";
+pub struct View<T>(&'static [u8], pub for<'a> fn(&'a Bump, &T) -> UI<'a, T>);
 
-#[cfg(target_os = "macos")]
-pub const DYLIB_EXT: &str = "dylib";
-
-#[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
-pub const DYLIB_EXT: &str = "so";
-
-#[cfg(not(debug_assertions))]
-pub struct View<T>(pub fn(&T) -> Dom<T>);
-
-#[cfg(debug_assertions)]
-pub struct View<T>(&'static [u8], PhantomData<T>);
+impl<T> fmt::Debug for View<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}()", self.0)
+    }
+}
 
 impl<T> View<T> {
-    #[cfg(not(debug_assertions))]
-    pub fn new(func: fn(&T) -> Dom<T>) -> Self {
-        View::<T>(func)
+    pub fn new(name: &'static [u8], func: for<'a> fn(&'a Bump, &T) -> UI<'a, T>) -> Self {
+        View::<T>(name, func)
     }
 
-    #[cfg(debug_assertions)]
-    pub fn new(name: &'static [u8]) -> Self {
-        View::<T>(name, PhantomData)
+    // Default behaviour
+    #[cfg(not(all(debug_assertions, feature = "hot-reload")))]
+    pub(crate) fn get(&self, _: &Option<LibLoader>) -> for<'a> fn(&'a Bump, &T) -> UI<'a, T> {
+        self.1
     }
 
-    #[cfg(not(debug_assertions))]
-    pub fn get(&self, _: &Option<Library>) -> (fn(&T) -> Dom<T>) {
-        self.0
+    #[cfg(all(debug_assertions, feature = "hot-reload"))]
+    pub(crate) fn get(&self, lib: &Option<LibLoader>) -> for<'a> fn(&'a Bump, &T) -> UI<'a, T> {
+        // Better to panic so it's obvious that hot-reloading failed
+        *lib.as_ref()
+            .expect("[Rosin] Hot-reload: Not initialized properly")
+            .get(self.0)
+            .expect("[Rosin] Hot-reload: LibLoading returned an error")
     }
-
-    #[cfg(debug_assertions)]
-    pub fn get(&self, lib: &Option<Library>) -> (fn(&T) -> Dom<T>) {
-        unsafe { *lib.as_ref().unwrap().get(self.0).unwrap() }
-    }
-}
-
-#[cfg(not(debug_assertions))]
-#[macro_export]
-macro_rules! view_new {
-    ($id:ident) => {
-        View::new($id)
-    };
-}
-
-#[cfg(debug_assertions)]
-#[macro_export]
-macro_rules! view_new {
-    ($id:ident) => {
-        View::new(stringify!($id).as_bytes())
-    };
 }

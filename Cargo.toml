@@ -1,6 +1,6 @@
 [package]
 name = "rosin"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["TimTom <timtom.business@gmail.com>"]
 edition = "2018"
 description = "Rosin is a GUI library for Rust that aims to be extremely easy to use."
@@ -13,12 +13,11 @@ categories = ["gui"]
 license = "MIT"
 
 [dependencies]
-webrender = "0.60"
-app_units = "0.7"
-euclid = "0.19"
-gleam = "0.6"
-glutin = "0.21"
-rayon = "1"
-cssparser = "0.25"
-libloading = "0.5"
-takeable-option = "0.5"
+druid-shell = { git = "https://github.com/xi-editor/druid.git" }
+cssparser = "0.27"
+libloading = "0.6"
+bumpalo = { version = "3.4", features = ["collections"] }
+font-kit = "0.9"
+
+[features]
+hot-reload = []
