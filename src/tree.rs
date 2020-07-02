@@ -9,7 +9,6 @@ use crate::style::{Style, StyleDefault};
 // TODO
 // - make it so a node either contains other nodes OR content
 // - use a hash for id and classes, just accept &str
-// - match statements
 
 /// Macro for describing the structure and style of a UI
 ///
@@ -30,8 +29,8 @@ macro_rules! ui {
     ($alloc:ident; $tree:expr; $($class:literal),* $(_)? => ( $function:expr ) $($tail:tt)*) => {
         ui!($alloc; $tree.child(&$alloc, $function $(.class($class))* ); $($tail)* )
     };
-    ($alloc:ident; $tree:expr; $($class:literal),* $(_)? => { $($options:tt)* } $($tail:tt)*) => {
-        ui!($alloc; $tree.child(&$alloc, TreeNode::new(&$alloc) $(.class($class))* $($options)* ); $($tail)* )
+    ($alloc:ident; $tree:expr; $($class:literal),* $(_)? => { $($builder:tt)* } $($tail:tt)*) => {
+        ui!($alloc; $tree.child(&$alloc, TreeNode::new(&$alloc) $(.class($class))* $($builder)* ); $($tail)* )
     };
     ($alloc:ident; $tree:expr; { $($body:tt)* } $($tail:tt)*) => {
         ui!($alloc; $tree $($body)*; $($tail)* )
@@ -47,6 +46,9 @@ macro_rules! ui {
     ($alloc:ident; $tree:expr; for $v:pat in $e:tt $($tail:tt)*) => {
         ui!(@munch; @for_block; $alloc; $tree; tree; (for $v in $e), $($tail)*)
     };
+    ($alloc:ident; $tree:expr; match $e:tt $($tail:tt)*) => {
+        ui!(@munch; @match_block; $alloc; $tree; tree; (match $e), $($tail)*)
+    };
 
     // If chains
     (@if_block; $alloc:ident; $tree:expr; $temp:ident; ($($prefix:tt)*), { $($body:tt)* } else if $e:tt $($tail:tt)*) => {
@@ -57,6 +59,11 @@ macro_rules! ui {
     };
     (@if_block; $alloc:ident; $tree:expr; $temp:ident; ($($prefix:tt)*), { $($body:tt)* } $($tail:tt)*) => {
         ui!($alloc; { let mut $temp = $tree; $($prefix)* { $temp = ui!($alloc; $temp; $($body)* ); } $temp }; $($tail)* )
+    };
+
+    // Match block
+    (@match_block; $alloc:ident; $tree:expr; $temp:ident; ($($prefix:tt)*), { $($pattern:pat => { $($branch:tt)* } $(,)?)* } $($tail:tt)*) => {
+        ui!($alloc; { let mut $temp = $tree; $temp = $($prefix)* { $($pattern => {ui!($alloc; $temp; $($branch)*)} )* }; $temp }; $($tail)* )
     };
 
     // For loop
