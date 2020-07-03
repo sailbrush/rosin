@@ -150,7 +150,7 @@ impl<'a, T> Default for Content<'a, T> {
 
 pub(crate) struct ArrayNode<'a, T> {
     pub id: Option<NodeID>,
-    pub classes: BumpVec<'a, &'a str>,
+    pub classes: BumpVec<'a, &'static str>,
     pub callbacks: CallbackList<'a, T>,
     pub style: Style,
     pub parent: usize,
@@ -171,9 +171,9 @@ impl<'a, T> ArrayNode<'a, T> {
 
 pub struct TreeNode<'a, T> {
     id: Option<NodeID>,
-    classes: Option<BumpVec<'a, &'a str>>,
+    classes: Option<BumpVec<'a, &'static str>>,
     callbacks: Option<CallbackList<'a, T>>,
-    style_default: Option<&'a dyn Fn() -> Style>,
+    style_default: Option<fn() -> Style>,
     size: usize,
     num_children: usize,
     prev_sibling: Option<&'a mut TreeNode<'a, T>>,
@@ -221,8 +221,8 @@ impl<'a, T> TreeNode<'a, T> {
     }
 
     /// Register a function that will provide an alternate default Style for this node
-    pub fn style_default(mut self, alloc: &'a Bump, func: &'a dyn Fn() -> Style) -> Self {
-        self.style_default = Some(alloc.alloc(func));
+    pub fn style_default(mut self, func: fn() -> Style) -> Self {
+        self.style_default = Some(func);
         self
     }
 
@@ -257,17 +257,11 @@ impl<'a, T> TreeNode<'a, T> {
                 tree[parent].last_child = NonZeroUsize::new(index);
             }
 
-            let style = if let Some(style_default) = curr_node.style_default {
-                style_default()
-            } else {
-                Style::default()
-            };
-
             tree.push(ArrayNode {
                 id: curr_node.id,
                 classes: curr_node.classes.take()?,
                 callbacks: curr_node.callbacks.take()?,
-                style,
+                style: curr_node.style_default.unwrap_or(Style::default)(),
                 parent,
                 num_children: curr_node.num_children,
                 last_child: None,
