@@ -56,6 +56,7 @@ impl LibLoader {
         Ok(reloaded)
     }
 
+    #[cfg(all(debug_assertions, feature = "hot-reload"))]
     pub fn get<S>(&self, symbol: &[u8]) -> Result<Symbol<S>, Box<dyn Error>> {
         // Unsafe is necessary to load from a dynamic library
         unsafe {

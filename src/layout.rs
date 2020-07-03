@@ -29,6 +29,7 @@ impl Default for Layout {
     }
 }
 
+// TODO: warn when in debug mode if content is being ignored
 #[allow(dead_code)]
 impl Layout {
     pub fn hit_test<T>(tree: &[ArrayNode<T>], layout: &[Self], position: (f32, f32)) -> usize {
@@ -202,7 +203,10 @@ impl Layout {
 
                     // Account for flex items' inflexible parts
                     for &id in flex_child_ids.iter() {
-                        remaining_space -= tree[id].style.flex_basis.unwrap_or(tree[id].style.width.unwrap_or(0.0));
+                        remaining_space -= tree[id]
+                            .style
+                            .flex_basis
+                            .unwrap_or_else(|| tree[id].style.width.unwrap_or(0.0));
 
                         remaining_space -= tree[id].style.margin_left.unwrap_or(0.0);
                         remaining_space -= tree[id].style.margin_right.unwrap_or(0.0);
@@ -217,7 +221,7 @@ impl Layout {
                     // Helper function
                     fn desired_width<T>(node: &ArrayNode<T>, flex_space: f32, total_flex_factor: f32) -> f32 {
                         (flex_space * (node.style.flex_grow / total_flex_factor))
-                            + node.style.flex_basis.unwrap_or(node.style.width.unwrap_or(0.0))
+                            + node.style.flex_basis.unwrap_or_else(|| node.style.width.unwrap_or(0.0))
                     };
 
                     // Get total flex factor
@@ -230,7 +234,7 @@ impl Layout {
                     let mut maxable_ids = flex_child_ids
                         .iter()
                         .filter(|&&id| tree[id].style.max_width != None)
-                        .map(|&id| id)
+                        .copied()
                         .collect::<Vec<usize>>();
 
                     // Account for children that have hit their max
@@ -255,7 +259,7 @@ impl Layout {
                     let mut minnable_ids = flex_child_ids
                         .iter()
                         .filter(|&&id| tree[id].style.min_width != None)
-                        .map(|&id| id)
+                        .copied()
                         .collect::<Vec<usize>>();
 
                     // Account for children that have hit their min
@@ -306,12 +310,18 @@ impl Layout {
                         // Get total basis and shrink factor
                         let mut total_basis: f32 = 0.0;
                         for &id in flex_child_ids.iter() {
-                            total_basis += tree[id].style.flex_basis.unwrap_or(tree[id].style.width.unwrap_or(0.0));
+                            total_basis += tree[id]
+                                .style
+                                .flex_basis
+                                .unwrap_or_else(|| tree[id].style.width.unwrap_or(0.0));
                         }
 
                         // Shrink children
                         for &id in flex_child_ids.iter() {
-                            let basis = tree[id].style.flex_basis.unwrap_or(tree[id].style.width.unwrap_or(0.0));
+                            let basis = tree[id]
+                                .style
+                                .flex_basis
+                                .unwrap_or_else(|| tree[id].style.width.unwrap_or(0.0));
                             let child_width = (basis
                                 + (((tree[id].style.flex_shrink * basis) / total_basis) * remaining_space))
                                 .max(tree[id].style.min_width.unwrap_or(0.0))

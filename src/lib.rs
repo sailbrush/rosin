@@ -15,7 +15,7 @@ pub mod widgets;
 pub mod prelude {
     pub use crate::app::{App, AppLauncher, On, Redraw, StopTask};
     pub use crate::style::{Style, Stylesheet};
-    pub use crate::tree::{TreeNode, UI, NodeID, Content};
+    pub use crate::tree::{Content, NodeID, TreeNode, UI};
     pub use crate::view::View;
     pub use crate::window::WindowDesc;
     pub use crate::{style_new, ui, view_new};
