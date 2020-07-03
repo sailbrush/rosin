@@ -9,12 +9,12 @@ static WINDOW_ID_COUNTER: AtomicU32 = AtomicU32::new(1);
 
 /// A unique identifier for a window.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct WindowId(u32);
+pub struct WindowID(u32);
 
-impl WindowId {
-    pub fn new() -> WindowId {
+impl WindowID {
+    pub fn new() -> Self {
         let id = WINDOW_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
-        WindowId(id)
+        Self(id)
     }
 }
 
