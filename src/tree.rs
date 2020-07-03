@@ -4,11 +4,7 @@ use std::num::NonZeroUsize;
 use bumpalo::{collections::Vec as BumpVec, Bump};
 
 use crate::app::*;
-use crate::style::{Style, StyleDefault};
-
-// TODO
-// - make it so a node either contains other nodes OR content
-
+use crate::style::Style;
 
 /// Macro for describing the structure and style of a UI
 ///
@@ -124,18 +120,31 @@ impl<'a, T> CallbackList<'a, T> {
     }
 }
 
-#[derive(Debug)]
-pub(crate) struct Node<'a, T> {
+#[derive(Copy, Clone)]
+pub enum Content<'a, T> {
+    None,
+    Text(&'a str),
+    DynamicText(fn(&'a T) -> &str),
+}
+
+impl<'a, T> Default for Content<'a, T> {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
+pub(crate) struct ArrayNode<'a, T> {
     pub id: Option<&'a str>,
-    pub css_classes: BumpVec<'a, &'a str>,
+    pub classes: BumpVec<'a, &'a str>,
     pub callbacks: CallbackList<'a, T>,
     pub style: Style,
     pub parent: usize,
     pub num_children: usize,
     pub last_child: Option<NonZeroUsize>,
+    pub content: Content<'a, T>,
 }
 
-impl<'a, T> Node<'a, T> {
+impl<'a, T> ArrayNode<'a, T> {
     pub fn child_ids(&self) -> std::ops::Range<usize> {
         if let Some(last_child) = self.last_child {
             last_child.get()..(last_child.get() + self.num_children)
@@ -147,31 +156,32 @@ impl<'a, T> Node<'a, T> {
 
 pub struct TreeNode<'a, T> {
     id: Option<&'a str>,
-    css_classes: Option<BumpVec<'a, &'a str>>,
+    classes: Option<BumpVec<'a, &'a str>>,
     callbacks: Option<CallbackList<'a, T>>,
-    style_default: Option<StyleDefault>,
+    style_default: Option<&'a dyn Fn() -> Style>,
     size: usize,
     num_children: usize,
     prev_sibling: Option<&'a mut TreeNode<'a, T>>,
     last_child: Option<&'a mut TreeNode<'a, T>>,
+    content: Content<'a, T>,
 }
 
 impl<'a, T> TreeNode<'a, T> {
     pub fn new(alloc: &'a Bump) -> Self {
         Self {
             id: None,
-            css_classes: Some(BumpVec::new_in(&alloc)),
+            classes: Some(BumpVec::new_in(&alloc)),
             callbacks: Some(CallbackList::new(&alloc)),
             style_default: None,
             size: 1,
             num_children: 0,
             prev_sibling: None,
             last_child: None,
+            content: Content::None,
         }
     }
 }
 
-// TODO Content enum that can be text, image, or canvas callback
 impl<'a, T> TreeNode<'a, T> {
     /// Set the id
     pub fn id(mut self, alloc: &'a Bump, id: &str) -> Self {
@@ -181,8 +191,8 @@ impl<'a, T> TreeNode<'a, T> {
 
     /// Add a CSS class
     pub fn class(mut self, alloc: &'a Bump, class: &'a str) -> Self {
-        if let Some(css_classes) = &mut self.css_classes {
-            css_classes.push(alloc.alloc(class.clone()));
+        if let Some(classes) = &mut self.classes {
+            classes.push(alloc.alloc(class.clone()));
         }
         self
     }
@@ -196,10 +206,13 @@ impl<'a, T> TreeNode<'a, T> {
     }
 
     /// Register a function that will provide an alternate default Style for this node
-    /// Useful for widgets
-    // TODO accept closure and allocate on bump
-    pub fn style_default(mut self, func: fn() -> Style) -> Self {
-        self.style_default = Some(func);
+    pub fn style_default(mut self, alloc: &'a Bump, func: &'a dyn Fn() -> Style) -> Self {
+        self.style_default = Some(alloc.alloc(func));
+        self
+    }
+
+    pub fn content(mut self, content: Content<'a, T>) -> Self {
+        self.content = content;
         self
     }
 
@@ -217,8 +230,8 @@ impl<'a, T> TreeNode<'a, T> {
         self
     }
 
-    pub(crate) fn finish(mut self, alloc: &'a Bump) -> Option<BumpVec<'a, Node<'a, T>>> {
-        let mut tree: BumpVec<Node<T>> = BumpVec::with_capacity_in(self.size, &alloc);
+    pub(crate) fn finish(mut self, alloc: &'a Bump) -> Option<BumpVec<'a, ArrayNode<'a, T>>> {
+        let mut tree: BumpVec<ArrayNode<T>> = BumpVec::with_capacity_in(self.size, &alloc);
         let mut stack: BumpVec<(bool, usize, &mut TreeNode<'a, T>)> = BumpVec::new_in(&alloc);
 
         stack.push((false, 0, &mut self));
@@ -228,14 +241,21 @@ impl<'a, T> TreeNode<'a, T> {
                 tree[parent].last_child = NonZeroUsize::new(index);
             }
 
-            tree.push(Node {
+            let style = if let Some(style_default) = curr_node.style_default {
+                style_default()
+            } else {
+                Style::default()
+            };
+
+            tree.push(ArrayNode {
                 id: curr_node.id,
-                css_classes: curr_node.css_classes.take()?,
+                classes: curr_node.classes.take()?,
                 callbacks: curr_node.callbacks.take()?,
-                style: curr_node.style_default.unwrap_or(Style::default)(),
+                style,
                 parent,
                 num_children: curr_node.num_children,
                 last_child: None,
+                content: std::mem::take(&mut curr_node.content),
             });
 
             if let Some(last_child) = curr_node.last_child.take() {

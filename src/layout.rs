@@ -1,7 +1,7 @@
 use std::{collections::HashMap, f32};
 
 use crate::style::{FlexDirection, Point, Position, Size};
-use crate::tree::Node;
+use crate::tree::ArrayNode;
 
 #[derive(Debug, Default, Copy, Clone)]
 pub struct Bounds {
@@ -31,12 +31,12 @@ impl Default for Layout {
 
 #[allow(dead_code)]
 impl Layout {
-    pub fn hit_test<T>(tree: &[Node<T>], layout: &[Self], position: (f32, f32)) -> usize {
+    pub fn hit_test<T>(tree: &[ArrayNode<T>], layout: &[Self], position: (f32, f32)) -> usize {
         Self::hit_test_node(tree, layout, position, (0.0, 0.0), 0)
     }
 
     fn hit_test_node<T>(
-        tree: &[Node<T>],
+        tree: &[ArrayNode<T>],
         layout: &[Self],
         position: (f32, f32),
         offset: (f32, f32),
@@ -71,7 +71,7 @@ impl Layout {
         hit_node
     }
 
-    fn round_layout<T>(tree: &[Node<T>], layouts: &mut [Self], id: usize, abs_x: f32, abs_y: f32) {
+    fn round_layout<T>(tree: &[ArrayNode<T>], layouts: &mut [Self], id: usize, abs_x: f32, abs_y: f32) {
         let abs_x = abs_x + layouts[id].position.x;
         let abs_y = abs_y + layouts[id].position.y;
 
@@ -86,7 +86,7 @@ impl Layout {
         }
     }
 
-    pub fn solve<T>(tree: &[Node<T>], size: (f64, f64)) -> Option<Vec<Self>> {
+    pub fn solve<T>(tree: &[ArrayNode<T>], size: (f64, f64)) -> Option<Vec<Self>> {
         let mut layouts = Vec::with_capacity(tree.len());
         for _ in 0..tree.len() {
             layouts.push(Layout::default());
@@ -107,7 +107,7 @@ impl Layout {
     }
 
     // Returns size including borders and padding, but not margins
-    fn solve_node<T>(id: usize, tree: &[Node<T>], bounds: Bounds, layouts: &mut [Self]) -> Option<Size> {
+    fn solve_node<T>(id: usize, tree: &[ArrayNode<T>], bounds: Bounds, layouts: &mut [Self]) -> Option<Size> {
         debug_assert!(bounds.min_width <= bounds.max_width);
         debug_assert!(bounds.min_height <= bounds.max_height);
 
@@ -215,7 +215,7 @@ impl Layout {
                     }
 
                     // Helper function
-                    fn desired_width<T>(node: &Node<T>, flex_space: f32, total_flex_factor: f32) -> f32 {
+                    fn desired_width<T>(node: &ArrayNode<T>, flex_space: f32, total_flex_factor: f32) -> f32 {
                         (flex_space * (node.style.flex_grow / total_flex_factor))
                             + node.style.flex_basis.unwrap_or(node.style.width.unwrap_or(0.0))
                     };

@@ -118,8 +118,6 @@ macro_rules! style_new {
     };
 }
 
-pub type StyleDefault = fn() -> Style;
-
 #[derive(Debug, Default, Copy, Clone)]
 pub struct Rect {
     pub top: f32,
@@ -488,7 +486,7 @@ pub enum Selector {
 
 impl Selector {
     /// Check if this selector applies to a node
-    pub(crate) fn check<T>(&self, node: &Node<T>) -> bool {
+    pub(crate) fn check<T>(&self, node: &ArrayNode<T>) -> bool {
         match self {
             Selector::Wildcard => true,
             Selector::Id(selector) => {
@@ -498,7 +496,7 @@ impl Selector {
                     false
                 }
             }
-            Selector::Class(selector) => node.css_classes.iter().any(|class| class == selector),
+            Selector::Class(selector) => node.classes.iter().any(|class| class == selector),
             _ => false,
         }
     }
@@ -600,7 +598,7 @@ impl Stylesheet {
     }
 
     /// Perform selector matching and apply styles to a tree
-    pub(crate) fn style<T: fmt::Debug>(&self, tree: &mut [Node<T>]) {
+    pub(crate) fn style<T: fmt::Debug>(&self, tree: &mut [ArrayNode<T>]) {
         for id in 0..tree.len() {
             // TODO hash map
             let mut relevant_rules = self

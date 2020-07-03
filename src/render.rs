@@ -3,9 +3,9 @@ use druid_shell::piet::{Color, Piet, RenderContext};
 
 use crate::layout::Layout;
 use crate::style::Style;
-use crate::tree::Node;
+use crate::tree::ArrayNode;
 
-pub(crate) fn render<T>(tree: &[Node<T>], layouts: &[Layout], piet: &mut Piet) {
+pub(crate) fn render<T>(tree: &[ArrayNode<T>], layouts: &[Layout], piet: &mut Piet) {
     for (i, node) in tree.iter().rev().enumerate() {
         let rect = Rect::new(
             layouts[i].position.x as f64,

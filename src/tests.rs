@@ -8,7 +8,7 @@ mod style {
     }
     mod selector_matching {
         use crate::prelude::*;
-        use crate::tree::Node;
+        use crate::tree::ArrayNode;
         use bumpalo::collections::Vec as BumpVec;
 
         #[test]
@@ -16,7 +16,7 @@ mod style {
             let alloc = Bump::new();
             let stylesheet = Stylesheet::new_static(".root { height: 100px; }");
 
-            let mut tree: BumpVec<Node<()>> = ui! { alloc;
+            let mut tree: BumpVec<ArrayNode<()>> = ui! { alloc;
                 "root" => [] // 0
             }
             .finish(&alloc)
@@ -32,7 +32,7 @@ mod style {
             let alloc = Bump::new();
             let stylesheet = Stylesheet::new_static(".root .child { height: 100px; }");
 
-            let mut tree: BumpVec<Node<()>> = ui! { alloc;
+            let mut tree: BumpVec<ArrayNode<()>> = ui! { alloc;
                 "root" => [ // 0
                     "child" => [] // 1
                 ]
@@ -51,7 +51,7 @@ mod style {
             let alloc = Bump::new();
             let stylesheet = Stylesheet::new_static(".parent > .child { height: 100px; } .child { height: 200px; }");
 
-            let mut tree: BumpVec<Node<()>> = ui! { alloc;
+            let mut tree: BumpVec<ArrayNode<()>> = ui! { alloc;
                 "root" => [ // 0
                     "parent" => [ // 2
                         "child" => [] // 3
@@ -81,7 +81,7 @@ mod style {
             let alloc = Bump::new();
             let stylesheet = Stylesheet::new_static(".root .child { height: 100px; } .child { height: 90px; }");
 
-            let mut tree: BumpVec<Node<()>> = ui! { alloc;
+            let mut tree: BumpVec<ArrayNode<()>> = ui! { alloc;
                 "root" => [ // 0
                     "wrap" => [ // 1
                         "child" => [] // 2
@@ -103,7 +103,7 @@ mod style {
             let alloc = Bump::new();
             let stylesheet = Stylesheet::new_static("* { height: 100px; }");
 
-            let mut tree: BumpVec<Node<()>> = ui! { alloc;
+            let mut tree: BumpVec<ArrayNode<()>> = ui! { alloc;
                 "root" => [ // 0
                     "parent" => [ // 2
                         "child" => [] // 3
@@ -133,7 +133,7 @@ mod style {
             let alloc = Bump::new();
             let stylesheet = Stylesheet::new_static("* { height: 100px; } child { height: 1px; }");
 
-            let mut tree: BumpVec<Node<()>> = ui! { alloc;
+            let mut tree: BumpVec<ArrayNode<()>> = ui! { alloc;
                 "root" => [ // 0
                     "parent" => [ // 2
                         "child" => [] // 3
@@ -163,7 +163,7 @@ mod style {
             let alloc = Bump::new();
             let stylesheet = Stylesheet::new_static("* one { height: 100px; }");
 
-            let mut tree: BumpVec<Node<()>> = ui! { alloc;
+            let mut tree: BumpVec<ArrayNode<()>> = ui! { alloc;
                 "root" => [ // 0
                     "parent" => [ // 1
                         "one" => [] // 3
@@ -187,7 +187,7 @@ mod style {
             let alloc = Bump::new();
             let stylesheet = Stylesheet::new_static("selector { height: 100px; } random name { height: 100px; }");
 
-            let mut tree: BumpVec<Node<()>> = ui! { alloc;
+            let mut tree: BumpVec<ArrayNode<()>> = ui! { alloc;
                 "root" => [ // 0
                     "parent" => [ // 1
                         "one" => [] // 3
@@ -211,7 +211,7 @@ mod style {
             let alloc = Bump::new();
             let stylesheet = Stylesheet::new_static("one two three { height: 100px; }");
 
-            let mut tree: BumpVec<Node<()>> = ui! { alloc;
+            let mut tree: BumpVec<ArrayNode<()>> = ui! { alloc;
                 "two" => [ // 0
                     "three" => [] // 1
                 ]
