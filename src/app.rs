@@ -156,9 +156,12 @@ impl<T: fmt::Debug> WinHandler for RosinHandler<T> {
                     Ok(true) => Redraw::Yes,
                     Ok(false) => Redraw::No,
                     Err(error) => {
-                        eprintln!("[Rosin] Failed to reload stylesheet: {:?} Error: {:?}", app.stylesheet.path, error);
+                        eprintln!(
+                            "[Rosin] Failed to reload stylesheet: {:?} Error: {:?}",
+                            app.stylesheet.path, error
+                        );
                         Redraw::No
-                    },
+                    }
                 };
 
                 if cfg!(feature = "hot-reload") {
@@ -167,7 +170,7 @@ impl<T: fmt::Debug> WinHandler for RosinHandler<T> {
                             Ok(true) => redraw = Redraw::Yes,
                             Err(error) => {
                                 eprintln!("[Rosin] Failed to hot-reload. Error: {:?}", error);
-                            },
+                            }
                             _ => (),
                         }
                     }

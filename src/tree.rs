@@ -120,7 +120,6 @@ impl<'a, T> CallbackList<'a, T> {
     }
 }
 
-#[derive(Copy, Clone)]
 pub enum Content<'a, T> {
     None,
     Text(&'a str),
@@ -211,6 +210,7 @@ impl<'a, T> TreeNode<'a, T> {
         self
     }
 
+    /// Set the contents of a node
     pub fn content(mut self, content: Content<'a, T>) -> Self {
         self.content = content;
         self
