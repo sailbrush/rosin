@@ -530,8 +530,8 @@ impl PartialOrd for Rule {
 
 #[derive(Debug, Default, Clone)]
 pub struct Stylesheet {
-    path: Option<&'static str>,
-    last_modified: Option<SystemTime>,
+    pub(crate) path: Option<&'static str>,
+    pub(crate) last_modified: Option<SystemTime>,
     pub(crate) rules: Vec<Rule>,
 }
 

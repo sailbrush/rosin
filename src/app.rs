@@ -152,16 +152,23 @@ impl<T: fmt::Debug> WinHandler for RosinHandler<T> {
 
         if cfg!(debug_assertions) {
             self.add_task(Duration::from_millis(100), |_, app| {
-                let mut redraw = if app.stylesheet.poll().expect("[Rosin] Failed to reload stylesheet.") {
-                    Redraw::Yes
-                } else {
-                    Redraw::No
+                let mut redraw = match app.stylesheet.poll() {
+                    Ok(true) => Redraw::Yes,
+                    Ok(false) => Redraw::No,
+                    Err(error) => {
+                        eprintln!("[Rosin] Failed to reload stylesheet: {:?} Error: {:?}", app.stylesheet.path, error);
+                        Redraw::No
+                    },
                 };
 
                 if cfg!(feature = "hot-reload") {
                     if let Some(loader) = &mut app.loader {
-                        if loader.poll().expect("[Rosin] Hot-reload: poll failed") {
-                            redraw = Redraw::Yes;
+                        match loader.poll() {
+                            Ok(true) => redraw = Redraw::Yes,
+                            Err(error) => {
+                                eprintln!("[Rosin] Failed to hot-reload. Error: {:?}", error);
+                            },
+                            _ => (),
                         }
                     }
                 }
