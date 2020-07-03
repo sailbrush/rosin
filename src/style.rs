@@ -550,7 +550,7 @@ impl Stylesheet {
             last_modified: None,
             rules: Vec::new(),
         };
-        new.poll();
+        new.poll().expect("[Rosin] Failed to load stylesheet.");
         new
     }
 
