@@ -1,5 +1,8 @@
-use std::fmt;
-use std::num::NonZeroUsize;
+use std::{
+    fmt,
+    num::NonZeroUsize,
+    sync::atomic::{AtomicU32, Ordering},
+};
 
 use bumpalo::{collections::Vec as BumpVec, Bump};
 
@@ -14,19 +17,19 @@ use crate::style::Style;
 #[macro_export]
 macro_rules! ui {
     ($alloc:ident; $($class:literal),* $(_)? => [ $($children:tt)* ]) => {
-        ui!($alloc; TreeNode::new(&$alloc) $(.class(&$alloc, $class))*; $($children)* )
+        ui!($alloc; TreeNode::new(&$alloc) $(.add_class($class))*; $($children)* )
     };
     ($alloc:ident; $tree:expr; $($class:literal),* $(_)? => [ $($children:tt)* ] $($tail:tt)*) => {
-        ui!($alloc; $tree.child(&$alloc, ui!($alloc; TreeNode::new(&$alloc) $(.class(&$alloc, $class))*; $($children)* )); $($tail)* )
+        ui!($alloc; $tree.add_child(&$alloc, ui!($alloc; TreeNode::new(&$alloc) $(.add_class($class))*; $($children)* )); $($tail)* )
     };
     ($alloc:ident; $tree:expr; $($class:literal),* $(_)? => ($widget:ident!( $($params:tt)* )) $($tail:tt)*) => {
-        ui!($alloc; $tree.child(&$alloc, $widget!($alloc; $($params)*) $(.class(&$alloc, $class))* ); $($tail)* )
+        ui!($alloc; $tree.add_child(&$alloc, $widget!($alloc; $($params)*) $(.add_class($class))* ); $($tail)* )
     };
     ($alloc:ident; $tree:expr; $($class:literal),* $(_)? => ( $function:expr ) $($tail:tt)*) => {
-        ui!($alloc; $tree.child(&$alloc, $function $(&$alloc, .class(&$alloc, $class))* ); $($tail)* )
+        ui!($alloc; $tree.add_child(&$alloc, $function $(&$alloc, .add_class($class))* ); $($tail)* )
     };
     ($alloc:ident; $tree:expr; $($class:literal),* $(_)? => { $($builder:tt)* } $($tail:tt)*) => {
-        ui!($alloc; $tree.child(&$alloc, TreeNode::new(&$alloc) $(.class(&$alloc, $class))* $($builder)* ); $($tail)* )
+        ui!($alloc; $tree.add_child(&$alloc, TreeNode::new(&$alloc) $(.add_class($class))* $($builder)* ); $($tail)* )
     };
     ($alloc:ident; $tree:expr; { $($body:tt)* } $($tail:tt)*) => {
         ui!($alloc; $tree $($body)*; $($tail)* )
@@ -81,6 +84,19 @@ macro_rules! ui {
     };
 }
 
+static NODE_ID_COUNTER: AtomicU32 = AtomicU32::new(1);
+
+/// A unique identifier for a node.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct NodeID(u32);
+
+impl NodeID {
+    pub fn new() -> Self {
+        let id = NODE_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+        Self(id)
+    }
+}
+
 pub type UI<'a, T> = TreeNode<'a, T>;
 
 pub(crate) struct Callback<T>(fn(&mut T, &mut App) -> Redraw);
@@ -133,7 +149,7 @@ impl<'a, T> Default for Content<'a, T> {
 }
 
 pub(crate) struct ArrayNode<'a, T> {
-    pub id: Option<&'a str>,
+    pub id: Option<NodeID>,
     pub classes: BumpVec<'a, &'a str>,
     pub callbacks: CallbackList<'a, T>,
     pub style: Style,
@@ -154,7 +170,7 @@ impl<'a, T> ArrayNode<'a, T> {
 }
 
 pub struct TreeNode<'a, T> {
-    id: Option<&'a str>,
+    id: Option<NodeID>,
     classes: Option<BumpVec<'a, &'a str>>,
     callbacks: Option<CallbackList<'a, T>>,
     style_default: Option<&'a dyn Fn() -> Style>,
@@ -183,15 +199,15 @@ impl<'a, T> TreeNode<'a, T> {
 
 impl<'a, T> TreeNode<'a, T> {
     /// Set the id
-    pub fn id(mut self, alloc: &'a Bump, id: &str) -> Self {
-        self.id = Some(alloc.alloc_str(id));
+    pub fn set_id(mut self, id: NodeID) -> Self {
+        self.id = Some(id);
         self
     }
 
     /// Add a CSS class
-    pub fn class(mut self, alloc: &'a Bump, class: &'a str) -> Self {
+    pub fn add_class(mut self, class: &'static str) -> Self {
         if let Some(classes) = &mut self.classes {
-            classes.push(alloc.alloc(class.clone()));
+            classes.push(class);
         }
         self
     }
@@ -217,7 +233,7 @@ impl<'a, T> TreeNode<'a, T> {
     }
 
     /// Add a child node
-    pub fn child(mut self, alloc: &'a Bump, mut new_child: Self) -> Self {
+    pub fn add_child(mut self, alloc: &'a Bump, mut new_child: Self) -> Self {
         self.size += new_child.size;
         self.num_children += 1;
 

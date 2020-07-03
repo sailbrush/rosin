@@ -488,14 +488,7 @@ impl Selector {
     pub(crate) fn check<T>(&self, node: &ArrayNode<T>) -> bool {
         match self {
             Selector::Wildcard => true,
-            Selector::Id(selector) => {
-                if let Some(id) = node.id {
-                    id == selector
-                } else {
-                    false
-                }
-            }
-            Selector::Class(selector) => node.classes.iter().any(|class| class == selector),
+            Selector::Id(selector) | Selector::Class(selector) => node.classes.iter().any(|class| class == selector),
             _ => false,
         }
     }
@@ -592,7 +585,7 @@ impl Stylesheet {
     /// Perform selector matching and apply styles to a tree
     pub(crate) fn style<T: fmt::Debug>(&self, tree: &mut [ArrayNode<T>]) {
         for id in 0..tree.len() {
-            // TODO hash map
+            // TODO benchmark hash map
             let mut relevant_rules = self
                 .rules
                 .iter()
