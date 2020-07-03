@@ -1,7 +1,6 @@
 #![allow(clippy::cognitive_complexity)]
 
-use std::time::SystemTime;
-use std::{cmp::Ordering, fmt, fs};
+use std::{cmp::Ordering, error::Error, fmt, fs, time::SystemTime};
 
 use cssparser::{Parser, ParserInput, RuleListParser};
 use druid_shell::piet;
@@ -551,36 +550,8 @@ impl Stylesheet {
             last_modified: None,
             rules: Vec::new(),
         };
-        new.reload();
+        new.poll();
         new
-    }
-
-    // TODO right now it defaults to reloading, but should probably switch to poll() like libloader. Maybe?
-    pub fn reload(&mut self) -> bool {
-        if let Some(path) = self.path {
-            let mut should_reload = true;
-
-            if let Ok(metadata) = fs::metadata(&path) {
-                if let Ok(last_modified) = metadata.modified() {
-                    if let Some(prev_last_modified) = self.last_modified {
-                        if last_modified <= prev_last_modified {
-                            should_reload = false;
-                        }
-                    }
-                    self.last_modified = Some(last_modified);
-                }
-            }
-
-            if should_reload {
-                // TODO consider just printing an error instead of panicing
-                let contents = fs::read_to_string(path).expect("[Rosin] Failed to read stylesheet");
-                self.rules = Self::parse(&contents);
-            }
-
-            should_reload
-        } else {
-            false
-        }
     }
 
     /// Parse CSS text into rule list
@@ -595,6 +566,27 @@ impl Stylesheet {
             }
         }
         rules_list
+    }
+
+    /// Reload stylesheet if it changed on disk
+    pub(crate) fn poll(&mut self) -> Result<bool, Box<dyn Error>> {
+        if let Some(path) = self.path {
+            let mut reloaded = false;
+            let last_modified = fs::metadata(&path)?.modified()?;
+
+            if let Some(prev_last_modified) = self.last_modified {
+                if last_modified > prev_last_modified {
+                    self.last_modified = Some(last_modified);
+                    let contents = fs::read_to_string(path)?;
+                    self.rules = Self::parse(&contents);
+                    reloaded = true;
+                }
+            }
+
+            Ok(reloaded)
+        } else {
+            Ok(false)
+        }
     }
 
     /// Perform selector matching and apply styles to a tree

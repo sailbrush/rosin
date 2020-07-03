@@ -152,7 +152,7 @@ impl<T: fmt::Debug> WinHandler for RosinHandler<T> {
 
         if cfg!(debug_assertions) {
             self.add_task(Duration::from_millis(100), |_, app| {
-                let mut redraw = if app.stylesheet.reload() {
+                let mut redraw = if app.stylesheet.poll().expect("[Rosin] Failed to reload stylesheet.") {
                     Redraw::Yes
                 } else {
                     Redraw::No
