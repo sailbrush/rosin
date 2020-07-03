@@ -19,8 +19,7 @@ pub(crate) struct LibLoader {
 
 impl LibLoader {
     pub fn new(path: PathBuf) -> Result<Self, Box<dyn Error>> {
-        let metadata = fs::metadata(&path)?;
-        let last_modified = metadata.modified()?;
+        let last_modified = fs::metadata(&path)?.modified()?;
         let temp_path = path.with_extension("0");
         fs::copy(&path, &temp_path)?;
         let lib = Library::new(temp_path)?;
@@ -35,9 +34,8 @@ impl LibLoader {
 
     /// Reload library if it changed on disk
     pub fn poll(&mut self) -> Result<bool, Box<dyn Error>> {
-        let mut changed = false;
-        let metadata = fs::metadata(&self.lib_path)?;
-        let last_modified = metadata.modified()?;
+        let mut reloaded = false;
+        let last_modified = fs::metadata(&self.lib_path)?.modified()?;
 
         if last_modified > self.last_modified {
             let next_temp_ext = self.temp_ext + 1;
@@ -51,11 +49,11 @@ impl LibLoader {
                 self.lib = Some(Library::new(next_temp_path)?);
                 fs::remove_file(self.lib_path.with_extension(self.temp_ext.to_string()))?;
                 self.temp_ext = next_temp_ext;
-                changed = true;
+                reloaded = true;
             }
         }
 
-        Ok(changed)
+        Ok(reloaded)
     }
 
     pub fn get<S>(&self, symbol: &[u8]) -> Result<Symbol<S>, Box<dyn Error>> {
