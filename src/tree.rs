@@ -9,6 +9,7 @@ use crate::style::{Style, StyleDefault};
 // TODO
 // - make it so a node either contains other nodes OR content
 
+
 /// Macro for describing the structure and style of a UI
 ///
 /// [] - Create and set classes on a new node
@@ -123,37 +124,11 @@ impl<'a, T> CallbackList<'a, T> {
     }
 }
 
-pub(crate) struct NodeData<'a, T> {
+#[derive(Debug)]
+pub(crate) struct Node<'a, T> {
     pub id: Option<&'a str>,
     pub css_classes: BumpVec<'a, &'a str>,
     pub callbacks: CallbackList<'a, T>,
-}
-
-impl<'a, T> fmt::Debug for NodeData<'a, T> {
-    // TODO
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "id: {:?},", self.id);
-        write!(f, "css_classes: [");
-        for class in &self.css_classes {
-            write!(f, "{:?},", class);
-        }
-        write!(f, "]")
-    }
-}
-
-impl<'a, T> NodeData<'a, T> {
-    fn new(alloc: &'a Bump) -> Self {
-        Self {
-            id: None,
-            css_classes: BumpVec::new_in(&alloc),
-            callbacks: CallbackList::new(&alloc),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub(crate) struct Node<'a, T> {
-    pub data: NodeData<'a, T>,
     pub style: Style,
     pub parent: usize,
     pub num_children: usize,
@@ -171,7 +146,9 @@ impl<'a, T> Node<'a, T> {
 }
 
 pub struct TreeNode<'a, T> {
-    data: Option<NodeData<'a, T>>,
+    id: Option<&'a str>,
+    css_classes: Option<BumpVec<'a, &'a str>>,
+    callbacks: Option<CallbackList<'a, T>>,
     style_default: Option<StyleDefault>,
     size: usize,
     num_children: usize,
@@ -182,7 +159,9 @@ pub struct TreeNode<'a, T> {
 impl<'a, T> TreeNode<'a, T> {
     pub fn new(alloc: &'a Bump) -> Self {
         Self {
-            data: Some(NodeData::new(&alloc)),
+            id: None,
+            css_classes: Some(BumpVec::new_in(&alloc)),
+            callbacks: Some(CallbackList::new(&alloc)),
             style_default: None,
             size: 1,
             num_children: 0,
@@ -196,24 +175,22 @@ impl<'a, T> TreeNode<'a, T> {
 impl<'a, T> TreeNode<'a, T> {
     /// Set the id
     pub fn id(mut self, alloc: &'a Bump, id: &str) -> Self {
-        if let Some(data) = &mut self.data {
-            data.id = Some(alloc.alloc_str(id));
-        }
+        self.id = Some(alloc.alloc_str(id));
         self
     }
 
     /// Add a CSS class
-    pub fn class(mut self, alloc: &'a Bump, class: &str) -> Self {
-        if let Some(data) = &mut self.data {
-            data.css_classes.push(alloc.alloc_str(class));
+    pub fn class(mut self, alloc: &'a Bump, class: &'a str) -> Self {
+        if let Some(css_classes) = &mut self.css_classes {
+            css_classes.push(alloc.alloc(class.clone()));
         }
         self
     }
 
     /// Register an event listener
     pub fn event(mut self, event_type: On, callback: fn(&mut T, &mut App) -> Redraw) -> Self {
-        if let Some(data) = &mut self.data {
-            data.callbacks.add(event_type, callback);
+        if let Some(callbacks) = &mut self.callbacks {
+            callbacks.add(event_type, callback);
         }
         self
     }
@@ -252,7 +229,9 @@ impl<'a, T> TreeNode<'a, T> {
             }
 
             tree.push(Node {
-                data: curr_node.data.take()?,
+                id: curr_node.id,
+                css_classes: curr_node.css_classes.take()?,
+                callbacks: curr_node.callbacks.take()?,
                 style: curr_node.style_default.unwrap_or(Style::default)(),
                 parent,
                 num_children: curr_node.num_children,

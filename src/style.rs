@@ -492,13 +492,13 @@ impl Selector {
         match self {
             Selector::Wildcard => true,
             Selector::Id(selector) => {
-                if let Some(id) = node.data.id {
+                if let Some(id) = node.id {
                     id == selector
                 } else {
                     false
                 }
             }
-            Selector::Class(selector) => node.data.css_classes.iter().any(|class| class == selector),
+            Selector::Class(selector) => node.css_classes.iter().any(|class| class == selector),
             _ => false,
         }
     }
