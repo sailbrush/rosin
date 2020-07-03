@@ -8,7 +8,6 @@ use crate::style::{Style, StyleDefault};
 
 // TODO
 // - make it so a node either contains other nodes OR content
-// - use a hash for id and classes, just accept &str
 
 /// Macro for describing the structure and style of a UI
 ///
@@ -18,19 +17,19 @@ use crate::style::{Style, StyleDefault};
 #[macro_export]
 macro_rules! ui {
     ($alloc:ident; $($class:literal),* $(_)? => [ $($children:tt)* ]) => {
-        ui!($alloc; TreeNode::new(&$alloc) $(.class($class))*; $($children)* )
+        ui!($alloc; TreeNode::new(&$alloc) $(.class(&$alloc, $class))*; $($children)* )
     };
     ($alloc:ident; $tree:expr; $($class:literal),* $(_)? => [ $($children:tt)* ] $($tail:tt)*) => {
-        ui!($alloc; $tree.child(&$alloc, ui!($alloc; TreeNode::new(&$alloc) $(.class($class))*; $($children)* )); $($tail)* )
+        ui!($alloc; $tree.child(&$alloc, ui!($alloc; TreeNode::new(&$alloc) $(.class(&$alloc, $class))*; $($children)* )); $($tail)* )
     };
     ($alloc:ident; $tree:expr; $($class:literal),* $(_)? => ($widget:ident!( $($params:tt)* )) $($tail:tt)*) => {
-        ui!($alloc; $tree.child(&$alloc, $widget!($alloc; $($params)*) $(.class($class))* ); $($tail)* )
+        ui!($alloc; $tree.child(&$alloc, $widget!($alloc; $($params)*) $(.class(&$alloc, $class))* ); $($tail)* )
     };
     ($alloc:ident; $tree:expr; $($class:literal),* $(_)? => ( $function:expr ) $($tail:tt)*) => {
-        ui!($alloc; $tree.child(&$alloc, $function $(.class($class))* ); $($tail)* )
+        ui!($alloc; $tree.child(&$alloc, $function $(&$alloc, .class(&$alloc, $class))* ); $($tail)* )
     };
     ($alloc:ident; $tree:expr; $($class:literal),* $(_)? => { $($builder:tt)* } $($tail:tt)*) => {
-        ui!($alloc; $tree.child(&$alloc, TreeNode::new(&$alloc) $(.class($class))* $($builder)* ); $($tail)* )
+        ui!($alloc; $tree.child(&$alloc, TreeNode::new(&$alloc) $(.class(&$alloc, $class))* $($builder)* ); $($tail)* )
     };
     ($alloc:ident; $tree:expr; { $($body:tt)* } $($tail:tt)*) => {
         ui!($alloc; $tree $($body)*; $($tail)* )
@@ -125,8 +124,8 @@ impl<'a, T> CallbackList<'a, T> {
 }
 
 pub(crate) struct NodeData<'a, T> {
-    pub id: Option<&'static str>,
-    pub css_classes: BumpVec<'a, &'static str>,
+    pub id: Option<&'a str>,
+    pub css_classes: BumpVec<'a, &'a str>,
     pub callbacks: CallbackList<'a, T>,
 }
 
@@ -196,17 +195,17 @@ impl<'a, T> TreeNode<'a, T> {
 // TODO Content enum that can be text, image, or canvas callback
 impl<'a, T> TreeNode<'a, T> {
     /// Set the id
-    pub fn id(mut self, id: &'static str) -> Self {
+    pub fn id(mut self, alloc: &'a Bump, id: &str) -> Self {
         if let Some(data) = &mut self.data {
-            data.id = Some(id);
+            data.id = Some(alloc.alloc_str(id));
         }
         self
     }
 
     /// Add a CSS class
-    pub fn class(mut self, class: &'static str) -> Self {
+    pub fn class(mut self, alloc: &'a Bump, class: &str) -> Self {
         if let Some(data) = &mut self.data {
-            data.css_classes.push(class);
+            data.css_classes.push(alloc.alloc_str(class));
         }
         self
     }
