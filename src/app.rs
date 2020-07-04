@@ -83,9 +83,9 @@ impl<T: std::fmt::Debug + 'static> AppLauncher<T> {
         self
     }
 
-    pub fn launch(self, store: T) -> Result<(), Box<dyn error::Error>> {
+    pub fn launch(self, state: T) -> Result<(), Box<dyn error::Error>> {
         let mut druid_app = Application::new(None);
-        let store_ref = Rc::new(RefCell::new(store));
+        let state_ref = Rc::new(RefCell::new(state));
         let mut app = App::new(self.style);
 
         if cfg!(debug_assertions) && cfg!(feature = "hot-reload") {
@@ -99,7 +99,7 @@ impl<T: std::fmt::Debug + 'static> AppLauncher<T> {
         for mut window in self.windows {
             let handler = Box::new(RosinHandler::new(
                 window.view,
-                Rc::clone(&store_ref),
+                Rc::clone(&state_ref),
                 Rc::clone(&app_ref),
             ));
             window.builder.set_handler(handler);
@@ -119,12 +119,12 @@ struct RosinHandler<T> {
     should_redraw: bool,
     should_relayout: bool,
     view: View<T>,
-    store: Rc<RefCell<T>>,
+    state: Rc<RefCell<T>>,
     app: Rc<RefCell<App>>,
 }
 
 impl<T> RosinHandler<T> {
-    fn new(view: View<T>, store: Rc<RefCell<T>>, app: Rc<RefCell<App>>) -> Self {
+    fn new(view: View<T>, state: Rc<RefCell<T>>, app: Rc<RefCell<App>>) -> Self {
         Self {
             handle: WindowHandle::default(),
             size: (0.0, 0.0),
@@ -133,7 +133,7 @@ impl<T> RosinHandler<T> {
             should_redraw: true,
             should_relayout: true,
             view,
-            store,
+            state,
             app,
         }
     }
@@ -183,13 +183,13 @@ impl<T: fmt::Debug> WinHandler for RosinHandler<T> {
 
     fn paint(&mut self, piet: &mut Piet) -> bool {
         let app = self.app.borrow();
-        let store = self.store.borrow();
+        let state = self.state.borrow();
 
         let time = Instant::now();
 
         // TODO set a bool instead of just clearing it because the cache will be needed for future events
         self.bump.reset();
-        let mut tree = self.view.get(&app.loader)(&self.bump, &store)
+        let mut tree = self.view.get(&app.loader)(&self.bump, &state)
             .finish(&self.bump)
             .unwrap();
         app.stylesheet.style(&mut tree);
@@ -239,7 +239,7 @@ impl<T: fmt::Debug> WinHandler for RosinHandler<T> {
         if let Some(tree) = Some(&self.ui.get_tree()) {
             if let Some(layouts) = Some(&self.ui.get_layouts()) {
                 let mut app = self.app.borrow_mut();
-                let mut store = self.store.borrow_mut();
+                let mut state = self.state.borrow_mut();
 
                 let hit_node =
                     Layout::hit_test(tree, layouts, (event.pos.x as f32, event.pos.y as f32));
@@ -250,7 +250,7 @@ impl<T: fmt::Debug> WinHandler for RosinHandler<T> {
                 if tree[hit_node]
                     .data
                     .callbacks
-                    .trigger(On::Hover, &mut store, &mut app)
+                    .trigger(On::Hover, &mut state, &mut app)
                     == Redraw::Yes
                 {
                     self.should_redraw = true;
@@ -264,7 +264,7 @@ impl<T: fmt::Debug> WinHandler for RosinHandler<T> {
         /*if let Some(tree) = Some(&self.ui.get_tree()) {
             if let Some(layouts) = Some(&self.ui.get_layouts()) {
                 let mut app = self.app.borrow_mut();
-                let mut store = self.store.borrow_mut();
+                let mut state = self.state.borrow_mut();
 
                 let hit_node =
                     Layout::hit_test(tree, layouts, (event.pos.x as f32, event.pos.y as f32));
@@ -272,7 +272,7 @@ impl<T: fmt::Debug> WinHandler for RosinHandler<T> {
                 if tree[hit_node]
                     .data
                     .callbacks
-                    .trigger(On::MouseDown, &mut store, &mut app)
+                    .trigger(On::MouseDown, &mut state, &mut app)
                     == Redraw::Yes
                 {
                     self.should_redraw = true;
@@ -286,7 +286,7 @@ impl<T: fmt::Debug> WinHandler for RosinHandler<T> {
         /*if let Some(tree) = Some(&self.ui.get_tree()) {
             if let Some(layouts) = Some(&self.ui.get_layouts()) {
                 let mut app = self.app.borrow_mut();
-                let mut store = self.store.borrow_mut();
+                let mut state = self.state.borrow_mut();
 
                 let hit_node =
                     Layout::hit_test(tree, layouts, (event.pos.x as f32, event.pos.y as f32));
@@ -294,7 +294,7 @@ impl<T: fmt::Debug> WinHandler for RosinHandler<T> {
                 if tree[hit_node]
                     .data
                     .callbacks
-                    .trigger(On::MouseUp, &mut store, &mut app)
+                    .trigger(On::MouseUp, &mut state, &mut app)
                     == Redraw::Yes
                 {
                     self.should_redraw = true;
@@ -308,9 +308,9 @@ impl<T: fmt::Debug> WinHandler for RosinHandler<T> {
         if let Some(task) = self.tasks.remove(&id) {
             let (r, s) = {
                 let mut app = self.app.borrow_mut();
-                let mut store = self.store.borrow_mut();
+                let mut state = self.state.borrow_mut();
 
-                (task.callback)(&mut store, &mut app)
+                (task.callback)(&mut state, &mut app)
             };
 
             if r == Redraw::Yes {
