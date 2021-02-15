@@ -1,14 +1,206 @@
-use std::{collections::HashMap, f32};
-
-use crate::style::{FlexDirection, Point, Position, Size};
+use crate::geometry::*;
+use crate::minmax::*;
+use crate::style::*;
 use crate::tree::ArrayNode;
 
-#[derive(Debug, Default, Copy, Clone)]
-pub struct Bounds {
-    pub min_width: f32,
-    pub max_width: f32,
-    pub min_height: f32,
-    pub max_height: f32,
+impl Style {
+    fn flex_base(&self, dir: FlexDirection) -> f32 {
+        if dir.is_row() {
+            self.flex_basis.unwrap_or_else(|| self.width.unwrap_or(0.0))
+        } else {
+            self.flex_basis.unwrap_or_else(|| self.height.unwrap_or(0.0))
+        }
+    }
+
+    fn hypo_inner_size(&self, dir: FlexDirection) -> Size {
+        if dir.is_row() {
+            Size {
+                width: self.min_width.maybe_max(
+                    self.max_width
+                        .maybe_min(self.flex_basis.unwrap_or_else(|| self.width.unwrap_or(0.0))),
+                ),
+                height: self
+                    .min_height
+                    .maybe_max(self.max_height.maybe_min(self.height.unwrap_or(0.0))),
+            }
+        } else {
+            Size {
+                width: self
+                    .min_width
+                    .maybe_max(self.max_width.maybe_min(self.width.unwrap_or(0.0))),
+                height: self.min_height.maybe_max(
+                    self.max_height
+                        .maybe_min(self.flex_basis.unwrap_or_else(|| self.height.unwrap_or(0.0))),
+                ),
+            }
+        }
+    }
+
+    fn perimeter_size(&self, dir: FlexDirection) -> Size {
+        Size {
+            width: self.margin_left.unwrap_or(0.0)
+                + self.margin_right.unwrap_or(0.0)
+                + self.border_left_width
+                + self.border_right_width
+                + self.padding_left
+                + self.padding_right,
+            height: self.margin_top.unwrap_or(0.0)
+                + self.margin_bottom.unwrap_or(0.0)
+                + self.border_top_width
+                + self.border_bottom_width
+                + self.padding_top
+                + self.padding_bottom,
+        }
+    }
+
+    fn hypo_outer_size(&self, dir: FlexDirection) -> Size {
+        let hypo_inner = self.hypo_inner_size(dir);
+        let perimeter = self.perimeter_size(dir);
+
+        Size {
+            width: hypo_inner.width + perimeter.width,
+            height: hypo_inner.height + perimeter.height,
+        }
+    }
+    /*
+    fn initial_target_size(&self, dir: FlexDirection) -> Size {
+        if dir.is_row() {
+            Size {
+                width: self.min_width.maybe_max(
+                    self.max_width
+                        .maybe_min(self.flex_basis.unwrap_or_else(|| self.width.unwrap_or(0.0))),
+                ),
+                height: self
+                    .min_height
+                    .maybe_max(self.max_height.maybe_min(self.height.unwrap_or(0.0))),
+            }
+        } else {
+            Size {
+                width: self
+                    .min_width
+                    .maybe_max(self.max_width.maybe_min(self.width.unwrap_or(0.0))),
+                height: self.min_height.maybe_max(
+                    self.max_height
+                        .maybe_min(self.flex_basis.unwrap_or_else(|| self.height.unwrap_or(0.0))),
+                ),
+            }
+        }
+    }
+
+    fn hypothetical_inner_size(&self, dir: FlexDirection) -> Size {
+        if dir.is_row() {
+            Size {
+                width: self.min_width.maybe_max(
+                    self.max_width
+                        .maybe_min(self.flex_basis.unwrap_or_else(|| self.width.unwrap_or(0.0))),
+                ) + self.border_left_width
+                    + self.border_right_width
+                    + self.padding_left
+                    + self.padding_right,
+                height: self
+                    .min_height
+                    .maybe_max(self.max_height.maybe_min(self.height.unwrap_or(0.0)))
+                    + self.border_top_width
+                    + self.border_bottom_width
+                    + self.padding_top
+                    + self.padding_bottom,
+            }
+        } else {
+            Size {
+                width: self
+                    .min_width
+                    .maybe_max(self.max_width.maybe_min(self.width.unwrap_or(0.0)))
+                    + self.border_left_width
+                    + self.border_right_width
+                    + self.padding_left
+                    + self.padding_right,
+                height: self.min_height.maybe_max(
+                    self.max_height
+                        .maybe_min(self.flex_basis.unwrap_or_else(|| self.height.unwrap_or(0.0))),
+                ) + self.border_top_width
+                    + self.border_bottom_width
+                    + self.padding_top
+                    + self.padding_bottom,
+            }
+        }
+    }
+
+    fn hypothetical_outer_size(&self, dir: FlexDirection) -> Size {
+        if dir.is_row() {
+            Size {
+                width: self.min_width.maybe_max(
+                    self.max_width
+                        .maybe_min(self.flex_basis.unwrap_or_else(|| self.width.unwrap_or(0.0))),
+                ) + self.margin_left.unwrap_or(0.0)
+                    + self.margin_right.unwrap_or(0.0)
+                    + self.border_left_width
+                    + self.border_right_width
+                    + self.padding_left
+                    + self.padding_right,
+                height: self
+                    .min_height
+                    .maybe_max(self.max_height.maybe_min(self.height.unwrap_or(0.0)))
+                    + self.margin_top.unwrap_or(0.0)
+                    + self.margin_bottom.unwrap_or(0.0)
+                    + self.border_top_width
+                    + self.border_bottom_width
+                    + self.padding_top
+                    + self.padding_bottom,
+            }
+        } else {
+            Size {
+                width: self
+                    .min_width
+                    .maybe_max(self.max_width.maybe_min(self.width.unwrap_or(0.0)))
+                    + self.margin_left.unwrap_or(0.0)
+                    + self.margin_right.unwrap_or(0.0)
+                    + self.border_left_width
+                    + self.border_right_width
+                    + self.padding_left
+                    + self.padding_right,
+                height: self.min_height.maybe_max(
+                    self.max_height
+                        .maybe_min(self.flex_basis.unwrap_or_else(|| self.height.unwrap_or(0.0))),
+                ) + self.margin_top.unwrap_or(0.0)
+                    + self.margin_bottom.unwrap_or(0.0)
+                    + self.border_top_width
+                    + self.border_bottom_width
+                    + self.padding_top
+                    + self.padding_bottom,
+            }
+        }
+    }*/
+}
+
+#[derive(Debug)]
+struct FlexItem {
+    id: usize,
+
+    margin_top: Option<f32>,
+    margin_right: Option<f32>,
+    margin_bottom: Option<f32>,
+    margin_left: Option<f32>,
+
+    align_self: AlignItems,
+    flex_grow: f32,
+    flex_shrink: f32,
+    flex_base: f32,
+
+    min_size: Size,
+    max_size: Size,
+
+    hypo_inner_size: Size,
+    hypo_outer_size: Size,
+    perimeter_size: Size,
+
+    target_size: Size,
+    frozen: bool,
+}
+
+impl FlexItem {
+    fn flexed_size(&self, flex_space: f32, total_flex_factor: f32) -> f32 {
+        (flex_space * (self.flex_grow / total_flex_factor)) + self.flex_base
+    }
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -29,7 +221,7 @@ impl Default for Layout {
     }
 }
 
-// TODO: warn when in debug mode if content is being ignored
+// TODO content should be drawn behind children
 #[allow(dead_code)]
 impl Layout {
     pub fn hit_test<T>(tree: &[ArrayNode<T>], layout: &[Self], position: (f32, f32)) -> usize {
@@ -100,267 +292,169 @@ impl Layout {
             max_height: size.1 as f32,
         };
 
-        let mut root_layout = Self::default();
-        root_layout.size = Self::solve_node(0, tree, bounds, &mut layouts)?;
-        layouts[0] = root_layout;
+        layouts[0] = Self { size: Self::solve_node(0, tree, bounds, &mut layouts)?, ..Self::default() };
         Self::round_layout(tree, &mut layouts, 0, 0.0, 0.0);
         Some(layouts)
     }
 
     // Returns size including borders and padding, but not margins
     fn solve_node<T>(id: usize, tree: &[ArrayNode<T>], bounds: Bounds, layouts: &mut [Self]) -> Option<Size> {
-        debug_assert!(bounds.min_width <= bounds.max_width);
-        debug_assert!(bounds.min_height <= bounds.max_height);
+        let container = &tree[id];
+        let dir = container.style.flex_direction;
 
         // Collect children that aren't position: fixed
-        let mut child_ids: Vec<usize> = tree[id]
+        // TODO make sure to deal with position: fixed children at the end
+        let mut flex_items: Vec<FlexItem> = container
             .child_ids()
-            .filter(|child_id| tree[*child_id].style.position != Position::Fixed)
             .rev()
+            .map(|id| (id, &tree[id].style))
+            .filter(|(_, style)| style.position != Position::Fixed)
+            .map(|(id, style)| FlexItem {
+                id,
+                margin_top: style.margin_top,
+                margin_right: style.margin_right,
+                margin_bottom: style.margin_bottom,
+                margin_left: style.margin_left,
+                align_self: style.align_self,
+                flex_grow: style.flex_grow,
+                flex_shrink: style.flex_shrink,
+                flex_base: style.flex_base(dir),
+                min_size: Size::new(style.min_width.unwrap_or(0.0), style.min_height.unwrap_or(0.0)),
+                max_size: Size::new(
+                    style.max_width.unwrap_or(f32::INFINITY),
+                    style.max_height.unwrap_or(f32::INFINITY),
+                ),
+                hypo_inner_size: style.hypo_inner_size(dir),
+                hypo_outer_size: style.hypo_outer_size(dir),
+                perimeter_size: style.perimeter_size(dir),
+                target_size: style.hypo_inner_size(dir),
+                frozen: false,
+            })
             .collect();
 
-        if child_ids.is_empty() {
-            // TODO layout text and stuff
+        // TODO layout text and stuff
 
+        if flex_items.is_empty() {
+            // TODO this is incorrect
             Some(Size {
-                width: bounds.min_width.max(
-                    bounds.max_width.min(
-                        tree[id]
-                            .style
-                            .width
-                            .unwrap_or_else(|| tree[id].style.min_width.unwrap_or(0.0))
-                            + tree[id].style.border_left_width
-                            + tree[id].style.border_right_width
-                            + tree[id].style.padding_left
-                            + tree[id].style.padding_right,
-                    ),
-                ),
-                height: bounds.min_height.max(
-                    bounds.max_height.min(
-                        tree[id]
-                            .style
-                            .height
-                            .unwrap_or_else(|| tree[id].style.min_height.unwrap_or(0.0))
-                            + tree[id].style.border_top_width
-                            + tree[id].style.border_bottom_width
-                            + tree[id].style.padding_top
-                            + tree[id].style.padding_bottom,
-                    ),
-                ),
+                width: bounds.min_width.max(bounds.max_width),
+                height: bounds.min_height.max(bounds.max_height),
             })
         } else {
-            let mut child_sizes: HashMap<usize, Size> = HashMap::new();
-
-            // Split children into fixed and flex groups
-            let mut fixed_child_ids = Vec::new();
-            let mut flex_child_ids = Vec::new();
-
-            child_ids.sort_by_key(|&id| tree[id].style.order);
-
-            for &child_id in child_ids.iter() {
-                if tree[child_id].style.flex_grow == 0.0 {
-                    fixed_child_ids.push(child_id);
-                } else {
-                    flex_child_ids.push(child_id);
+            // Split flex items into lines
+            let mut lines: Vec<Vec<FlexItem>> = match container.style.flex_wrap {
+                FlexWrap::NoWrap => vec![flex_items],
+                _ => {
+                    let mut lines = Vec::new();
+                    while !flex_items.is_empty() {
+                        let mut remaining_space = bounds.min_main(dir);
+                        let mut line = Vec::new();
+                        while remaining_space >= 0.0 && !flex_items.is_empty() {
+                            if remaining_space - flex_items.last().unwrap().target_size.main(dir) >= 0.0 {
+                                let item = flex_items.pop().unwrap();
+                                remaining_space -= item.target_size.main(dir);
+                                line.push(item);
+                            }
+                        }
+                        lines.push(line);
+                    }
+                    lines
                 }
-            }
+            };
 
-            match tree[id].style.flex_direction {
-                FlexDirection::RowReverse | FlexDirection::ColumnReverse => {
-                    child_ids.reverse();
+            // Determine main size of items
+            for line in &mut lines {
+                // 9.7.1 - Determine used flex factor
+                let total_hypo_size: f32 = line.iter().map(|child| child.target_size.main(dir)).sum();
+                let growing: bool = total_hypo_size < bounds.max_main(dir);
+
+                // 9.7.2 - Size inflexible items
+                for item in line.iter_mut() {
+                    if item.flex_grow == 0.0
+                        || (growing && item.flex_base > item.target_size.main(dir))
+                        || (!growing && item.flex_base < item.target_size.main(dir))
+                    {
+                        item.frozen = true;
+                    }
                 }
-                _ => {}
-            }
-            match tree[id].style.flex_direction {
-                FlexDirection::Row | FlexDirection::RowReverse => {
-                    // TODO: collect into multiple rows if flex-wrap
 
-                    // Count how many auto margins there are
-                    let mut num_auto_margins: u32 = 0;
-                    for &child_id in child_ids.iter() {
-                        if tree[child_id].style.margin_left == None {
-                            num_auto_margins += 1;
-                        }
+                // 9.7.3 - Calculate initial free space
+                let total_hypo_main_size: f32 = line.iter().map(|item| item.target_size.main(dir)).sum();
+                let initial_free_space: f32 = bounds.max_main(dir) - total_hypo_main_size;
 
-                        if tree[child_id].style.margin_right == None {
-                            num_auto_margins += 1;
-                        }
+                // 9.7.4 - Loop
+                loop {
+                    // a. Check for flexible items
+                    if line.iter().all(|item| item.frozen) {
+                        break;
                     }
 
-                    // Get sizes of fixed children and calculate flexible space
-                    let fixed_bounds = Bounds {
-                        min_width: 0.0,
-                        max_width: f32::INFINITY,
-                        min_height: 0.0,
-                        max_height: bounds.max_height,
-                    };
-                    let mut remaining_space = bounds.max_width;
-                    for &id in fixed_child_ids.iter() {
-                        let child_size = Self::solve_node(id, tree, fixed_bounds, layouts);
-                        child_sizes.insert(id, child_size?);
-                        remaining_space -= child_size?.width;
-                    }
+                    // b. Calculate the remaining free space
+                    let used_space: f32 = line.iter().map(|item| item.target_size.main(dir)).sum();
 
-                    // Account for flex items' inflexible parts
-                    for &id in flex_child_ids.iter() {
-                        remaining_space -= tree[id]
-                            .style
-                            .flex_basis
-                            .unwrap_or_else(|| tree[id].style.width.unwrap_or(0.0));
+                    let mut unfrozen: Vec<&mut FlexItem> = line.iter_mut().filter(|item| !item.frozen).collect();
 
-                        remaining_space -= tree[id].style.margin_left.unwrap_or(0.0);
-                        remaining_space -= tree[id].style.margin_right.unwrap_or(0.0);
+                    let (sum_flex_grow, sum_flex_shrink): (f32, f32) =
+                        unfrozen.iter().fold((0.0, 0.0), |(flex_grow, flex_shrink), item| {
+                            (flex_grow + item.flex_grow, flex_shrink + item.flex_shrink)
+                        });
 
-                        remaining_space -= tree[id].style.border_left_width;
-                        remaining_space -= tree[id].style.border_right_width;
-
-                        remaining_space -= tree[id].style.padding_left;
-                        remaining_space -= tree[id].style.padding_right;
-                    }
-
-                    // Helper function
-                    fn desired_width<T>(node: &ArrayNode<T>, flex_space: f32, total_flex_factor: f32) -> f32 {
-                        (flex_space * (node.style.flex_grow / total_flex_factor))
-                            + node.style.flex_basis.unwrap_or_else(|| node.style.width.unwrap_or(0.0))
-                    };
-
-                    // Get total flex factor
-                    let mut total_flex_factor: f32 = 0.0;
-                    for &id in flex_child_ids.iter() {
-                        total_flex_factor += tree[id].style.flex_grow;
-                    }
-
-                    // Get list of children with a max_width
-                    let mut maxable_ids = flex_child_ids
-                        .iter()
-                        .filter(|&&id| tree[id].style.max_width != None)
-                        .copied()
-                        .collect::<Vec<usize>>();
-
-                    // Account for children that have hit their max
-                    let mut just_found_maxed = true;
-                    while just_found_maxed {
-                        just_found_maxed = false;
-                        for i in 0..maxable_ids.len() {
-                            if tree[maxable_ids[i]].style.max_width?
-                                < desired_width(&tree[maxable_ids[i]], remaining_space, total_flex_factor)
-                            {
-                                remaining_space -= tree[maxable_ids[i]].style.max_width?;
-                                total_flex_factor -= tree[maxable_ids[i]].style.flex_grow;
-
-                                maxable_ids.remove(i);
-                                just_found_maxed = true;
-                                break;
-                            }
-                        }
-                    }
-
-                    // Get list of children with a min_width
-                    let mut minnable_ids = flex_child_ids
-                        .iter()
-                        .filter(|&&id| tree[id].style.min_width != None)
-                        .copied()
-                        .collect::<Vec<usize>>();
-
-                    // Account for children that have hit their min
-                    let mut just_found_minned = true;
-                    while just_found_minned {
-                        just_found_minned = false;
-                        for i in 0..minnable_ids.len() {
-                            if tree[minnable_ids[i]].style.min_width?
-                                > desired_width(&tree[minnable_ids[i]], remaining_space, total_flex_factor)
-                            {
-                                remaining_space -= tree[minnable_ids[i]].style.min_width?;
-                                total_flex_factor -= tree[minnable_ids[i]].style.flex_grow;
-
-                                minnable_ids.remove(i);
-                                just_found_minned = true;
-                                break;
-                            }
-                        }
-                    }
-
-                    // flex-grow vs flex-shrink
-                    if remaining_space >= 0.0 {
-                        // If any margins are set to Auto, the space between children will flex instead
-                        if num_auto_margins > 0 {
-                            todo!();
-                        } else {
-                            // Grow children
-                            for &id in flex_child_ids.iter() {
-                                let child_width = desired_width(&tree[id], remaining_space, total_flex_factor)
-                                    .min(tree[id].style.max_width.unwrap_or(f32::INFINITY))
-                                    .max(tree[id].style.min_width.unwrap_or(0.0))
-                                    + tree[id].style.border_left_width
-                                    + tree[id].style.border_right_width
-                                    + tree[id].style.padding_left
-                                    + tree[id].style.padding_right;
-
-                                let child_bounds = Bounds {
-                                    min_width: child_width,
-                                    max_width: child_width,
-                                    min_height: 0.0,
-                                    max_height: bounds.max_height,
-                                };
-                                let child_size = Self::solve_node(id, tree, child_bounds, layouts);
-                                child_sizes.insert(id, child_size?);
-                            }
-                        }
+                    let free_space = if growing && sum_flex_grow < 1.0 {
+                        initial_free_space * sum_flex_grow
+                    } else if !growing && sum_flex_shrink < 1.0 {
+                        initial_free_space * sum_flex_shrink
                     } else {
-                        // Get total basis and shrink factor
-                        let mut total_basis: f32 = 0.0;
-                        for &id in flex_child_ids.iter() {
-                            total_basis += tree[id]
-                                .style
-                                .flex_basis
-                                .unwrap_or_else(|| tree[id].style.width.unwrap_or(0.0));
-                        }
+                        bounds.max_main(dir) - used_space
+                    };
 
-                        // Shrink children
-                        for &id in flex_child_ids.iter() {
-                            let basis = tree[id]
-                                .style
-                                .flex_basis
-                                .unwrap_or_else(|| tree[id].style.width.unwrap_or(0.0));
-                            let child_width = (basis
-                                + (((tree[id].style.flex_shrink * basis) / total_basis) * remaining_space))
-                                .max(tree[id].style.min_width.unwrap_or(0.0))
-                                + tree[id].style.border_left_width
-                                + tree[id].style.border_right_width
-                                + tree[id].style.padding_left
-                                + tree[id].style.padding_right;
+                    // c. Distribute the free space proportional the the flex factors
+                    if free_space.is_normal() {
+                        if growing && sum_flex_grow > 0.0 {
+                            for item in &mut unfrozen {
+                                item.target_size
+                                    .set_main(dir, item.flex_base + free_space * (item.flex_grow / sum_flex_grow));
+                            }
+                        } else if !growing && sum_flex_shrink > 0.0 {
+                            let sum_scaled_shrink_factor: f32 =
+                                unfrozen.iter().map(|item| item.flex_base * item.flex_shrink).sum();
 
-                            let child_bounds = Bounds {
-                                min_width: child_width,
-                                max_width: child_width,
-                                min_height: 0.0,
-                                max_height: bounds.max_height,
-                            };
-                            let child_size = Self::solve_node(id, tree, child_bounds, layouts);
-                            child_sizes.insert(id, child_size?);
+                            if sum_scaled_shrink_factor > 0.0 {
+                                for item in &mut unfrozen {
+                                    let scaled_shrink_factor = item.flex_base * item.flex_shrink;
+                                    item.target_size.set_main(
+                                        dir,
+                                        item.flex_base + free_space * (scaled_shrink_factor / sum_scaled_shrink_factor),
+                                    )
+                                }
+                            }
                         }
                     }
 
-                    // TODO: Position children
-                    let mut x_pos: f32 = 0.0;
-                    for &child_id in child_ids.iter() {
-                        let child_size = child_sizes.get(&child_id)?;
-                        let child_layout = Layout {
-                            size: *child_size,
-                            position: Point { x: x_pos, y: 0.0 },
-                        };
-                        layouts[child_id] = child_layout;
-                        x_pos += child_size.width;
-                    }
+                    // d. Fix min/max violations
 
-                    // TODO: Return correct size, taking into account node's style as well as children
-                    Some(Size {
-                        width: x_pos.max(bounds.min_width).min(bounds.max_width),
-                        height: bounds.max_height,
-                    })
+                    // e. Freeze over-flexed items
                 }
-                FlexDirection::Column | FlexDirection::ColumnReverse => todo!(),
             }
+
+            let mut x_pos: f32 = 0.0;
+            for line in lines {
+                // TODO: Position children
+
+                for item in line {
+                    let child_layout = Layout {
+                        size: item.target_size,
+                        position: Point { x: x_pos, y: 0.0 },
+                    };
+                    layouts[item.id] = child_layout;
+                    x_pos += item.target_size.main(dir);
+                }
+            }
+
+            // TODO: Return correct size, taking into account node's style as well as children
+            Some(Size {
+                width: (x_pos).max(bounds.min_width).min(bounds.max_width),
+                height: bounds.max_height,
+            })
         }
     }
 }

@@ -1,5 +1,8 @@
-use libloading::{Library, Symbol};
+#![cfg_attr(not(all(debug_assertions, feature = "hot-reload")), allow(unused_imports))]
+
 use std::{error::Error, fs, path::PathBuf, time::SystemTime};
+
+use libloading::{Library, Symbol};
 
 #[cfg(target_os = "windows")]
 pub const DYLIB_EXT: &str = "dll";
@@ -22,7 +25,9 @@ impl LibLoader {
         let last_modified = fs::metadata(&path)?.modified()?;
         let temp_path = path.with_extension("0");
         fs::copy(&path, &temp_path)?;
-        let lib = Library::new(temp_path)?;
+
+        // SAFETY: This is necessary to use a dynamic library
+        let lib = unsafe { Library::new(temp_path) }?;
 
         Ok(Self {
             lib: Some(lib),
@@ -42,11 +47,15 @@ impl LibLoader {
             let next_temp_path = self.lib_path.with_extension(next_temp_ext.to_string());
 
             // Copy to a new location so the compiler can overwrite the original
-            // If unable to copy, the file is likely still being written to
-            // So, just wait until next poll to unload the current library
+            // If unable to copy, the file is likely still being written
+            // so just wait until next poll to unload the current library
             if fs::copy(&self.lib_path, &next_temp_path).is_ok() {
+                // SAFETY: This is necessary to use a dynamic library
+                unsafe {
+                    self.lib = Some(Library::new(next_temp_path)?);
+                }
+
                 self.last_modified = last_modified;
-                self.lib = Some(Library::new(next_temp_path)?);
                 fs::remove_file(self.lib_path.with_extension(self.temp_ext.to_string()))?;
                 self.temp_ext = next_temp_ext;
                 reloaded = true;
@@ -58,9 +67,9 @@ impl LibLoader {
 
     #[cfg(all(debug_assertions, feature = "hot-reload"))]
     pub fn get<S>(&self, symbol: &[u8]) -> Result<Symbol<S>, Box<dyn Error>> {
-        // Unsafe is necessary to load from a dynamic library
+        // SAFETY: This is necessary to use a dynamic library
         unsafe {
-            // Unwrap is ok because lib *should* always be Some() until dropped
+            // Unwrap is ok because lib will always be Some() until dropped
             Ok(self.lib.as_ref().unwrap().get(symbol)?)
         }
     }

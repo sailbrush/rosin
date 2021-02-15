@@ -1,12 +1,11 @@
 #![allow(clippy::cognitive_complexity)]
 
-use std::{cmp::Ordering, error::Error, fmt, fs, time::SystemTime};
-
-use cssparser::{Parser, ParserInput, RuleListParser};
-use druid_shell::piet;
-
 use crate::parser::*;
 use crate::tree::*;
+
+use std::{cmp::Ordering, error::Error, fs, time::SystemTime};
+
+use cssparser::{Parser, ParserInput, RuleListParser, RGBA};
 
 macro_rules! apply {
     (@color, $value:expr, $style:expr, $par_style:ident, $attr:ident) => {
@@ -24,7 +23,7 @@ macro_rules! apply {
                     $style.$attr = $style.color.clone();
                 }
                 cssparser::Color::RGBA(rgba) => {
-                    $style.$attr = piet::Color::rgba8(rgba.red, rgba.green, rgba.blue, rgba.alpha);
+                    $style.$attr = *rgba;
                 }
             },
             _ => debug_assert!(false),
@@ -115,26 +114,6 @@ macro_rules! style_new {
             Stylesheet::new_static(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), $path)))
         }
     };
-}
-
-#[derive(Debug, Default, Copy, Clone)]
-pub struct Rect {
-    pub top: f32,
-    pub right: f32,
-    pub bottom: f32,
-    pub left: f32,
-}
-
-#[derive(Debug, Default, Copy, Clone)]
-pub struct Size {
-    pub width: f32,
-    pub height: f32,
-}
-
-#[derive(Debug, Default, Copy, Clone)]
-pub struct Point {
-    pub x: f32,
-    pub y: f32,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -275,6 +254,13 @@ pub enum FlexDirection {
 }
 
 impl FlexDirection {
+    pub fn is_row(&self) -> bool {
+        match self {
+            FlexDirection::Row | FlexDirection::RowReverse => true,
+            FlexDirection::Column | FlexDirection::ColumnReverse => false,
+        }
+    }
+
     pub(crate) fn from_css_token(token: &str) -> Result<Self, ()> {
         match token {
             "row" => Ok(FlexDirection::Row),
@@ -349,17 +335,17 @@ pub struct Style {
     pub align_content: AlignContent,
     pub align_items: AlignItems,
     pub align_self: AlignItems,
-    pub background_color: piet::Color,
-    pub background_image: Option<piet::FixedGradient>,
-    pub border_bottom_color: piet::Color,
+    pub background_color: RGBA,
+    //pub background_image: Option<piet::FixedGradient>,
+    pub border_bottom_color: RGBA,
     pub border_bottom_left_radius: f32,
     pub border_bottom_right_radius: f32,
     pub border_bottom_width: f32,
-    pub border_left_color: piet::Color,
+    pub border_left_color: RGBA,
     pub border_left_width: f32,
-    pub border_right_color: piet::Color,
+    pub border_right_color: RGBA,
     pub border_right_width: f32,
-    pub border_top_color: piet::Color,
+    pub border_top_color: RGBA,
     pub border_top_left_radius: f32,
     pub border_top_right_radius: f32,
     pub border_top_width: f32,
@@ -367,9 +353,9 @@ pub struct Style {
     pub box_shadow_offset_x: f32,
     pub box_shadow_offset_y: f32,
     pub box_shadow_blur: f32,
-    pub box_shadow_color: piet::Color,
+    pub box_shadow_color: RGBA,
     pub box_shadow_inset: Option<bool>,
-    pub color: piet::Color,
+    pub color: RGBA,
     pub cursor: Cursor,
     pub flex_basis: Option<f32>,
     pub flex_direction: FlexDirection,
@@ -409,17 +395,17 @@ impl Default for Style {
             align_content: AlignContent::Stretch,
             align_items: AlignItems::Stretch,
             align_self: AlignItems::Stretch,
-            background_color: piet::Color::WHITE.with_alpha(0.0),
-            background_image: None,
-            border_bottom_color: piet::Color::BLACK,
+            background_color: RGBA::transparent(),
+            //background_image: None,
+            border_bottom_color: RGBA::new(0, 0, 0, 255),
             border_bottom_left_radius: 0.0,
             border_bottom_right_radius: 0.0,
             border_bottom_width: 0.0,
-            border_left_color: piet::Color::BLACK,
+            border_left_color: RGBA::new(0, 0, 0, 255),
             border_left_width: 0.0,
-            border_right_color: piet::Color::BLACK,
+            border_right_color: RGBA::new(0, 0, 0, 255),
             border_right_width: 0.0,
-            border_top_color: piet::Color::BLACK,
+            border_top_color: RGBA::new(0, 0, 0, 255),
             border_top_left_radius: 0.0,
             border_top_right_radius: 0.0,
             border_top_width: 0.0,
@@ -427,9 +413,9 @@ impl Default for Style {
             box_shadow_offset_x: 0.0,
             box_shadow_offset_y: 0.0,
             box_shadow_blur: 0.0,
-            box_shadow_color: piet::Color::BLACK,
+            box_shadow_color: RGBA::new(0, 0, 0, 255),
             box_shadow_inset: None,
-            color: piet::Color::BLACK,
+            color: RGBA::new(0, 0, 0, 255),
             cursor: Cursor::Default,
             flex_basis: None,
             flex_direction: FlexDirection::Row,
@@ -564,26 +550,29 @@ impl Stylesheet {
     /// Reload stylesheet if it changed on disk
     pub(crate) fn poll(&mut self) -> Result<bool, Box<dyn Error>> {
         if let Some(path) = self.path {
-            let mut reloaded = false;
+            let mut reload = true;
             let last_modified = fs::metadata(&path)?.modified()?;
 
             if let Some(prev_last_modified) = self.last_modified {
-                if last_modified > prev_last_modified {
-                    self.last_modified = Some(last_modified);
-                    let contents = fs::read_to_string(path)?;
-                    self.rules = Self::parse(&contents);
-                    reloaded = true;
+                if last_modified == prev_last_modified {
+                    reload = false;
                 }
             }
 
-            Ok(reloaded)
+            if reload {
+                self.last_modified = Some(last_modified);
+                let contents = fs::read_to_string(path)?;
+                self.rules = Self::parse(&contents);
+            }
+
+            Ok(reload)
         } else {
             Ok(false)
         }
     }
 
     /// Perform selector matching and apply styles to a tree
-    pub(crate) fn style<T: fmt::Debug>(&self, tree: &mut [ArrayNode<T>]) {
+    pub(crate) fn style<T>(&self, tree: &mut [ArrayNode<T>]) {
         for id in 0..tree.len() {
             // TODO benchmark hash map
             let mut relevant_rules = self
@@ -696,14 +685,13 @@ impl Stylesheet {
                                 PropertyValue::Initial => tree[id].style.color = Style::default().color,
                                 PropertyValue::Exact(color) => {
                                     if let cssparser::Color::RGBA(rgba) = color {
-                                        tree[id].style.color =
-                                            piet::Color::rgba8(rgba.red, rgba.green, rgba.blue, rgba.alpha);
+                                        tree[id].style.color = *rgba;
                                     }
                                 }
                                 _ => {
                                     // Inherited by default
                                     if let Some(parent) = &par_style {
-                                        tree[id].style.color = parent.color.clone();
+                                        tree[id].style.color = parent.color;
                                     }
                                 }
                             }
@@ -720,7 +708,7 @@ impl Stylesheet {
             }
             if !color_set {
                 if let Some(parent) = &par_style {
-                    tree[id].style.color = parent.color.clone();
+                    tree[id].style.color = parent.color;
                 }
             }
 
@@ -742,10 +730,10 @@ impl Stylesheet {
                         Property::BackgroundColor(value) => {
                             apply!(@color, value, tree[id].style, par_style, background_color);
                         }
-                        Property::BackgroundImage(_) => {
+                        /*Property::BackgroundImage(_) => {
                             todo!();
                             //apply!(@generic_opt, value, arena[id].style, par_style, background_image);
-                        }
+                        }*/
                         Property::BorderBottomColor(value) => {
                             apply!(@color, value, tree[id].style, par_style, border_bottom_color);
                         }

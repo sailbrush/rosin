@@ -1,9 +1,8 @@
 #![allow(clippy::cognitive_complexity)]
 
-use cssparser::*;
-use druid_shell::piet;
-
 use crate::style::*;
+
+use cssparser::*;
 
 // TODO: if debug_assertions, print parse errors to stderr
 // TODO: :focus, :hover, etc
@@ -201,7 +200,8 @@ pub enum Property {
     AlignItems(PropertyValue<AlignItems>),
     AlignSelf(PropertyValue<AlignItems>),
     BackgroundColor(PropertyValue<cssparser::Color>),
-    BackgroundImage(PropertyValue<piet::FixedGradient>),
+    //TODO
+    //BackgroundImage(PropertyValue<piet::FixedGradient>),
     BorderBottomColor(PropertyValue<cssparser::Color>),
     BorderBottomLeftRadius(PropertyValue<Length>),
     BorderBottomRightRadius(PropertyValue<Length>),
@@ -337,7 +337,7 @@ impl<'i> QualifiedRuleParser<'i> for RulesParser {
     fn parse_block<'t>(
         &mut self,
         prelude: Self::Prelude,
-        _location: SourceLocation,
+        _start: &ParserState,
         parser: &mut Parser<'i, 't>,
     ) -> Result<Self::QualifiedRule, ParseError<'i, Self::Error>> {
         let mut property_list = Vec::new();

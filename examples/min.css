@@ -1,0 +1,11 @@
+.left {
+    flex-grow: 2.0;
+    height: 300px;
+    background-color: lightblue;
+}
+
+.right {
+    flex-grow: 1.0;
+    height: 200px;
+    background-color: red;
+}

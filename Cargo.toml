@@ -3,9 +3,9 @@ name = "rosin"
 version = "0.2.0"
 authors = ["TimTom <timtom.business@gmail.com>"]
 edition = "2018"
-description = "Rosin is a GUI library for Rust that aims to be extremely easy to use."
+description = "Rosin is a GUI framework for Rust that aims to be extremely easy to use."
 documentation = "https://github.com/timtom-dev/rosin"
-homepage = "https://www.rosin.rs/"
+homepage = "https://github.com/timtom-dev/rosin"
 repository = "https://github.com/timtom-dev/rosin"
 readme = "README.md"
 keywords = ["GUI"]
@@ -13,11 +13,19 @@ categories = ["gui"]
 license = "MIT"
 
 [dependencies]
-druid-shell = { git = "https://github.com/xi-editor/druid.git" }
-cssparser = "0.27"
-libloading = "0.6"
-bumpalo = { version = "3.4", features = ["collections"] }
-font-kit = "0.9"
+bumpalo = { version = "3.6", features = ["collections"] }
+cssparser = "0.28"
+font-kit = "0.10"
+futures = "0.3"
+libloading = "0.7"
+raqote = "0.8"
+wgpu = "0.7"
+winit = "0.24"
 
 [features]
 hot-reload = []
+
+# raqote is too slow to use without optimisations
+# eventually we'll switch to a fast GPU rasterizer
+[profile.dev]
+opt-level = 3 
