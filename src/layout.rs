@@ -279,12 +279,7 @@ impl Layout {
         }
     }
 
-    pub fn solve<T>(tree: &[ArrayNode<T>], size: (f64, f64)) -> Option<Vec<Self>> {
-        let mut layouts = Vec::with_capacity(tree.len());
-        for _ in 0..tree.len() {
-            layouts.push(Layout::default());
-        }
-
+    pub fn solve<T>(tree: &[ArrayNode<T>], size: (f32, f32), output: &mut [Self]) {
         let bounds = Bounds {
             min_width: size.0 as f32,
             max_width: size.0 as f32,
@@ -292,13 +287,24 @@ impl Layout {
             max_height: size.1 as f32,
         };
 
-        layouts[0] = Self { size: Self::solve_node(0, tree, bounds, &mut layouts)?, ..Self::default() };
-        Self::round_layout(tree, &mut layouts, 0, 0.0, 0.0);
-        Some(layouts)
+        /*output[0] = Self {
+            size: Self::solve_node(0, tree, bounds, output),
+            ..Self::default()
+        };*/
+
+        output[0] = Self {
+            size: Size {
+                width: size.0,
+                height: size.1,
+            },
+            ..Self::default()
+        };
+
+        Self::round_layout(tree, output, 0, 0.0, 0.0);
     }
 
     // Returns size including borders and padding, but not margins
-    fn solve_node<T>(id: usize, tree: &[ArrayNode<T>], bounds: Bounds, layouts: &mut [Self]) -> Option<Size> {
+    fn solve_node<T>(id: usize, tree: &[ArrayNode<T>], bounds: Bounds, layouts: &mut [Self]) -> Size {
         let container = &tree[id];
         let dir = container.style.flex_direction;
 
@@ -336,10 +342,10 @@ impl Layout {
 
         if flex_items.is_empty() {
             // TODO this is incorrect
-            Some(Size {
+            Size {
                 width: bounds.min_width.max(bounds.max_width),
                 height: bounds.min_height.max(bounds.max_height),
-            })
+            }
         } else {
             // Split flex items into lines
             let mut lines: Vec<Vec<FlexItem>> = match container.style.flex_wrap {
@@ -451,10 +457,10 @@ impl Layout {
             }
 
             // TODO: Return correct size, taking into account node's style as well as children
-            Some(Size {
+            Size {
                 width: (x_pos).max(bounds.min_width).min(bounds.max_width),
                 height: bounds.max_height,
-            })
+            }
         }
     }
 }

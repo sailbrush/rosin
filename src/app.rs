@@ -44,6 +44,7 @@ pub enum StopTask {
 pub type TaskCallback<T> = fn(&mut T, &mut App<T>) -> (Stage, StopTask);
 
 struct Task<T> {
+    window_id: Option<WindowId>,
     last_run: Instant,
     frequency: Duration,
     callback: TaskCallback<T>,
@@ -54,6 +55,7 @@ pub struct App<T> {
     loader: Option<LibLoader>,
     new_windows: Vec<WindowDesc<T>>,
     windows: HashMap<WindowId, RosinWindow<T>>,
+    current_window: Option<WindowId>,
     stylesheet: Stylesheet,
     tasks: Vec<Task<T>>,
 }
@@ -71,6 +73,7 @@ impl<T: 'static> App<T> {
             loader: None,
             new_windows: Vec::new(),
             windows: HashMap::new(),
+            current_window: None,
             stylesheet: Stylesheet::default(),
             tasks: Vec::new(),
         }
@@ -86,12 +89,17 @@ impl<T: 'static> App<T> {
         self
     }
 
-    pub fn add_task(&mut self, frequency: Duration, callback: TaskCallback<T>) {
+    pub fn add_task(&mut self, window_id: Option<WindowId>, frequency: Duration, callback: TaskCallback<T>) {
         self.tasks.push(Task {
+            window_id,
             last_run: Instant::now(),
             frequency,
             callback,
         });
+    }
+
+    pub fn wid(&self) -> Option<WindowId> {
+        self.current_window
     }
 
     pub fn run(mut self, mut state: T) -> Result<(), Box<dyn error::Error>> {
@@ -104,9 +112,9 @@ impl<T: 'static> App<T> {
         }
 
         if cfg!(debug_assertions) {
-            self.add_task(Duration::from_millis(100), |_, app| {
+            self.add_task(None, Duration::from_millis(100), |_, app| {
                 let mut stage = match app.stylesheet.poll() {
-                    Ok(true) => Stage::Layout,
+                    Ok(true) => Stage::Build,
                     Ok(false) => Stage::Idle,
                     Err(error) => {
                         eprintln!(
@@ -152,7 +160,12 @@ impl<T: 'static> App<T> {
                     if Instant::now().duration_since(task.last_run) >= task.frequency {
                         task.last_run = Instant::now();
                         let (stage, stoptask) = (task.callback)(&mut state, &mut self);
-                        new_stage.keep_max(stage);
+                        if let Some(window_id) = task.window_id {
+                            self.windows.get_mut(&window_id).unwrap().set_stage(stage);
+                        } else {
+                            new_stage.keep_max(stage);
+                        }
+
                         if stoptask == StopTask::Yes {
                             stopped_task_ids.push(i);
                             continue;

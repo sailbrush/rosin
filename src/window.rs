@@ -1,5 +1,7 @@
+use crate::layout::*;
+use crate::render;
 use crate::tree::*;
-use crate::view::View;
+use crate::view::*;
 use crate::{app::Stage, libloader::LibLoader, style::Stylesheet};
 
 use std::{borrow::Cow, error::Error, mem, ptr::NonNull};
@@ -47,12 +49,27 @@ struct OrphanVec {
     _d: NonNull<()>,
 }
 
+impl OrphanVec {
+    pub unsafe fn orphan<U>(vec: BumpVec<U>) -> OrphanVec {
+        mem::transmute::<BumpVec<U>, OrphanVec>(vec)
+    }
+
+    pub unsafe fn adopt<U>(&self) -> &BumpVec<U> {
+        &*(self as *const OrphanVec as *const BumpVec<U>)
+    }
+
+    pub unsafe fn adopt_mut<U>(&mut self) -> &mut BumpVec<U> {
+        &mut *(self as *mut OrphanVec as *mut BumpVec<U>)
+    }
+}
+
 pub(crate) struct RosinWindow<T> {
     window: Window,
     view: View<T>,
     stage: Stage,
     alloc: Alloc,
     tree_cache: Option<OrphanVec>,
+    layout_cache: Option<OrphanVec>,
 
     surface: wgpu::Surface,
     device: wgpu::Device,
@@ -68,8 +85,6 @@ pub(crate) struct RosinWindow<T> {
 
 impl<T> RosinWindow<T> {
     pub fn new(desc: WindowDesc<T>, event_loop: &EventLoopWindowTarget<()>) -> Result<Self, Box<dyn Error>> {
-        assert!(mem::size_of::<BumpVec<()>>() == mem::size_of::<OrphanVec>());
-
         let window = desc.builder.build(event_loop)?;
         let size = window.inner_size();
 
@@ -210,6 +225,7 @@ impl<T> RosinWindow<T> {
             stage: Stage::Build,
             alloc: Alloc::default(),
             tree_cache: None,
+            layout_cache: None,
 
             surface,
             device,
@@ -225,6 +241,7 @@ impl<T> RosinWindow<T> {
     }
 
     fn reset_cache(&mut self) {
+        self.layout_cache = None;
         self.tree_cache = None;
         self.alloc.bump.reset();
     }
@@ -234,9 +251,15 @@ impl<T> RosinWindow<T> {
     }
 
     pub fn borrow_tree_cache(&self) -> Option<&BumpVec<ArrayNode<T>>> {
-        // SAFETY: The returned borrow is guarnteed to remain valid because
+        // SAFETY: The returned borrow is guaranteed to remain valid because
         // it points to heap allocated memory that requires &mut to clear
-        Some(unsafe { &*(self.tree_cache.as_ref()? as *const OrphanVec as *const BumpVec<ArrayNode<T>>) })
+        Some(unsafe { self.tree_cache.as_ref()?.adopt() })
+    }
+
+    pub fn borrow_layout_cache(&self) -> Option<&BumpVec<Layout>> {
+        // SAFETY: The returned borrow is guaranteed to remain valid because
+        // it points to heap allocated memory that requires &mut to clear
+        Some(unsafe { self.layout_cache.as_ref()?.adopt() })
     }
 
     pub fn set_stage(&mut self, stage: Stage) {
@@ -248,7 +271,7 @@ impl<T> RosinWindow<T> {
 
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
-            self.stage.keep_max(Stage::Layout);
+            self.set_stage(Stage::Layout);
 
             self.swap_chain_desc.width = new_size.width;
             self.swap_chain_desc.height = new_size.height;
@@ -300,21 +323,34 @@ impl<T> RosinWindow<T> {
             let mut tree = self.view.get(loader)(&self.alloc, &state).finish(&self.alloc).unwrap();
             stylesheet.style(&mut tree);
             // SAFETY: This is needed to store self references, which allows us to retain bump allocated data between redraws
-            self.tree_cache = Some(unsafe { mem::transmute::<BumpVec<ArrayNode<T>>, OrphanVec>(tree) });
+            self.tree_cache = Some(unsafe { OrphanVec::orphan(tree) });
         }
 
-        let tree = self.borrow_tree_cache();
+        let tree: &BumpVec<ArrayNode<T>> = unsafe { self.tree_cache.as_ref().unwrap().adopt() };
 
         // Recalculate layout
         let size = self.window.inner_size();
-        if self.stage >= Stage::Layout {
+        if self.stage >= Stage::Layout || self.layout_cache.is_none() {
+            if self.layout_cache.is_none() {
+                let new_layout: BumpVec<Layout> = BumpVec::with_capacity_in(tree.len(), &self.alloc.bump);
+                // SAFETY: This is needed to store self references, which allows us to retain bump allocated data between redraws
+                self.layout_cache = Some(unsafe { OrphanVec::orphan(new_layout) });
+            }
 
-            // TODO reuse vector for layout
-            //Layout::solve(&tree, (size.width.into(), size.height.into()));
+            let layout = unsafe { self.layout_cache.as_mut().unwrap().adopt_mut() };
+
+            layout.clear();
+            for _ in 0..tree.len() {
+                layout.push(Layout::default());
+            }
+
+            Layout::solve(&tree, (size.width as f32, size.height as f32), layout);
         }
 
-        // Paint
-        let dt = crate::render::render(size);
+        let layout: &BumpVec<Layout> = unsafe { self.layout_cache.as_ref().unwrap().adopt() };
+
+        // Render
+        let dt = render::render(tree, layout);
 
         // Blit to screen
         let frame = self.swap_chain.get_current_frame()?.output;
@@ -338,6 +374,7 @@ impl<T> RosinWindow<T> {
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.draw(0..3, 0..1);
         drop(render_pass);
+
         self.queue.write_texture(
             wgpu::TextureCopyView {
                 texture: &self.texture,
