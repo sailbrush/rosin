@@ -104,6 +104,9 @@ impl<T: 'static> App<T> {
 
     pub fn run(mut self, mut state: T) -> Result<(), Box<dyn error::Error>> {
         let event_loop = self.event_loop.take().ok_or("[Rosin] Already launched")?;
+        if self.new_windows.is_empty() {
+            return Err("[Rosin] No windows".into());
+        }
 
         if cfg!(debug_assertions) && cfg!(feature = "hot-reload") {
             // Use the name of the current binary to find the library
