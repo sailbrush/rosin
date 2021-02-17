@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 mod parser {
     // TODO check that each property is parsing correctly
 }

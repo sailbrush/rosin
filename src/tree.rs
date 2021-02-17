@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use crate::app::*;
 use crate::style::Style;
 

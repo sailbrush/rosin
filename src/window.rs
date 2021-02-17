@@ -358,7 +358,7 @@ impl<T> RosinWindow<T> {
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-        
+
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
             color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {

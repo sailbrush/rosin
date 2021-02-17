@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use crate::layout::Layout;
 use crate::tree::ArrayNode;
 

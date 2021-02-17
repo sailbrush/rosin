@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use crate::style::FlexDirection;
 
 #[derive(Debug, Default, Copy, Clone)]

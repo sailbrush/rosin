@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 pub trait MinMax<In, Out> {
     fn maybe_min(self, rhs: In) -> Out;
     fn maybe_max(self, rhs: In) -> Out;

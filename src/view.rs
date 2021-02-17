@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use crate::libloader::LibLoader;
 use crate::tree::{Alloc, UI};
 

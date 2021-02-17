@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use crate::libloader::LibLoader;
 use crate::libloader::DYLIB_EXT;
 use crate::style::*;

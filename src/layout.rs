@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use crate::geometry::*;
 use crate::minmax::*;
 use crate::style::*;
