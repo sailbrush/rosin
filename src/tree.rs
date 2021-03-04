@@ -19,16 +19,16 @@ use bumpalo::{collections::Vec as BumpVec, Bump};
 #[macro_export]
 macro_rules! ui {
     ($alloc:ident, $($class:literal),* [ $($children:tt)* ]) => {
-        ui!($alloc, TreeNode::new($alloc) $(.add_class($class))*; $($children)* )
+        ui!($alloc, TreeNode::new_in($alloc) $(.add_class($class))*; $($children)* )
     };
     ($alloc:ident, $tree:expr; $($class:literal),* [ $($children:tt)* ] $($tail:tt)*) => {
-        ui!($alloc, $tree.add_child($alloc, ui!($alloc, TreeNode::new($alloc) $(.add_class($class))*; $($children)* )); $($tail)* )
+        ui!($alloc, $tree.add_child($alloc, ui!($alloc, TreeNode::new_in($alloc) $(.add_class($class))*; $($children)* )); $($tail)* )
     };
     ($alloc:ident, $tree:expr; $($class:literal),* ( $($child:tt)* ) $($tail:tt)*) => {
         ui!($alloc, $tree.add_child($alloc, $($child)* $(.add_class($class))* ); $($tail)* )
     };
     ($alloc:ident, $tree:expr; $($class:literal),* { $($builder:tt)* } $($tail:tt)*) => {
-        ui!($alloc, $tree.add_child($alloc, TreeNode::new($alloc) $(.add_class($class))* $($builder)* ); $($tail)* )
+        ui!($alloc, $tree.add_child($alloc, TreeNode::new_in($alloc) $(.add_class($class))* $($builder)* ); $($tail)* )
     };
     ($alloc:ident, $tree:expr; { $($body:tt)* } $($tail:tt)*) => {
         ui!($alloc, $tree $($body)*; $($tail)* )
@@ -117,7 +117,7 @@ impl<'a, T> fmt::Debug for CallbackList<'a, T> {
 }
 
 impl<'a, T> CallbackList<'a, T> {
-    fn new(alloc: &'a Bump) -> Self {
+    fn new_in(alloc: &'a Bump) -> Self {
         Self {
             list: BumpVec::new_in(&alloc),
         }
@@ -187,11 +187,11 @@ pub struct TreeNode<'a, T> {
 }
 
 impl<'a, T> TreeNode<'a, T> {
-    pub fn new(alloc: &'a Alloc) -> Self {
+    pub fn new_in(alloc: &'a Alloc) -> Self {
         Self {
             id: None,
             classes: Some(BumpVec::new_in(&alloc.bump)),
-            callbacks: Some(CallbackList::new(&alloc.bump)),
+            callbacks: Some(CallbackList::new_in(&alloc.bump)),
             style_default: None,
             size: 1,
             num_children: 0,
@@ -200,9 +200,7 @@ impl<'a, T> TreeNode<'a, T> {
             content: Content::None,
         }
     }
-}
 
-impl<'a, T> TreeNode<'a, T> {
     /// Set the id
     pub fn set_id(mut self, id: NodeID) -> Self {
         self.id = Some(id);

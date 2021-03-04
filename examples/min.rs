@@ -9,13 +9,11 @@ pub struct State {
     height: f32,
 }
 
-pub fn main_view<'a>(alloc: &'a Alloc, state: &State) -> UI<'a, State> {
-    ui! { alloc,
-        "root" [
-            "left" []
-            "right" []
-        ]
-    }
+pub fn main_view<'a>(alloc: &'a Alloc, _state: &State) -> UI<'a, State> {
+    ui!(alloc, "root" [
+        "left" []
+        "right" []
+    ])
 }
 
 fn main() {
@@ -26,11 +24,11 @@ fn main() {
 
     let view = view_new!(main_view);
     let style = style_new!("/examples/min.css");
-    let window = WindowDesc::new(view).with_title("Rosin Window").with_size(500.0, 500.0);
+    let window = WindowDesc::new(view).with_title("Rosin Window").with_size(250.0, 250.0);
 
     App::new()
-        .add_window(window)
         .use_style(style)
+        .add_window(window)
         .run(state)
         .expect("Failed to launch");
 }

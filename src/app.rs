@@ -16,6 +16,8 @@ use winit::{
 #[non_exhaustive]
 #[derive(Debug, PartialEq, Eq)]
 pub enum On {
+    Build, // TODO Think this through. What happens when a widget wants to spawn a task? What happens after the widget is deleted?
+    Update, // Maybe this? I don't like it though...
     MouseDown,
     MouseUp,
     Hover,
@@ -30,7 +32,7 @@ pub enum Stage {
 }
 
 impl Stage {
-    pub(crate) fn keep_max(&mut self, other: Self) {
+    pub fn keep_max(&mut self, other: Self) {
         if *self < other {
             *self = other;
         }
@@ -44,6 +46,7 @@ pub enum StopTask {
 }
 
 pub type TaskCallback<T> = fn(&mut T, &mut App<T>) -> (Stage, StopTask);
+pub type AnimCallback<T> = fn(&mut T, Duration) -> (Stage, StopTask);
 
 struct Task<T> {
     window_id: Option<WindowId>,
@@ -68,6 +71,8 @@ impl<T: 'static> Default for App<T> {
     }
 }
 
+// TODO add event_filters and event_handlers?
+// Need some way to access raw events for pen pressure, etc
 impl<T: 'static> App<T> {
     pub fn new() -> Self {
         Self {
@@ -91,16 +96,20 @@ impl<T: 'static> App<T> {
         self
     }
 
+    // TODO add_anim_task
+
+    // Similar to setInterval in JS
     pub fn add_task(&mut self, window_id: Option<WindowId>, frequency: Duration, callback: TaskCallback<T>) {
         self.tasks.push(Task {
             window_id,
             last_run: Instant::now(),
-            frequency,
+            frequency: Duration::from_millis(10).max(frequency),
             callback,
         });
     }
 
-    pub fn wid(&self) -> Option<WindowId> {
+    // TODO bike shed this
+    pub fn cwid(&self) -> Option<WindowId> {
         self.current_window
     }
 

@@ -14,6 +14,7 @@ use winit::{
     window::{Window, WindowBuilder, WindowId},
 };
 
+// TODO Just re-export winit types for window creation / events
 pub struct WindowDesc<T> {
     pub(crate) builder: WindowBuilder,
     pub(crate) view: View<T>,
@@ -36,8 +37,6 @@ impl<T> WindowDesc<T> {
         self.builder = self.builder.with_inner_size(LogicalSize::new(width, height));
         self
     }
-
-    //TODO wrap other WindowBuilder functions
 }
 
 // A struct with the same size as BumpVec used to erase lifetimes
@@ -350,6 +349,8 @@ impl<T> RosinWindow<T> {
         let layout: &BumpVec<Layout> = unsafe { self.layout_cache.as_ref().unwrap().adopt() };
 
         // Render
+        // TODO: If stage == Idle, re-issue commands from last frame
+        // TODO: Consider optimizing for a blinking cursor some how
         let dt = render::render(tree, layout);
 
         // Blit to screen
