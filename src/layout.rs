@@ -48,14 +48,6 @@ impl FiniteOrElse for f32 {
 }
 
 impl Style {
-    fn main_size(&self, dir: FlexDirection) -> Option<f32> {
-        if dir.is_row() {
-            self.width
-        } else {
-            self.height
-        }
-    }
-
     fn cross_size(&self, dir: FlexDirection) -> Option<f32> {
         if !dir.is_row() {
             self.width
@@ -146,7 +138,6 @@ struct Cache {
 struct FlexItem {
     id: usize,
 
-    size: Size,
     min_size: Size,
     max_size: Size,
 
@@ -175,7 +166,7 @@ struct FlexItem {
 struct FlexLine<'a> {
     items: &'a mut [FlexItem],
     cross_size: f32,
-    cross_offset: f32,
+    offset_cross: f32,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -228,7 +219,7 @@ fn layout<T>(
     output: &mut [Layout],
 ) -> Size {
     // Check cache for already calculated hypothetical outer size
-    /*if let Some(result) = cache[id].inf_result {
+    if let Some(result) = cache[id].inf_result {
         if hypothetical && bounds.is_infinite() {
             return result;
         }
@@ -248,12 +239,10 @@ fn layout<T>(
         if hypothetical && (!width_compat || !height_compat) {
             panic!("Not compatable??");
         }
-    }*/
+    }
 
     // Define some useful constants
     let dir = tree[id].style.flex_direction;
-    let is_row = dir.is_row();
-    let is_wrap_reverse = tree[id].style.flex_wrap == FlexWrap::WrapReverse;
     let align_content = tree[id].style.align_content;
     let justify_content = tree[id].style.justify_content;
     let flex_wrap = tree[id].style.flex_wrap;
@@ -263,17 +252,11 @@ fn layout<T>(
     let padding = tree[id].style.padding();
     let mbp = margin + border + padding;
 
-    let inner_bounds = Size {
-        width: bounds.width - mbp.horizontal(),
-        height: bounds.height - mbp.vertical(),
-    };
-
     let mut container_size = Size::zero();
 
     // leaf nodes can skip the rest of the function
     if tree[id].num_children == 0 {
         // TODO - measure content, and cache result
-        // TODO - doesn't involve flex_basis, but probably should
 
         let width = bounds.width.finite_or_else(|| {
             tree[id]
@@ -306,7 +289,7 @@ fn layout<T>(
         .filter(|(_, style)| style.position != Position::Fixed)
         .map(|(id, style)| FlexItem {
             id,
-            size: Size::new(style.width.unwrap_or(0.0), style.height.unwrap_or(0.0)),
+
             min_size: Size::new(style.min_width, style.min_height),
             max_size: Size::new(style.max_width, style.max_height),
 
@@ -366,7 +349,7 @@ fn layout<T>(
         flex_lines.push(FlexLine {
             items: &mut flex_items,
             cross_size: 0.0,
-            cross_offset: 0.0,
+            offset_cross: 0.0,
         });
     } else {
         let mut flex_items = &mut flex_items[..];
@@ -387,7 +370,7 @@ fn layout<T>(
             flex_lines.push(FlexLine {
                 items,
                 cross_size: 0.0,
-                cross_offset: 0.0,
+                offset_cross: 0.0,
             });
             flex_items = rest;
         }
@@ -726,7 +709,7 @@ fn layout<T>(
     let align_line = |(i, line): (usize, &mut FlexLine)| {
         let is_first = i == 0;
 
-        line.cross_offset = match align_content {
+        line.offset_cross = match align_content {
             AlignContent::Center => {
                 if is_first {
                     free_space / 2.0
@@ -773,28 +756,28 @@ fn layout<T>(
     }
 
     // Save final layouts
-    let mut total_cross_offset = border.cross(dir) + padding.cross(dir);
+    let mut total_offset_cross = border.cross_start(dir) + padding.cross_start(dir);
     let layout_line = |line: &mut FlexLine| {
-        let mut total_main_offset = tree[id].style.main_margin_start(dir).unwrap_or(0.0);
-        let line_cross_offset = line.cross_offset;
+        let mut total_offset_main = tree[id].style.main_margin_start(dir).unwrap_or(0.0) + border.main_start(dir) + padding.main_start(dir);
+        let line_offset_cross = line.offset_cross;
 
         // TODO - support CSS position
         let layout_item = |item: &mut FlexItem| {
             // Now that we know the final size of an item, layout its children
             layout(alloc, tree, item.id, item.target_size, false, cache, output);
 
-            let main_offset = total_main_offset + item.offset_main + item.margin.main_start(dir);
-            let cross_offset = total_cross_offset + item.offset_cross + line_cross_offset + item.margin.cross_start(dir);
+            let offset_main = total_offset_main + item.offset_main + item.margin.main_start(dir);
+            let offset_cross = total_offset_cross + item.offset_cross + line_offset_cross + item.margin.cross_start(dir);
 
             output[item.id] = Layout {
                 size: item.target_size,
                 position: Point {
-                    x: if dir.is_row() { main_offset } else { cross_offset },
-                    y: if !dir.is_row() { main_offset } else { cross_offset },
+                    x: if dir.is_row() { offset_main } else { offset_cross },
+                    y: if !dir.is_row() { offset_main } else { offset_cross },
                 },
             };
 
-            total_main_offset += item.offset_main + item.margin.main(dir) + item.target_size.main(dir);
+            total_offset_main += item.offset_main + item.mbp.main(dir) + item.target_size.main(dir);
         };
 
         if dir.is_reverse() {
@@ -803,7 +786,7 @@ fn layout<T>(
             line.items.iter_mut().for_each(layout_item);
         }
 
-        total_cross_offset += line_cross_offset + line.cross_size;
+        total_offset_cross += line_offset_cross + line.cross_size;
     };
 
     if flex_wrap == FlexWrap::WrapReverse {
