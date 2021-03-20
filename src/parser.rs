@@ -34,9 +34,7 @@ macro_rules! parse {
     (@length, $parser:ident, $property_type:expr) => {{
         let token = $parser.next()?;
         match token {
-            Token::Number { .. } | Token::Dimension { .. } => {
-                Ok(vec![$property_type(PropertyValue::Exact(token.into()))])
-            }
+            Token::Number { .. } | Token::Dimension { .. } => Ok(vec![$property_type(PropertyValue::Exact(token.into()))]),
             Token::Ident(s) => match_ignore_ascii_case! { &s,
                 "auto" => Ok(vec![$property_type(PropertyValue::Auto)]),
                 "initial" => Ok(vec![$property_type(PropertyValue::Initial)]),
@@ -304,7 +302,7 @@ impl<'i> QualifiedRuleParser<'i> for RulesParser {
                         selector_list.push(Selector::Children);
                     }
 
-                    selector_list.push(Selector::Class(s.replace("-", "_")));
+                    selector_list.push(Selector::Class(s.to_string()));
                     specificity += 10;
 
                     whitespace = false;
@@ -315,7 +313,7 @@ impl<'i> QualifiedRuleParser<'i> for RulesParser {
                         selector_list.push(Selector::Children);
                     }
 
-                    selector_list.push(Selector::Id(s.replace("-", "_")));
+                    selector_list.push(Selector::Id(s.to_string()));
                     specificity += 100;
 
                     whitespace = false;

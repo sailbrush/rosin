@@ -1,13 +1,8 @@
 #![forbid(unsafe_code)]
 
-use crate::app::*;
-use crate::style::Style;
+use crate::prelude::*;
 
-use std::{
-    fmt,
-    num::NonZeroUsize,
-    sync::atomic::{AtomicU32, Ordering},
-};
+use std::num::NonZeroUsize;
 
 use bumpalo::{collections::Vec as BumpVec, Bump};
 
@@ -18,131 +13,87 @@ use bumpalo::{collections::Vec as BumpVec, Bump};
 /// {} - Call methods on parent node
 #[macro_export]
 macro_rules! ui {
-    ($alloc:ident, $($class:literal),* [ $($children:tt)* ]) => {
-        ui!($alloc, TreeNode::new_in($alloc) $(.add_class($class))*; $($children)* )
+    ($al:ident, $($class:literal),* [ $($children:tt)* ]) => {
+        ui!($al, Node::new_in($al) $(.add_class($class))*; $($children)* )
     };
-    ($alloc:ident, $tree:expr; $($class:literal),* [ $($children:tt)* ] $($tail:tt)*) => {
-        ui!($alloc, $tree.add_child($alloc, ui!($alloc, TreeNode::new_in($alloc) $(.add_class($class))*; $($children)* )); $($tail)* )
+    ($al:ident, $tree:expr; $($class:literal),* [ $($children:tt)* ] $($tail:tt)*) => {
+        ui!($al, $tree.add_child($al, ui!($al, Node::new_in($al) $(.add_class($class))*; $($children)* )); $($tail)* )
     };
-    ($alloc:ident, $tree:expr; $($class:literal),* ( $($child:tt)* ) $($tail:tt)*) => {
-        ui!($alloc, $tree.add_child($alloc, $($child)* $(.add_class($class))* ); $($tail)* )
+    ($al:ident, $tree:expr; $($class:literal),* ( $($child:tt)* ) $($tail:tt)*) => {
+        ui!($al, $tree.add_child($al, $($child)* $(.add_class($class))* ); $($tail)* )
     };
-    ($alloc:ident, $tree:expr; $($class:literal),* { $($builder:tt)* } $($tail:tt)*) => {
-        ui!($alloc, $tree.add_child($alloc, TreeNode::new_in($alloc) $(.add_class($class))* $($builder)* ); $($tail)* )
+    ($al:ident, $tree:expr; $($class:literal),* { $($builder:tt)* } $($tail:tt)*) => {
+        ui!($al, $tree.add_child($al, Node::new_in($al) $(.add_class($class))* $($builder)* ); $($tail)* )
     };
-    ($alloc:ident, $tree:expr; { $($body:tt)* } $($tail:tt)*) => {
-        ui!($alloc, $tree $($body)*; $($tail)* )
+    ($al:ident, $tree:expr; { $($body:tt)* } $($tail:tt)*) => {
+        ui!($al, $tree $($body)*; $($tail)* )
     };
 
     // Control flow
-    ($alloc:ident, $tree:expr; if let $v:pat = $e:tt $($tail:tt)*) => {
-        ui!(@munch; @if_block; $alloc; $tree; tree; (if let $v = $e), $($tail)*)
+    ($al:ident, $tree:expr; if let $v:pat = $e:tt $($tail:tt)*) => {
+        ui!(@munch; @if_block; $al; $tree; tree; (if let $v = $e), $($tail)*)
     };
-    ($alloc:ident, $tree:expr; if $e:tt $($tail:tt)*) => {
-        ui!(@munch; @if_block; $alloc; $tree; tree; (if $e), $($tail)*)
+    ($al:ident, $tree:expr; if $e:tt $($tail:tt)*) => {
+        ui!(@munch; @if_block; $al; $tree; tree; (if $e), $($tail)*)
     };
-    ($alloc:ident, $tree:expr; for $v:pat in $e:tt $($tail:tt)*) => {
-        ui!(@munch; @for_block; $alloc; $tree; tree; (for $v in $e), $($tail)*)
+    ($al:ident, $tree:expr; for $v:pat in $e:tt $($tail:tt)*) => {
+        ui!(@munch; @for_block; $al; $tree; tree; (for $v in $e), $($tail)*)
     };
-    ($alloc:ident, $tree:expr; match $e:tt $($tail:tt)*) => {
-        ui!(@munch; @match_block; $alloc; $tree; tree; (match $e), $($tail)*)
+    ($al:ident, $tree:expr; match $e:tt $($tail:tt)*) => {
+        ui!(@munch; @match_block; $al; $tree; tree; (match $e), $($tail)*)
     };
 
     // If chains
-    (@if_block; $alloc:ident; $tree:expr; $temp:ident; ($($prefix:tt)*), { $($body:tt)* } else if $e:tt $($tail:tt)*) => {
-        ui!(@munch; $alloc; if_block; $tree; $temp; ($($prefix)* { $temp = ui!($alloc, $temp; $($body)* ); } else if $e), $($tail)* )
+    (@if_block; $al:ident; $tree:expr; $temp:ident; ($($prefix:tt)*), { $($body:tt)* } else if $e:tt $($tail:tt)*) => {
+        ui!(@munch; $al; if_block; $tree; $temp; ($($prefix)* { $temp = ui!($al, $temp; $($body)* ); } else if $e), $($tail)* )
     };
-    (@if_block; $alloc:ident; $tree:expr; $temp:ident; ($($prefix:tt)*), { $($one:tt)* } else { $($two:tt)* } $($tail:tt)*) => {
-        ui!($alloc, { let mut $temp = $tree; $($prefix)* { $temp = ui!($alloc, $temp; $($one)* ); } else { $temp = ui!($alloc, $temp; $($two)* ); } $temp }; $($tail)* )
+    (@if_block; $al:ident; $tree:expr; $temp:ident; ($($prefix:tt)*), { $($one:tt)* } else { $($two:tt)* } $($tail:tt)*) => {
+        ui!($al, { let mut $temp = $tree; $($prefix)* { $temp = ui!($al, $temp; $($one)* ); } else { $temp = ui!($al, $temp; $($two)* ); } $temp }; $($tail)* )
     };
-    (@if_block; $alloc:ident; $tree:expr; $temp:ident; ($($prefix:tt)*), { $($body:tt)* } $($tail:tt)*) => {
-        ui!($alloc, { let mut $temp = $tree; $($prefix)* { $temp = ui!($alloc, $temp; $($body)* ); } $temp }; $($tail)* )
+    (@if_block; $al:ident; $tree:expr; $temp:ident; ($($prefix:tt)*), { $($body:tt)* } $($tail:tt)*) => {
+        ui!($al, { let mut $temp = $tree; $($prefix)* { $temp = ui!($al, $temp; $($body)* ); } $temp }; $($tail)* )
     };
 
     // Match block
-    (@match_block; $alloc:ident; $tree:expr; $temp:ident; ($($prefix:tt)*), { $($pattern:pat => { $($branch:tt)* } $(,)?)* } $($tail:tt)*) => {
-        ui!($alloc, { let mut $temp = $tree; $temp = $($prefix)* { $($pattern => {ui!($alloc, $temp; $($branch)*)} )* }; $temp }; $($tail)* )
+    (@match_block; $al:ident; $tree:expr; $temp:ident; ($($prefix:tt)*), { $($pattern:pat => { $($branch:tt)* } $(,)?)* } $($tail:tt)*) => {
+        ui!($al, { let mut $temp = $tree; $temp = $($prefix)* { $($pattern => {ui!($al, $temp; $($branch)*)} )* }; $temp }; $($tail)* )
     };
 
     // For loop
-    (@for_block; $alloc:ident; $tree:expr; $temp:ident; ($($prefix:tt)*), { $($body:tt)* } $($tail:tt)*) => {
-        ui!($alloc, { let mut $temp = $tree; $($prefix)* { $temp = ui!($alloc, $temp; $($body)* ); } $temp }; $($tail)* )
+    (@for_block; $al:ident; $tree:expr; $temp:ident; ($($prefix:tt)*), { $($body:tt)* } $($tail:tt)*) => {
+        ui!($al, { let mut $temp = $tree; $($prefix)* { $temp = ui!($al, $temp; $($body)* ); } $temp }; $($tail)* )
     };
 
     // Prefix muncher
-    (@munch; @$goto:ident; $alloc:ident; $tree:expr; $temp:ident; ($($prefix:tt)*), { $($body:tt)* } $($tail:tt)*) => {
-        ui!(@$goto; $alloc; $tree; $temp; ($($prefix)*), { $($body)* } $($tail)* )
+    (@munch; @$goto:ident; $al:ident; $tree:expr; $temp:ident; ($($prefix:tt)*), { $($body:tt)* } $($tail:tt)*) => {
+        ui!(@$goto; $al; $tree; $temp; ($($prefix)*), { $($body)* } $($tail)* )
     };
-    (@munch; @$goto:ident; $alloc:ident; $tree:expr; $temp:ident; ($($prefix:tt)*), $first:tt $($tail:tt)*) => {
-        ui!(@munch; @$goto; $alloc; $tree; $temp; ($($prefix)* $first), $($tail)* )
+    (@munch; @$goto:ident; $al:ident; $tree:expr; $temp:ident; ($($prefix:tt)*), $first:tt $($tail:tt)*) => {
+        ui!(@munch; @$goto; $al; $tree; $temp; ($($prefix)* $first), $($tail)* )
     };
 
     // Default case
-    ($alloc:ident, $tree:expr; $($tail:tt)*) => {
+    ($al:ident, $tree:expr; $($tail:tt)*) => {
         $tree $($tail)*
     };
 }
 
-static NODE_ID_COUNTER: AtomicU32 = AtomicU32::new(1);
-
-/// A unique identifier for a node.
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct NodeID(u32);
-
-impl NodeID {
-    pub fn new() -> Self {
-        let id = NODE_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
-        Self(id)
-    }
-}
-
-// An opaque handle to an allocator
+// A handle to an allocator
 #[derive(Default)]
 pub struct Alloc {
     pub(crate) bump: Bump,
 }
 
-pub type UI<'a, T> = TreeNode<'a, T>;
-
-pub(crate) struct Callback<T>(fn(&mut T, &mut App<T>) -> Stage);
-
-pub(crate) struct CallbackList<'a, T> {
-    list: BumpVec<'a, (On, Callback<T>)>,
-}
-
-impl<'a, T> fmt::Debug for CallbackList<'a, T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "CallbackList[{}]", self.list.len())
+impl Alloc {
+    pub fn alloc<U>(&self, val: U) -> &mut U {
+        self.bump.alloc(val)
     }
 }
 
-impl<'a, T> CallbackList<'a, T> {
-    fn new_in(alloc: &'a Bump) -> Self {
-        Self {
-            list: BumpVec::new_in(&alloc),
-        }
-    }
-
-    fn add(&mut self, event_type: On, callback: fn(&mut T, &mut App<T>) -> Stage) {
-        self.list.push((event_type, Callback(callback)));
-    }
-
-    pub(crate) fn trigger(&self, event_type: On, store: &mut T, app: &mut App<T>) -> Stage {
-        let mut stage = Stage::Idle;
-        for (et, callback) in &self.list {
-            if *et == event_type {
-                stage.keep_max(callback.0(store, app));
-            }
-        }
-        stage
-    }
-}
-
-#[derive(Debug)]
 pub enum Content<'a, T> {
     None,
-    Text(&'a str),
-    DynamicText(fn(&'a T) -> &str),
+    Label(&'a str),
+    DynamicLabel(&'a dyn Fn(&'a T) -> &'a str),
 }
 
 impl<'a, T> Default for Content<'a, T> {
@@ -151,12 +102,12 @@ impl<'a, T> Default for Content<'a, T> {
     }
 }
 
-#[derive(Debug)]
 pub(crate) struct ArrayNode<'a, T> {
-    pub id: Option<NodeID>,
+    pub key: Option<Key>,
     pub classes: BumpVec<'a, &'static str>,
-    pub callbacks: CallbackList<'a, T>,
+    pub callbacks: BumpVec<'a, (On, &'a EventCallback<T>)>,
     pub style: Style,
+    pub style_on_draw: Option<&'a StyleCallback<T>>,
     pub parent: usize,
     pub num_children: usize,
     pub last_child: Option<NonZeroUsize>,
@@ -164,35 +115,47 @@ pub(crate) struct ArrayNode<'a, T> {
 }
 
 impl<'a, T> ArrayNode<'a, T> {
-    pub fn child_ids(&self) -> std::ops::Range<usize> {
+    // Note: Children are reversed
+    pub(crate) fn child_ids(&self) -> std::ops::Range<usize> {
         if let Some(last_child) = self.last_child {
             last_child.get()..(last_child.get() + self.num_children)
         } else {
             0..0
         }
     }
+
+    pub(crate) fn trigger(&self, event_type: On, state: &mut T, app: &mut App<T>) -> Stage {
+        let mut stage = Stage::Idle;
+        for (et, callback) in &self.callbacks {
+            if *et == event_type {
+                stage = stage.max((callback)(state, app));
+            }
+        }
+        stage
+    }
 }
 
-#[derive(Debug)]
-pub struct TreeNode<'a, T> {
-    id: Option<NodeID>,
+pub struct Node<'a, T> {
+    key: Option<Key>,
     classes: Option<BumpVec<'a, &'static str>>,
-    callbacks: Option<CallbackList<'a, T>>,
+    callbacks: Option<BumpVec<'a, (On, &'a EventCallback<T>)>>,
     style_default: Option<fn() -> Style>,
+    style_on_draw: Option<&'a StyleCallback<T>>,
     size: usize,
     num_children: usize,
-    prev_sibling: Option<&'a mut TreeNode<'a, T>>,
-    last_child: Option<&'a mut TreeNode<'a, T>>,
+    prev_sibling: Option<&'a mut Node<'a, T>>,
+    last_child: Option<&'a mut Node<'a, T>>,
     content: Content<'a, T>,
 }
 
-impl<'a, T> TreeNode<'a, T> {
-    pub fn new_in(alloc: &'a Alloc) -> Self {
+impl<'a, T> Node<'a, T> {
+    pub fn new_in(al: &'a Alloc) -> Self {
         Self {
-            id: None,
-            classes: Some(BumpVec::new_in(&alloc.bump)),
-            callbacks: Some(CallbackList::new_in(&alloc.bump)),
+            key: None,
+            classes: Some(BumpVec::new_in(&al.bump)),
+            callbacks: Some(BumpVec::new_in(&al.bump)),
             style_default: None,
+            style_on_draw: None,
             size: 1,
             num_children: 0,
             prev_sibling: None,
@@ -201,9 +164,9 @@ impl<'a, T> TreeNode<'a, T> {
         }
     }
 
-    /// Set the id
-    pub fn set_id(mut self, id: NodeID) -> Self {
-        self.id = Some(id);
+    /// Set a key on a node, providing a stable identity between rebuilds
+    pub fn key(mut self, key: Key) -> Self {
+        self.key = Some(key);
         self
     }
 
@@ -215,10 +178,10 @@ impl<'a, T> TreeNode<'a, T> {
         self
     }
 
-    /// Register an event listener
-    pub fn event(mut self, event_type: On, callback: fn(&mut T, &mut App<T>) -> Stage) -> Self {
+    /// Register an event callback
+    pub fn event(mut self, event_type: On, callback: &'a EventCallback<T>) -> Self {
         if let Some(callbacks) = &mut self.callbacks {
-            callbacks.add(event_type, callback);
+            callbacks.push((event_type, callback));
         }
         self
     }
@@ -226,6 +189,12 @@ impl<'a, T> TreeNode<'a, T> {
     /// Register a function that will provide an alternate default Style for this node
     pub fn style_default(mut self, func: fn() -> Style) -> Self {
         self.style_default = Some(func);
+        self
+    }
+
+    /// Register a function to modify this node's style right before redrawing
+    pub fn style_on_draw(mut self, func: &'a StyleCallback<T>) -> Self {
+        self.style_on_draw = Some(func);
         self
     }
 
@@ -249,9 +218,9 @@ impl<'a, T> TreeNode<'a, T> {
         self
     }
 
-    pub(crate) fn finish(mut self, alloc: &'a Alloc) -> Option<BumpVec<'a, ArrayNode<'a, T>>> {
-        let mut tree: BumpVec<ArrayNode<T>> = BumpVec::with_capacity_in(self.size, &alloc.bump);
-        let mut stack: BumpVec<(bool, usize, &mut TreeNode<'a, T>)> = BumpVec::new_in(&alloc.bump);
+    pub(crate) fn finish(mut self, al: &'a Alloc) -> Option<BumpVec<'a, ArrayNode<'a, T>>> {
+        let mut tree: BumpVec<ArrayNode<T>> = BumpVec::with_capacity_in(self.size, &al.bump);
+        let mut stack: BumpVec<(bool, usize, &mut Node<'a, T>)> = BumpVec::new_in(&al.bump);
 
         stack.push((false, 0, &mut self));
         while let Some((is_last_child, parent, curr_node)) = stack.pop() {
@@ -261,10 +230,11 @@ impl<'a, T> TreeNode<'a, T> {
             }
 
             tree.push(ArrayNode {
-                id: curr_node.id,
+                key: curr_node.key,
                 classes: curr_node.classes.take()?,
                 callbacks: curr_node.callbacks.take()?,
                 style: curr_node.style_default.unwrap_or(Style::default)(),
+                style_on_draw: curr_node.style_on_draw,
                 parent,
                 num_children: curr_node.num_children,
                 last_child: None,

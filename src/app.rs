@@ -2,6 +2,7 @@
 
 use crate::libloader::LibLoader;
 use crate::libloader::DYLIB_EXT;
+use crate::prelude::*;
 use crate::style::*;
 use crate::window::*;
 
@@ -16,43 +17,40 @@ use winit::{
 #[non_exhaustive]
 #[derive(Debug, PartialEq, Eq)]
 pub enum On {
-    Build, // TODO Think this through. What happens when a widget wants to spawn a task? What happens after the widget is deleted?
-    Update, // Maybe this? I don't like it though...
     MouseDown,
     MouseUp,
     Hover,
+
+    Change, // Can be used by widgets to signal that they have changed
+    Focus,  // TODO - find a way to set focus that doesn't involve linear search
+    Blur,   // TODO - cache id on focus, so blur doesn't have to search again
 }
 
 #[derive(Debug, Copy, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum Stage {
-    Idle = 0,
-    Paint = 1,
-    Layout = 2,
-    Build = 3,
+    Idle,
+    Paint,
+    Layout,
+    Build,
 }
 
-impl Stage {
-    pub fn keep_max(&mut self, other: Self) {
-        if *self < other {
-            *self = other;
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StopTask {
     Yes,
     No,
 }
 
-pub type TaskCallback<T> = fn(&mut T, &mut App<T>) -> (Stage, StopTask);
-pub type AnimCallback<T> = fn(&mut T, Duration) -> (Stage, StopTask);
+pub type EventCallback<T> = dyn Fn(&mut T, &mut App<T>) -> Stage;
+pub type StyleCallback<T> = dyn Fn(&T, &mut Style);
+pub type TaskCallback<T> = dyn Fn(&mut T, &mut App<T>) -> (Stage, StopTask);
+pub type AnimCallback<T> = dyn Fn(&mut T, Duration) -> (Stage, StopTask);
+pub type ViewCallback<T> = for<'a> fn(&T, &'a Alloc) -> Node<'a, T>;
 
 struct Task<T> {
     window_id: Option<WindowId>,
     last_run: Instant,
     frequency: Duration,
-    callback: TaskCallback<T>,
+    callback: Box<TaskCallback<T>>,
 }
 
 pub struct App<T> {
@@ -99,7 +97,7 @@ impl<T: 'static> App<T> {
     // TODO add_anim_task
 
     // Similar to setInterval in JS
-    pub fn add_task(&mut self, window_id: Option<WindowId>, frequency: Duration, callback: TaskCallback<T>) {
+    pub fn add_task(&mut self, window_id: Option<WindowId>, frequency: Duration, callback: Box<TaskCallback<T>>) {
         self.tasks.push(Task {
             window_id,
             last_run: Instant::now(),
@@ -108,9 +106,28 @@ impl<T: 'static> App<T> {
         });
     }
 
-    // TODO bike shed this
-    pub fn cwid(&self) -> Option<WindowId> {
+    pub fn current_window(&self) -> Option<WindowId> {
         self.current_window
+    }
+
+    // TODO - trigger a change event on self, and every ancestor node (need self for when a widget has only one node)
+    pub fn emit_change(&mut self) {
+        // make sure to stop infinite loops of change handlers emitting changes
+        // probably only one event per frame, so no need to batch them up
+        todo!();
+    }
+
+    pub fn focus_on(&mut self, key: Key) {
+        todo!();
+    }
+
+    // Avoids linear searching through all nodes
+    pub fn focus_on_ancestor(&mut self, key: Key) {
+        todo!();
+    }
+
+    pub fn blur(&mut self) {
+        todo!();
     }
 
     pub fn run(mut self, mut state: T) -> Result<(), Box<dyn error::Error>> {
@@ -126,33 +143,37 @@ impl<T: 'static> App<T> {
         }
 
         if cfg!(debug_assertions) {
-            self.add_task(None, Duration::from_millis(100), |_, app| {
-                let mut stage = match app.stylesheet.poll() {
-                    Ok(true) => Stage::Build,
-                    Ok(false) => Stage::Idle,
-                    Err(error) => {
-                        eprintln!(
-                            "[Rosin] Failed to reload stylesheet: {:?} Error: {:?}",
-                            app.stylesheet.path, error
-                        );
-                        Stage::Idle
-                    }
-                };
+            self.add_task(
+                None,
+                Duration::from_millis(100),
+                Box::new(|_, app| {
+                    let mut stage = match app.stylesheet.poll() {
+                        Ok(true) => Stage::Build,
+                        Ok(false) => Stage::Idle,
+                        Err(error) => {
+                            eprintln!(
+                                "[Rosin] Failed to reload stylesheet: {:?} Error: {:?}",
+                                app.stylesheet.path, error
+                            );
+                            Stage::Idle
+                        }
+                    };
 
-                if cfg!(feature = "hot-reload") {
-                    if let Some(loader) = &mut app.loader {
-                        match loader.poll() {
-                            Ok(true) => stage = Stage::Build,
-                            Err(error) => {
-                                eprintln!("[Rosin] Failed to hot-reload. Error: {:?}", error);
+                    if cfg!(feature = "hot-reload") {
+                        if let Some(loader) = &mut app.loader {
+                            match loader.poll() {
+                                Ok(true) => stage = Stage::Build,
+                                Err(error) => {
+                                    eprintln!("[Rosin] Failed to hot-reload. Error: {:?}", error);
+                                }
+                                _ => (),
                             }
-                            _ => (),
                         }
                     }
-                }
 
-                (stage, StopTask::No)
-            });
+                    (stage, StopTask::No)
+                }),
+            );
         }
 
         let mut active_tasks = Vec::new();
@@ -161,7 +182,7 @@ impl<T: 'static> App<T> {
         //TODO what to do about unwraps in the event loop? Can't return error...
         event_loop.run(move |event, event_loop, control_flow| {
             // Run tasks
-            // TODO find a better place to run them. In response to which events?
+            // TODO find a better place to run them. In response to which sytem events?
             if self.tasks.is_empty() {
                 *control_flow = ControlFlow::Wait;
             } else {
@@ -175,9 +196,9 @@ impl<T: 'static> App<T> {
                         task.last_run = Instant::now();
                         let (stage, stoptask) = (task.callback)(&mut state, &mut self);
                         if let Some(window_id) = task.window_id {
-                            self.windows.get_mut(&window_id).unwrap().set_stage(stage);
+                            self.windows.get_mut(&window_id).unwrap().update_stage(stage);
                         } else {
-                            new_stage.keep_max(stage);
+                            new_stage = new_stage.max(stage);
                         }
 
                         if stoptask == StopTask::Yes {
@@ -196,7 +217,7 @@ impl<T: 'static> App<T> {
                 self.tasks.append(&mut active_tasks);
 
                 for (_, window) in self.windows.iter_mut() {
-                    window.set_stage(new_stage);
+                    window.update_stage(new_stage);
                 }
 
                 *control_flow = ControlFlow::WaitUntil(next_update);
@@ -213,6 +234,17 @@ impl<T: 'static> App<T> {
                             self.windows.get_mut(&window_id).unwrap().resize(*new_inner_size);
                         }
                         WindowEvent::CloseRequested => {
+                            // Remove any tasks associated with the closing window
+                            self.tasks.retain(|task| {
+                                if let Some(id) = task.window_id {
+                                    id != window_id
+                                } else {
+                                    true
+                                }
+                            });
+
+                            // TODO - Remove anim tasks
+
                             // Drops the window, causing it to close.
                             self.windows.remove(&window_id);
 
@@ -235,8 +267,6 @@ impl<T: 'static> App<T> {
             }
 
             // Build new windows
-            // TODO could take advantage of async to poll window creation so events don't stall while creating a window
-            // would probably need to set control_flow to Poll while creating a window though, so CPU use might spike. Is that a material problem?
             for desc in self.new_windows.drain(..) {
                 let window = RosinWindow::new(desc, event_loop).unwrap();
                 self.windows.insert(window.id(), window);

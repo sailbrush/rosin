@@ -1,11 +1,31 @@
-.left {
-    flex-grow: 2.0;
-    height: 300px;
-    background-color: lightblue;
+.root {
+    display:flex;
+    height: 100%;
+    width: 100%;
+    flex-grow: 1.0;
+
+    flex-direction: column;
+    background-color: black;
 }
 
-.right {
+.display {
     flex-grow: 1.0;
-    height: 200px;
+
+    background-color: rgb(90, 90, 90);
+}
+
+.row {
+    display:flex;
+    flex-grow:1.0;
+
+    flex-direction: row;
     background-color: red;
+}
+
+.btn {
+    display:flex;
+    flex-grow:1.0;
+
+    background-color: rgb(73, 73, 73);
+    margin: 5px;
 }

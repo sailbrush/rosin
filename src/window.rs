@@ -1,13 +1,10 @@
-use crate::layout::*;
-use crate::render;
-use crate::tree::*;
-use crate::view::*;
-use crate::{app::Stage, libloader::LibLoader, style::Stylesheet};
+use crate::prelude::*;
+use crate::{geometry::Size, layout::*, libloader::LibLoader, render, tree::*};
 
 use std::{borrow::Cow, error::Error, mem, ptr::NonNull};
 
-use bumpalo::collections::Vec as BumpVec;
-use futures::executor::block_on;
+use bumpalo::{collections::Vec as BumpVec, Bump};
+use futures::executor;
 use winit::{
     dpi::{LogicalSize, PhysicalSize},
     event_loop::EventLoopWindowTarget,
@@ -69,6 +66,7 @@ pub(crate) struct RosinWindow<T> {
     alloc: Alloc,
     tree_cache: Option<OrphanVec>,
     layout_cache: Option<OrphanVec>,
+    scratch: Bump,
 
     surface: wgpu::Surface,
     device: wgpu::Device,
@@ -89,13 +87,13 @@ impl<T> RosinWindow<T> {
 
         let instance = wgpu::Instance::new(wgpu::BackendBit::all());
         let surface = unsafe { instance.create_surface(&window) };
-        let adapter = block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+        let adapter = executor::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::default(),
             compatible_surface: Some(&surface),
         }))
         .expect("[Rosin] Failed to find an appropriate adapter");
 
-        let (device, queue) = block_on(adapter.request_device(
+        let (device, queue) = executor::block_on(adapter.request_device(
             &wgpu::DeviceDescriptor {
                 label: None,
                 features: wgpu::Features::empty(),
@@ -225,6 +223,7 @@ impl<T> RosinWindow<T> {
             alloc: Alloc::default(),
             tree_cache: None,
             layout_cache: None,
+            scratch: Bump::new(),
 
             surface,
             device,
@@ -261,16 +260,16 @@ impl<T> RosinWindow<T> {
         Some(unsafe { self.layout_cache.as_ref()?.adopt() })
     }
 
-    pub fn set_stage(&mut self, stage: Stage) {
-        self.stage.keep_max(stage);
-        if stage != Stage::Idle {
+    pub fn update_stage(&mut self, new_stage: Stage) {
+        self.stage = self.stage.max(new_stage);
+        if new_stage != Stage::Idle {
             self.window.request_redraw();
         }
     }
 
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
-            self.set_stage(Stage::Layout);
+            self.update_stage(Stage::Layout);
 
             self.swap_chain_desc.width = new_size.width;
             self.swap_chain_desc.height = new_size.height;
@@ -316,19 +315,33 @@ impl<T> RosinWindow<T> {
         stylesheet: &Stylesheet,
         loader: &Option<LibLoader>,
     ) -> Result<(), wgpu::SwapChainError> {
+        // Reset scratch allocator
+        self.scratch.reset();
+
+        // Get window size
+        let size = self.window.inner_size();
+
         // Rebuild window tree
         if self.stage == Stage::Build || self.tree_cache.is_none() {
             self.reset_cache();
-            let mut tree = self.view.get(loader)(&self.alloc, &state).finish(&self.alloc).unwrap();
+            let mut tree = self.view.get(loader)(&state, &self.alloc).finish(&self.alloc).unwrap();
             stylesheet.style(&mut tree);
             // SAFETY: This is needed to store self references, which allows us to retain bump allocated data between redraws
             self.tree_cache = Some(unsafe { OrphanVec::orphan(tree) });
         }
 
-        let tree: &BumpVec<ArrayNode<T>> = unsafe { self.tree_cache.as_ref().unwrap().adopt() };
+        let tree: &mut BumpVec<ArrayNode<T>> = unsafe { self.tree_cache.as_mut().unwrap().adopt_mut() };
+
+        // Stash default styles, and run style callbacks
+        let mut default_styles: BumpVec<(usize, Style)> = BumpVec::new_in(&self.scratch);
+        for (id, node) in tree.iter_mut().enumerate() {
+            if let Some(modify_style) = node.style_on_draw {
+                default_styles.push((id, node.style.clone()));
+                modify_style(state, &mut node.style);
+            }
+        }
 
         // Recalculate layout
-        let size = self.window.inner_size();
         if self.stage >= Stage::Layout || self.layout_cache.is_none() {
             if self.layout_cache.is_none() {
                 let new_layout: BumpVec<Layout> = BumpVec::with_capacity_in(tree.len(), &self.alloc.bump);
@@ -343,14 +356,22 @@ impl<T> RosinWindow<T> {
                 layout.push(Layout::default());
             }
 
-            Layout::solve(&tree, (size.width as f32, size.height as f32), layout);
+            let layout_size = Size {
+                width: size.width as f32,
+                height: size.height as f32,
+            };
+            build_layout(&self.scratch, &tree, layout_size, layout);
         }
 
         let layout: &BumpVec<Layout> = unsafe { self.layout_cache.as_ref().unwrap().adopt() };
 
+        println!("BEGIN TREE ------------------------------------------");
+        let test: Vec<(&str, &Layout)> = tree.into_iter().map(|item| item.classes[0]).zip(layout.into_iter()).collect();
+        dbg!(test);
+        println!("END TREE ------------------------------------------");
+
         // Render
-        // TODO: If stage == Idle, re-issue commands from last frame
-        // TODO: Consider optimizing for a blinking cursor some how
+        // TODO: If stage == Idle, re-issue commands from last frame. Also, don't cache default styles
         let dt = render::render(tree, layout);
 
         // Blit to screen
@@ -396,6 +417,11 @@ impl<T> RosinWindow<T> {
             },
         );
         self.queue.submit(std::iter::once(encoder.finish()));
+
+        // Restore default styles
+        for (id, style) in default_styles {
+            tree[id].style = style;
+        }
 
         // Cleanup
         self.stage = Stage::Idle;

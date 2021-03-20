@@ -8,6 +8,17 @@ use std::{cmp::Ordering, error::Error, fs, time::SystemTime};
 
 use cssparser::{Parser, ParserInput, RuleListParser, RGBA};
 
+#[macro_export]
+macro_rules! new_style {
+    ($path:expr) => {
+        if cfg!(debug_assertions) {
+            Stylesheet::new_dynamic(concat!(env!("CARGO_MANIFEST_DIR"), $path))
+        } else {
+            Stylesheet::new_static(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), $path)))
+        }
+    };
+}
+
 macro_rules! apply {
     (@color, $value:expr, $style:expr, $par_style:ident, $attr:ident) => {
         match $value {
@@ -104,27 +115,58 @@ macro_rules! apply {
             },
         };
     };
-}
-
-#[macro_export]
-macro_rules! style_new {
-    ($path:expr) => {
-        if cfg!(debug_assertions) {
-            Stylesheet::new_dynamic(concat!(env!("CARGO_MANIFEST_DIR"), $path))
-        } else {
-            Stylesheet::new_static(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), $path)))
-        }
+    (@length_max, $value:expr, $style:expr, $par_style:ident, $attr:ident) => {
+        match $value {
+            PropertyValue::Auto => $style.$attr = f32::INFINITY,
+            PropertyValue::Initial => {
+                $style.$attr = Style::default().$attr;
+            }
+            PropertyValue::Inherit => {
+                if let Some(parent) = &$par_style {
+                    $style.$attr = parent.$attr;
+                }
+            }
+            PropertyValue::Exact(value) => match value {
+                Length::Em(value) => {
+                    $style.$attr = $style.font_size * value;
+                }
+                Length::Px(value) => {
+                    $style.$attr = *value;
+                }
+            },
+        };
+    };
+    (@length_min, $value:expr, $style:expr, $par_style:ident, $attr:ident) => {
+        match $value {
+            PropertyValue::Auto => $style.$attr = f32::NEG_INFINITY,
+            PropertyValue::Initial => {
+                $style.$attr = Style::default().$attr;
+            }
+            PropertyValue::Inherit => {
+                if let Some(parent) = &$par_style {
+                    $style.$attr = parent.$attr;
+                }
+            }
+            PropertyValue::Exact(value) => match value {
+                Length::Em(value) => {
+                    $style.$attr = $style.font_size * value;
+                }
+                Length::Px(value) => {
+                    $style.$attr = *value;
+                }
+            },
+        };
     };
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AlignContent {
-    Stretch,
     Center,
-    FlexStart,
     FlexEnd,
-    SpaceBetween,
+    FlexStart,
     SpaceAround,
+    SpaceBetween,
+    Stretch,
 }
 
 impl AlignContent {
@@ -141,7 +183,7 @@ impl AlignContent {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AlignItems {
     Stretch,
     Center,
@@ -262,6 +304,13 @@ impl FlexDirection {
         }
     }
 
+    pub fn is_reverse(&self) -> bool {
+        match self {
+            FlexDirection::RowReverse | FlexDirection::ColumnReverse => true,
+            FlexDirection::Row | FlexDirection::Column => false,
+        }
+    }
+
     pub(crate) fn from_css_token(token: &str) -> Result<Self, ()> {
         match token {
             "row" => Ok(FlexDirection::Row),
@@ -273,7 +322,7 @@ impl FlexDirection {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FlexWrap {
     NoWrap,
     Wrap,
@@ -298,6 +347,7 @@ pub enum JustifyContent {
     Center,
     SpaceBetween,
     SpaceAround,
+    SpaceEvenly,
 }
 
 impl JustifyContent {
@@ -308,6 +358,7 @@ impl JustifyContent {
             "center" => Ok(JustifyContent::Center),
             "space-between" => Ok(JustifyContent::SpaceBetween),
             "space-around" => Ok(JustifyContent::SpaceAround),
+            "space-evenly" => Ok(JustifyContent::SpaceEvenly),
             _ => Err(()),
         }
     }
@@ -373,10 +424,10 @@ pub struct Style {
     pub margin_left: Option<f32>,
     pub margin_right: Option<f32>,
     pub margin_top: Option<f32>,
-    pub max_height: Option<f32>,
-    pub max_width: Option<f32>,
-    pub min_height: Option<f32>,
-    pub min_width: Option<f32>,
+    pub max_height: f32,
+    pub max_width: f32,
+    pub min_height: f32,
+    pub min_width: f32,
     pub opacity: f32,
     pub order: i32,
     pub padding_bottom: f32,
@@ -420,7 +471,7 @@ impl Default for Style {
             cursor: Cursor::Default,
             flex_basis: None,
             flex_direction: FlexDirection::Row,
-            flex_grow: 0.0,
+            flex_grow: 1.0,
             flex_shrink: 1.0,
             flex_wrap: FlexWrap::NoWrap,
             font_family: 0,
@@ -433,10 +484,10 @@ impl Default for Style {
             margin_left: Some(0.0),
             margin_right: Some(0.0),
             margin_top: Some(0.0),
-            max_height: None,
-            max_width: None,
-            min_height: None,
-            min_width: None,
+            max_height: f32::INFINITY,
+            max_width: f32::INFINITY,
+            min_height: f32::NEG_INFINITY,
+            min_width: f32::NEG_INFINITY,
             opacity: 1.0,
             order: 0,
             padding_bottom: 0.0,
@@ -835,16 +886,16 @@ impl Stylesheet {
                             apply!(@length_opt, value, tree[id].style, par_style, margin_top);
                         }
                         Property::MaxHeight(value) => {
-                            apply!(@length_opt, value, tree[id].style, par_style, max_height);
+                            apply!(@length_max, value, tree[id].style, par_style, max_height);
                         }
                         Property::MaxWidth(value) => {
-                            apply!(@length_opt, value, tree[id].style, par_style, max_width);
+                            apply!(@length_max, value, tree[id].style, par_style, max_width);
                         }
                         Property::MinHeight(value) => {
-                            apply!(@length_opt, value, tree[id].style, par_style, min_height);
+                            apply!(@length_min, value, tree[id].style, par_style, min_height);
                         }
                         Property::MinWidth(value) => {
-                            apply!(@length_opt, value, tree[id].style, par_style, min_width);
+                            apply!(@length_min, value, tree[id].style, par_style, min_width);
                         }
                         Property::Opacity(value) => {
                             apply!(@generic, value, tree[id].style, par_style, opacity);
