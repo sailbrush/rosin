@@ -19,8 +19,9 @@ font-kit = "0.10"
 futures = "0.3"
 libloading = "0.7"
 raqote = "0.8"
-wgpu = "0.7"
-winit = "0.24"
+
+glutin = "0.26"
+femtovg = "0.1.2"
 
 [features]
 hot-reload = []

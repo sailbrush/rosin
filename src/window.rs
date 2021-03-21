@@ -1,15 +1,11 @@
 use crate::prelude::*;
 use crate::{geometry::Size, layout::*, libloader::LibLoader, render, tree::*};
 
-use std::{borrow::Cow, error::Error, mem, ptr::NonNull};
+use std::{borrow::Cow, error::Error, mem, ptr::NonNull, time::Instant};
 
 use bumpalo::{collections::Vec as BumpVec, Bump};
 use futures::executor;
-use winit::{
-    dpi::{LogicalSize, PhysicalSize},
-    event_loop::EventLoopWindowTarget,
-    window::{Window, WindowBuilder, WindowId},
-};
+use glutin::{NotCurrent, WindowedContext, dpi::{LogicalSize, PhysicalSize}, event_loop::EventLoopWindowTarget, window::{Window, WindowBuilder, WindowId}};
 
 // TODO Just re-export winit types for window creation / events
 pub struct WindowDesc<T> {
@@ -60,181 +56,30 @@ impl OrphanVec {
 }
 
 pub(crate) struct RosinWindow<T> {
-    window: Window,
+    windowed_context: WindowedContext<NotCurrent>,
     view: View<T>,
     stage: Stage,
     alloc: Alloc,
     tree_cache: Option<OrphanVec>,
     layout_cache: Option<OrphanVec>,
     scratch: Bump,
-
-    surface: wgpu::Surface,
-    device: wgpu::Device,
-    sampler: wgpu::Sampler,
-    queue: wgpu::Queue,
-    texture: wgpu::Texture,
-    bind_group_layout: wgpu::BindGroupLayout,
-    bind_group: wgpu::BindGroup,
-    swap_chain_desc: wgpu::SwapChainDescriptor,
-    swap_chain: wgpu::SwapChain,
-    render_pipeline: wgpu::RenderPipeline,
 }
 
 impl<T> RosinWindow<T> {
     pub fn new(desc: WindowDesc<T>, event_loop: &EventLoopWindowTarget<()>) -> Result<Self, Box<dyn Error>> {
-        let window = desc.builder.build(event_loop)?;
-        let size = window.inner_size();
+        let windowed_context = glutin::ContextBuilder::new().build_windowed(desc.builder, event_loop)?;
+        let size = windowed_context.window().inner_size();
 
-        let instance = wgpu::Instance::new(wgpu::BackendBit::all());
-        let surface = unsafe { instance.create_surface(&window) };
-        let adapter = executor::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::default(),
-            compatible_surface: Some(&surface),
-        }))
-        .expect("[Rosin] Failed to find an appropriate adapter");
-
-        let (device, queue) = executor::block_on(adapter.request_device(
-            &wgpu::DeviceDescriptor {
-                label: None,
-                features: wgpu::Features::empty(),
-                limits: wgpu::Limits::default(),
-            },
-            None,
-        ))
-        .expect("[Rosin] Failed to create device");
-
-        let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("blit.wgsl"))),
-            flags: wgpu::ShaderFlags::VALIDATION,
-        });
-
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: None,
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Nearest,
-            min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::FilterMode::Nearest,
-            lod_min_clamp: 0.0,
-            lod_max_clamp: 1.0,
-            compare: None,
-            anisotropy_clamp: None,
-            border_color: None,
-        });
-
-        let texture_extent = wgpu::Extent3d {
-            width: size.width,
-            height: size.height,
-            depth: 1,
-        };
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: None,
-            size: texture_extent,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Bgra8UnormSrgb,
-            usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST,
-        });
-        let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: None,
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStage::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        multisampled: false,
-                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStage::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler {
-                        comparison: false,
-                        filtering: false,
-                    },
-                    count: None,
-                },
-            ],
-        });
-
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: None,
-            layout: &bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&texture_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
-                },
-            ],
-        });
-
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: None,
-            bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
-        });
-
-        let swapchain_format = adapter.get_swap_chain_preferred_format(&surface);
-
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: None,
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: "vs_main",
-                buffers: &[],
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: "fs_main",
-                targets: &[swapchain_format.into()],
-            }),
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-        });
-
-        let swap_chain_desc = wgpu::SwapChainDescriptor {
-            usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
-            format: swapchain_format,
-            width: size.width,
-            height: size.height,
-            present_mode: wgpu::PresentMode::Fifo,
-        };
-
-        let swap_chain = device.create_swap_chain(&surface, &swap_chain_desc);
+        // TODO
 
         Ok(Self {
-            window,
+            windowed_context,
             view: desc.view,
             stage: Stage::Build,
             alloc: Alloc::default(),
             tree_cache: None,
             layout_cache: None,
             scratch: Bump::new(),
-
-            surface,
-            device,
-            sampler,
-            queue,
-            texture,
-            bind_group_layout,
-            bind_group,
-            swap_chain_desc,
-            swap_chain,
-            render_pipeline,
         })
     }
 
@@ -245,7 +90,7 @@ impl<T> RosinWindow<T> {
     }
 
     pub fn id(&self) -> WindowId {
-        self.window.id()
+        self.windowed_context.window().id()
     }
 
     pub fn borrow_tree_cache(&self) -> Option<&BumpVec<ArrayNode<T>>> {
@@ -263,7 +108,7 @@ impl<T> RosinWindow<T> {
     pub fn update_stage(&mut self, new_stage: Stage) {
         self.stage = self.stage.max(new_stage);
         if new_stage != Stage::Idle {
-            self.window.request_redraw();
+            self.windowed_context.window().request_redraw();
         }
     }
 
@@ -271,41 +116,7 @@ impl<T> RosinWindow<T> {
         if new_size.width > 0 && new_size.height > 0 {
             self.update_stage(Stage::Layout);
 
-            self.swap_chain_desc.width = new_size.width;
-            self.swap_chain_desc.height = new_size.height;
-            self.swap_chain = self.device.create_swap_chain(&self.surface, &self.swap_chain_desc);
-
-            self.texture.destroy();
-            let texture_extent = wgpu::Extent3d {
-                width: new_size.width,
-                height: new_size.height,
-                depth: 1,
-            };
-            self.texture = self.device.create_texture(&wgpu::TextureDescriptor {
-                label: None,
-                size: texture_extent,
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Bgra8UnormSrgb,
-                usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST,
-            });
-            let texture_view = self.texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-            self.bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: None,
-                layout: &self.bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&texture_view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&self.sampler),
-                    },
-                ],
-            });
+            // TODO
         }
     }
 
@@ -314,12 +125,12 @@ impl<T> RosinWindow<T> {
         state: &T,
         stylesheet: &Stylesheet,
         loader: &Option<LibLoader>,
-    ) -> Result<(), wgpu::SwapChainError> {
+    ) -> Result<(), Box<dyn Error>> {
         // Reset scratch allocator
         self.scratch.reset();
 
         // Get window size
-        let size = self.window.inner_size();
+        let size = self.windowed_context.window().inner_size();
 
         // Rebuild window tree
         if self.stage == Stage::Build || self.tree_cache.is_none() {
@@ -365,58 +176,19 @@ impl<T> RosinWindow<T> {
 
         let layout: &BumpVec<Layout> = unsafe { self.layout_cache.as_ref().unwrap().adopt() };
 
-        println!("BEGIN TREE ------------------------------------------");
-        let test: Vec<(&str, &Layout)> = tree.into_iter().map(|item| item.classes[0]).zip(layout.into_iter()).collect();
-        dbg!(test);
-        println!("END TREE ------------------------------------------");
+        //println!("BEGIN TREE ------------------------------------------");
+        //let test: Vec<(&str, &Layout)> = tree.into_iter().map(|item| item.classes[0]).zip(layout.into_iter()).collect();
+        //dbg!(test);
+        //println!("END TREE ------------------------------------------");
 
         // Render
         // TODO: If stage == Idle, re-issue commands from last frame. Also, don't cache default styles
+        let start_time = Instant::now();
         let dt = render::render(tree, layout);
 
         // Blit to screen
-        let frame = self.swap_chain.get_current_frame()?.output;
 
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-
-        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: None,
-            color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
-                attachment: &frame.view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
-                    store: true,
-                },
-            }],
-            depth_stencil_attachment: None,
-        });
-        render_pass.set_bind_group(0, &self.bind_group, &[]);
-        render_pass.set_pipeline(&self.render_pipeline);
-        render_pass.draw(0..3, 0..1);
-        drop(render_pass);
-
-        self.queue.write_texture(
-            wgpu::TextureCopyView {
-                texture: &self.texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-            },
-            dt.get_data_u8(),
-            wgpu::TextureDataLayout {
-                offset: 0,
-                bytes_per_row: 4 * size.width,
-                rows_per_image: size.height,
-            },
-            wgpu::Extent3d {
-                width: size.width,
-                height: size.height,
-                depth: 1,
-            },
-        );
-        self.queue.submit(std::iter::once(encoder.finish()));
+        // TODO
 
         // Restore default styles
         for (id, style) in default_styles {

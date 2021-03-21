@@ -8,7 +8,7 @@ use crate::window::*;
 
 use std::{collections::HashMap, env, error, fmt::Debug, mem, path::Path, time::Duration, time::Instant};
 
-use winit::{
+use glutin::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
     window::WindowId,
