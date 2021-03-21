@@ -1,11 +1,16 @@
 use crate::prelude::*;
 use crate::{geometry::Size, layout::*, libloader::LibLoader, render, tree::*};
 
-use std::{borrow::Cow, error::Error, mem, ptr::NonNull, time::Instant};
+use std::{error::Error, mem, ptr::NonNull};
 
 use bumpalo::{collections::Vec as BumpVec, Bump};
-use futures::executor;
-use glutin::{NotCurrent, WindowedContext, dpi::{LogicalSize, PhysicalSize}, event_loop::EventLoopWindowTarget, window::{Window, WindowBuilder, WindowId}};
+use femtovg::{renderer::OpenGl, Canvas};
+use glutin::{
+    dpi::{LogicalSize, PhysicalSize},
+    event_loop::EventLoopWindowTarget,
+    window::{WindowBuilder, WindowId},
+    PossiblyCurrent, WindowedContext,
+};
 
 // TODO Just re-export winit types for window creation / events
 pub struct WindowDesc<T> {
@@ -56,7 +61,8 @@ impl OrphanVec {
 }
 
 pub(crate) struct RosinWindow<T> {
-    windowed_context: WindowedContext<NotCurrent>,
+    windowed_context: WindowedContext<PossiblyCurrent>,
+    canvas: Canvas<OpenGl>,
     view: View<T>,
     stage: Stage,
     alloc: Alloc,
@@ -67,13 +73,27 @@ pub(crate) struct RosinWindow<T> {
 
 impl<T> RosinWindow<T> {
     pub fn new(desc: WindowDesc<T>, event_loop: &EventLoopWindowTarget<()>) -> Result<Self, Box<dyn Error>> {
-        let windowed_context = glutin::ContextBuilder::new().build_windowed(desc.builder, event_loop)?;
-        let size = windowed_context.window().inner_size();
+        // TODO - handle errors better
+        let windowed_context = unsafe {
+            glutin::ContextBuilder::new()
+                .build_windowed(desc.builder, event_loop)?
+                .make_current()
+                .unwrap()
+        };
+        let window_size = windowed_context.window().inner_size();
 
-        // TODO
+        let renderer =
+            OpenGl::new(|s| windowed_context.get_proc_address(s) as *const _).expect("[Rosin] Cannot create renderer");
+        let mut canvas = Canvas::new(renderer).expect("[Rosin] Cannot create canvas");
+        canvas.set_size(
+            window_size.width as u32,
+            window_size.height as u32,
+            windowed_context.window().scale_factor() as f32,
+        );
 
         Ok(Self {
             windowed_context,
+            canvas,
             view: desc.view,
             stage: Stage::Build,
             alloc: Alloc::default(),
@@ -116,23 +136,19 @@ impl<T> RosinWindow<T> {
         if new_size.width > 0 && new_size.height > 0 {
             self.update_stage(Stage::Layout);
 
-            // TODO
+            self.windowed_context.resize(new_size);
         }
     }
 
-    pub fn redraw(
-        &mut self,
-        state: &T,
-        stylesheet: &Stylesheet,
-        loader: &Option<LibLoader>,
-    ) -> Result<(), Box<dyn Error>> {
+    pub fn redraw(&mut self, state: &T, stylesheet: &Stylesheet, loader: &Option<LibLoader>) -> Result<(), Box<dyn Error>> {
         // Reset scratch allocator
         self.scratch.reset();
 
-        // Get window size
-        let size = self.windowed_context.window().inner_size();
+        // Get window size and dpi
+        let window_size = self.windowed_context.window().inner_size();
+        let dpi_factor = self.windowed_context.window().scale_factor();
 
-        // Rebuild window tree
+        // ---------- Rebuild window tree ----------
         if self.stage == Stage::Build || self.tree_cache.is_none() {
             self.reset_cache();
             let mut tree = self.view.get(loader)(&state, &self.alloc).finish(&self.alloc).unwrap();
@@ -145,14 +161,16 @@ impl<T> RosinWindow<T> {
 
         // Stash default styles, and run style callbacks
         let mut default_styles: BumpVec<(usize, Style)> = BumpVec::new_in(&self.scratch);
-        for (id, node) in tree.iter_mut().enumerate() {
-            if let Some(modify_style) = node.style_on_draw {
-                default_styles.push((id, node.style.clone()));
-                modify_style(state, &mut node.style);
+        if self.stage != Stage::Idle {
+            for (id, node) in tree.iter_mut().enumerate() {
+                if let Some(modify_style) = node.style_on_draw {
+                    default_styles.push((id, node.style.clone()));
+                    modify_style(state, &mut node.style);
+                }
             }
         }
 
-        // Recalculate layout
+        // ---------- Recalculate layout ----------
         if self.stage >= Stage::Layout || self.layout_cache.is_none() {
             if self.layout_cache.is_none() {
                 let new_layout: BumpVec<Layout> = BumpVec::with_capacity_in(tree.len(), &self.alloc.bump);
@@ -168,8 +186,8 @@ impl<T> RosinWindow<T> {
             }
 
             let layout_size = Size {
-                width: size.width as f32,
-                height: size.height as f32,
+                width: window_size.width as f32,
+                height: window_size.height as f32,
             };
             build_layout(&self.scratch, &tree, layout_size, layout);
         }
@@ -181,22 +199,31 @@ impl<T> RosinWindow<T> {
         //dbg!(test);
         //println!("END TREE ------------------------------------------");
 
-        // Render
-        // TODO: If stage == Idle, re-issue commands from last frame. Also, don't cache default styles
-        let start_time = Instant::now();
-        let dt = render::render(tree, layout);
+        // ---------- Render ----------
+        // TODO - If stage == Idle, re-issue commands from last frame
+        self.canvas
+            .set_size(window_size.width as u32, window_size.height as u32, dpi_factor as f32);
+        self.canvas.clear_rect(
+            0,
+            0,
+            window_size.width as u32,
+            window_size.height as u32,
+            femtovg::Color::black(),
+        );
 
-        // Blit to screen
+        render::render(tree, layout, &mut self.canvas);
 
-        // TODO
+        self.canvas.flush();
+        self.windowed_context.swap_buffers().unwrap();
+
+        // ---------- Cleanup ----------
+        self.stage = Stage::Idle;
 
         // Restore default styles
         for (id, style) in default_styles {
             tree[id].style = style;
         }
 
-        // Cleanup
-        self.stage = Stage::Idle;
         Ok(())
     }
 }

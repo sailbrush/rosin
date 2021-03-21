@@ -160,10 +160,6 @@ impl Size {
         self.width.is_infinite() && self.height.is_infinite()
     }
 
-    pub fn has_finite(&self) -> bool {
-        self.width.is_finite() || self.height.is_finite()
-    }
-
     pub fn main(&self, dir: FlexDirection) -> f32 {
         if dir.is_row() {
             self.width

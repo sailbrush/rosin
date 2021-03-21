@@ -22,8 +22,8 @@ pub enum On {
     Hover,
 
     Change, // Can be used by widgets to signal that they have changed
-    Focus,  // TODO - find a way to set focus that doesn't involve linear search
-    Blur,   // TODO - cache id on focus, so blur doesn't have to search again
+    Focus,
+    Blur, // TODO - cache id on focus, so blur doesn't have to search
 }
 
 #[derive(Debug, Copy, PartialEq, Eq, PartialOrd, Ord, Clone)]
@@ -182,7 +182,7 @@ impl<T: 'static> App<T> {
         //TODO what to do about unwraps in the event loop? Can't return error...
         event_loop.run(move |event, event_loop, control_flow| {
             // Run tasks
-            // TODO find a better place to run them. In response to which sytem events?
+            // TODO - find a better place to run them. In response to which sytem events?
             if self.tasks.is_empty() {
                 *control_flow = ControlFlow::Wait;
             } else {

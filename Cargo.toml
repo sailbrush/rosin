@@ -15,18 +15,10 @@ license = "MIT"
 [dependencies]
 bumpalo = { version = "3.6", features = ["collections"] }
 cssparser = "0.28"
-font-kit = "0.10"
-futures = "0.3"
-libloading = "0.7"
-raqote = "0.8"
-
-glutin = "0.26"
 femtovg = "0.1.2"
+font-kit = "0.10"
+glutin = "0.26"
+libloading = "0.7"
 
 [features]
 hot-reload = []
-
-# raqote is too slow to use without optimisations
-# eventually we'll switch to a fast GPU rasterizer
-[profile.dev]
-opt-level = 3 

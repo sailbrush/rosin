@@ -218,6 +218,7 @@ fn layout<T>(
     cache: &mut [Cache],
     output: &mut [Layout],
 ) -> Size {
+    //println!("id: {:?}, bounds: {:?}, hypo: {:?}", id, bounds, hypothetical);
     // Check cache for already calculated hypothetical outer size
     if let Some(result) = cache[id].inf_result {
         if hypothetical && bounds.is_infinite() {
@@ -226,10 +227,6 @@ fn layout<T>(
     }
 
     if let Some(result) = cache[id].fin_result {
-        if hypothetical && bounds.has_finite() {
-            return result;
-        }
-
         // TODO - hopefully remove this
         let width_compat =
             (cache[id].bounds.width - bounds.width).abs() < f32::EPSILON || cache[id].bounds.width == bounds.width;
@@ -237,7 +234,12 @@ fn layout<T>(
             (cache[id].bounds.height - bounds.height).abs() < f32::EPSILON || cache[id].bounds.height == bounds.height;
 
         if hypothetical && (!width_compat || !height_compat) {
-            panic!("Not compatable??");
+            //println!("Bounds: {:?}\n Cache:{:?}", bounds, cache[id].bounds);
+            //panic!("Not compatable??");
+        }
+
+        if hypothetical && !bounds.is_infinite() {
+            return result;
         }
     }
 
@@ -251,12 +253,14 @@ fn layout<T>(
     let border = tree[id].style.border();
     let padding = tree[id].style.padding();
     let mbp = margin + border + padding;
+    let min_size = Size::new(tree[id].style.min_width, tree[id].style.min_height);
+    let max_size = Size::new(tree[id].style.max_width, tree[id].style.max_height);
 
     let mut container_size = Size::zero();
 
     // leaf nodes can skip the rest of the function
     if tree[id].num_children == 0 {
-        // TODO - measure content, and cache result
+        // TODO - measure content
 
         let width = bounds.width.finite_or_else(|| {
             tree[id]
@@ -278,7 +282,16 @@ fn layout<T>(
                 + mbp.vertical()
         });
 
-        return Size { width, height };
+        container_size = Size { width, height };
+
+        if bounds.is_infinite() {
+            cache[id].inf_result = Some(container_size);
+        } else {
+            cache[id].fin_result = Some(container_size);
+            cache[id].bounds = bounds;
+        }
+
+        return container_size;
     }
 
     // 1 - Generate anonymous flex items
@@ -327,9 +340,7 @@ fn layout<T>(
 
     // 3 - Determine the flex base size and hypothetical main size of each item
     for item in &mut flex_items {
-        // TODO - not sure if this is correct yet
         let inf_result = layout(alloc, tree, item.id, Size::infinite(), true, cache, output);
-        cache[item.id].inf_result = Some(inf_result);
 
         // A - If the item has a definite used flex basis, that’s the flex base size
         if let Some(flex_basis) = tree[item.id].style.flex_basis {
@@ -472,9 +483,6 @@ fn layout<T>(
             let mut item_bounds = Size::infinite();
             item_bounds.set_main(dir, item.target_size.main(dir));
             let fin_result = layout(alloc, tree, item.id, item_bounds, true, cache, output);
-            // TODO - save cache on return, not after it has just been potentially accessed
-            cache[item.id].fin_result = Some(fin_result);
-            cache[item.id].bounds = item_bounds;
 
             item.hypo_outer_size.set_cross(dir, fin_result.cross(dir));
             item.hypo_inner_size
@@ -683,9 +691,6 @@ fn layout<T>(
     }
 
     // 15 - Determine the flex container’s used cross size
-    let min_size = Size::new(tree[id].style.min_width, tree[id].style.min_height);
-    let max_size = Size::new(tree[id].style.max_width, tree[id].style.max_height);
-
     let total_cross_size: f32 = flex_lines.iter().map(|line| line.cross_size).sum();
 
     let inner_cross = if let Some(cross_size) = tree[id].style.cross_size(dir) {
@@ -699,6 +704,12 @@ fn layout<T>(
     container_size.set_cross(dir, bounds.cross(dir).finite_or_else(|| inner_cross + mbp.cross(dir)));
 
     if hypothetical {
+        if bounds.is_infinite() {
+            cache[id].inf_result = Some(container_size);
+        } else {
+            cache[id].fin_result = Some(container_size);
+            cache[id].bounds = bounds;
+        }
         return container_size;
     }
 
@@ -758,7 +769,8 @@ fn layout<T>(
     // Save final layouts
     let mut total_offset_cross = border.cross_start(dir) + padding.cross_start(dir);
     let layout_line = |line: &mut FlexLine| {
-        let mut total_offset_main = tree[id].style.main_margin_start(dir).unwrap_or(0.0) + border.main_start(dir) + padding.main_start(dir);
+        let mut total_offset_main =
+            tree[id].style.main_margin_start(dir).unwrap_or(0.0) + border.main_start(dir) + padding.main_start(dir);
         let line_offset_cross = line.offset_cross;
 
         // TODO - support CSS position
