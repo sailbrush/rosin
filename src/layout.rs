@@ -184,9 +184,9 @@ impl Default for Layout {
     }
 }
 
-pub(crate) fn build_layout<T>(scratch: &Bump, tree: &[ArrayNode<T>], root_size: Size, output: &mut [Layout]) {
-    let mut cache = bumpalo::vec![in &scratch; Cache::default(); tree.len()];
-    layout(scratch, tree, 0, root_size, false, &mut cache, output);
+pub(crate) fn build_layout<T>(temp: &Bump, tree: &[ArrayNode<T>], root_size: Size, output: &mut [Layout]) {
+    let mut cache = bumpalo::vec![in &temp; Cache::default(); tree.len()];
+    layout(temp, tree, 0, root_size, false, &mut cache, output);
     output[0] = Layout {
         size: root_size,
         position: Point::zero(),
@@ -210,7 +210,7 @@ fn round_layout<T>(tree: &[ArrayNode<T>], layout: &mut [Layout], id: usize, abs_
 }
 
 fn layout<T>(
-    alloc: &Bump,
+    temp: &Bump,
     tree: &[ArrayNode<T>],
     id: usize,
     bounds: Size,
@@ -326,7 +326,7 @@ fn layout<T>(
             offset_main: 0.0,
             offset_cross: 0.0,
         });
-    let mut flex_items = BumpVec::from_iter_in(flex_items_iter, alloc);
+    let mut flex_items = BumpVec::from_iter_in(flex_items_iter, temp);
 
     let has_baseline_child = flex_items
         .iter()
@@ -340,7 +340,7 @@ fn layout<T>(
 
     // 3 - Determine the flex base size and hypothetical main size of each item
     for item in &mut flex_items {
-        let inf_result = layout(alloc, tree, item.id, Size::infinite(), true, cache, output);
+        let inf_result = layout(temp, tree, item.id, Size::infinite(), true, cache, output);
 
         // A - If the item has a definite used flex basis, that’s the flex base size
         if let Some(flex_basis) = tree[item.id].style.flex_basis {
@@ -354,7 +354,7 @@ fn layout<T>(
     }
 
     // 5 - Collect flex items into flex lines
-    let mut flex_lines: BumpVec<FlexLine> = BumpVec::new_in(alloc);
+    let mut flex_lines: BumpVec<FlexLine> = BumpVec::new_in(temp);
 
     if tree[id].style.flex_wrap == FlexWrap::NoWrap {
         flex_lines.push(FlexLine {
@@ -417,7 +417,7 @@ fn layout<T>(
             // b. Calculate the remaining free space
             let used_space: f32 = line.items.iter().map(|item| if item.frozen { item.target_size.main(dir) } else { item.flex_basis } + item.mbp.main(dir)).sum();
 
-            let mut unfrozen = BumpVec::from_iter_in(line.items.iter_mut().filter(|item| !item.frozen), alloc);
+            let mut unfrozen = BumpVec::from_iter_in(line.items.iter_mut().filter(|item| !item.frozen), temp);
 
             let (sum_flex_grow, sum_flex_shrink): (f32, f32) =
                 unfrozen.iter().fold((0.0, 0.0), |(flex_grow, flex_shrink), item| {
@@ -482,7 +482,7 @@ fn layout<T>(
         for item in line.items.iter_mut() {
             let mut item_bounds = Size::infinite();
             item_bounds.set_main(dir, item.target_size.main(dir));
-            let fin_result = layout(alloc, tree, item.id, item_bounds, true, cache, output);
+            let fin_result = layout(temp, tree, item.id, item_bounds, true, cache, output);
 
             item.hypo_outer_size.set_cross(dir, fin_result.cross(dir));
             item.hypo_inner_size
@@ -776,7 +776,7 @@ fn layout<T>(
         // TODO - support CSS position
         let layout_item = |item: &mut FlexItem| {
             // Now that we know the final size of an item, layout its children
-            layout(alloc, tree, item.id, item.target_size, false, cache, output);
+            layout(temp, tree, item.id, item.target_size, false, cache, output);
 
             let offset_main = total_offset_main + item.offset_main + item.margin.main_start(dir);
             let offset_cross = total_offset_cross + item.offset_cross + line_offset_cross + item.margin.cross_start(dir);

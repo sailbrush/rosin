@@ -68,7 +68,7 @@ pub(crate) struct RosinWindow<T> {
     alloc: Alloc,
     tree_cache: Option<OrphanVec>,
     layout_cache: Option<OrphanVec>,
-    scratch: Bump,
+    temp: Bump,
 }
 
 impl<T> RosinWindow<T> {
@@ -99,7 +99,7 @@ impl<T> RosinWindow<T> {
             alloc: Alloc::default(),
             tree_cache: None,
             layout_cache: None,
-            scratch: Bump::new(),
+            temp: Bump::new(),
         })
     }
 
@@ -142,7 +142,7 @@ impl<T> RosinWindow<T> {
 
     pub fn redraw(&mut self, state: &T, stylesheet: &Stylesheet, loader: &Option<LibLoader>) -> Result<(), Box<dyn Error>> {
         // Reset scratch allocator
-        self.scratch.reset();
+        self.temp.reset();
 
         // Get window size and dpi
         let window_size = self.windowed_context.window().inner_size();
@@ -160,7 +160,7 @@ impl<T> RosinWindow<T> {
         let tree: &mut BumpVec<ArrayNode<T>> = unsafe { self.tree_cache.as_mut().unwrap().adopt_mut() };
 
         // Stash default styles, and run style callbacks
-        let mut default_styles: BumpVec<(usize, Style)> = BumpVec::new_in(&self.scratch);
+        let mut default_styles: BumpVec<(usize, Style)> = BumpVec::new_in(&self.temp);
         if self.stage != Stage::Idle {
             for (id, node) in tree.iter_mut().enumerate() {
                 if let Some(modify_style) = node.style_on_draw {
@@ -189,7 +189,7 @@ impl<T> RosinWindow<T> {
                 width: window_size.width as f32,
                 height: window_size.height as f32,
             };
-            build_layout(&self.scratch, &tree, layout_size, layout);
+            build_layout(&self.temp, &tree, layout_size, layout);
         }
 
         let layout: &BumpVec<Layout> = unsafe { self.layout_cache.as_ref().unwrap().adopt() };

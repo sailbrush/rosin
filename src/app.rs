@@ -89,8 +89,8 @@ impl<T: 'static> App<T> {
         self
     }
 
-    pub fn use_style(mut self, style: Stylesheet) -> Self {
-        self.stylesheet = style;
+    pub fn use_stylesheet(mut self, stylesheet: Stylesheet) -> Self {
+        self.stylesheet = stylesheet;
         self
     }
 
