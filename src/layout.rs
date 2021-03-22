@@ -129,7 +129,6 @@ impl Style {
 struct Cache {
     // Either both bounds are infinite, or the main axis has been determined
     inf_result: Option<Size>,
-    // TODO - check if bounds ever differs between calls. I think it wont, so we won't need this
     bounds: Size,
     fin_result: Option<Size>,
 }
@@ -143,7 +142,7 @@ struct FlexItem {
 
     position: Rect,
     margin: Rect,
-    mbp: Rect,
+    border_padding: Rect,
 
     flex_basis: f32,
     flex_grow: f32,
@@ -218,7 +217,6 @@ fn layout<T>(
     cache: &mut [Cache],
     output: &mut [Layout],
 ) -> Size {
-    //println!("id: {:?}, bounds: {:?}, hypo: {:?}", id, bounds, hypothetical);
     // Check cache for already calculated hypothetical outer size
     if let Some(result) = cache[id].inf_result {
         if hypothetical && bounds.is_infinite() {
@@ -227,18 +225,12 @@ fn layout<T>(
     }
 
     if let Some(result) = cache[id].fin_result {
-        // TODO - hopefully remove this
         let width_compat =
             (cache[id].bounds.width - bounds.width).abs() < f32::EPSILON || cache[id].bounds.width == bounds.width;
         let height_compat =
             (cache[id].bounds.height - bounds.height).abs() < f32::EPSILON || cache[id].bounds.height == bounds.height;
 
-        if hypothetical && (!width_compat || !height_compat) {
-            //println!("Bounds: {:?}\n Cache:{:?}", bounds, cache[id].bounds);
-            //panic!("Not compatable??");
-        }
-
-        if hypothetical && !bounds.is_infinite() {
+        if hypothetical && !bounds.is_infinite() && width_compat && height_compat {
             return result;
         }
     }
@@ -248,11 +240,7 @@ fn layout<T>(
     let align_content = tree[id].style.align_content;
     let justify_content = tree[id].style.justify_content;
     let flex_wrap = tree[id].style.flex_wrap;
-
-    let margin = tree[id].style.margin();
-    let border = tree[id].style.border();
-    let padding = tree[id].style.padding();
-    let mbp = margin + border + padding;
+    let border_padding = tree[id].style.border() + tree[id].style.padding();
     let min_size = Size::new(tree[id].style.min_width, tree[id].style.min_height);
     let max_size = Size::new(tree[id].style.max_width, tree[id].style.max_height);
 
@@ -269,7 +257,7 @@ fn layout<T>(
                 .unwrap_or(0.0)
                 .min(tree[id].style.max_width)
                 .max(tree[id].style.min_width)
-                + mbp.horizontal()
+                + border_padding.horizontal()
         });
 
         let height = bounds.height.finite_or_else(|| {
@@ -279,7 +267,7 @@ fn layout<T>(
                 .unwrap_or(0.0)
                 .min(tree[id].style.max_height)
                 .max(tree[id].style.min_height)
-                + mbp.vertical()
+                + border_padding.vertical()
         });
 
         container_size = Size { width, height };
@@ -308,7 +296,7 @@ fn layout<T>(
 
             position: style.position(),
             margin: style.margin(),
-            mbp: style.margin() + style.border() + style.padding(),
+            border_padding: style.border() + style.padding(),
 
             flex_basis: 0.0,
             flex_grow: style.flex_grow,
@@ -334,8 +322,8 @@ fn layout<T>(
 
     // 2 - Determine the available main and cross space for the flex items
     let available_space = Size {
-        width: bounds.width - mbp.horizontal(),
-        height: bounds.height - mbp.vertical(),
+        width: bounds.width - border_padding.horizontal(),
+        height: bounds.height - border_padding.vertical(),
     };
 
     // 3 - Determine the flex base size and hypothetical main size of each item
@@ -346,11 +334,11 @@ fn layout<T>(
         if let Some(flex_basis) = tree[item.id].style.flex_basis {
             item.flex_basis = flex_basis;
         } else {
-            item.flex_basis = inf_result.main(dir) - item.mbp.main(dir);
+            item.flex_basis = inf_result.main(dir) - item.border_padding.main(dir);
         };
 
-        item.hypo_inner_size = (inf_result - item.mbp.size()).min(item.max_size).max(item.min_size);
-        item.hypo_outer_size = item.hypo_inner_size + item.mbp.size();
+        item.hypo_inner_size = (inf_result - item.border_padding.size()).min(item.max_size).max(item.min_size);
+        item.hypo_outer_size = item.hypo_inner_size + item.border_padding.size();
     }
 
     // 5 - Collect flex items into flex lines
@@ -415,7 +403,7 @@ fn layout<T>(
             }
 
             // b. Calculate the remaining free space
-            let used_space: f32 = line.items.iter().map(|item| if item.frozen { item.target_size.main(dir) } else { item.flex_basis } + item.mbp.main(dir)).sum();
+            let used_space: f32 = line.items.iter().map(|item| if item.frozen { item.target_size.main(dir) } else { item.flex_basis } + item.margin.main(dir) + item.border_padding.main(dir)).sum();
 
             let mut unfrozen = BumpVec::from_iter_in(line.items.iter_mut().filter(|item| !item.frozen), temp);
 
@@ -459,7 +447,7 @@ fn layout<T>(
                 let prev_target = item.target_size.main(dir);
                 item.target_size.set_main(
                     dir,
-                    prev_target.min(item.max_size.main(dir)).max(0.0).max(item.min_size.main(dir)),
+                    prev_target.min(item.max_size.main(dir)).max(item.min_size.main(dir)).max(0.0),
                 );
                 item.violation = item.target_size.main(dir) - prev_target;
 
@@ -477,23 +465,32 @@ fn layout<T>(
         }
     }
 
+    // Determine main size of container
+    let longest_line = flex_lines.iter().fold(f32::MIN, |acc, line| {
+        let length: f32 = line.items.iter().map(|item| item.target_size.main(dir) + item.margin.main(dir) + item.border_padding.main(dir)).sum();
+        acc.max(length)
+    });
+
+    container_size.set_main(dir, longest_line + border_padding.main(dir));
+
     // 7 - Determine the hypothetical cross size of each item
     for line in &mut flex_lines {
         for item in line.items.iter_mut() {
             let mut item_bounds = Size::infinite();
-            item_bounds.set_main(dir, item.target_size.main(dir));
+            item_bounds.set_main(dir, item.target_size.main(dir) + item.border_padding.main(dir));
             let fin_result = layout(temp, tree, item.id, item_bounds, true, cache, output);
 
-            item.hypo_outer_size.set_cross(dir, fin_result.cross(dir));
-            item.hypo_inner_size
-                .set_cross(dir, fin_result.cross(dir) - item.mbp.cross(dir));
+            let inner_cross = (fin_result.cross(dir) - item.border_padding.cross(dir)).min(item.max_size.cross(dir)).max(item.min_size.cross(dir)).max(0.0);
+
+            item.hypo_inner_size.set_cross(dir, inner_cross);
+            item.hypo_outer_size.set_cross(dir, inner_cross + item.border_padding.cross(dir));
         }
     }
 
     // 8 - Calculate the cross size of each flex line
     // TODO - handle baselines
-    if flex_lines.len() == 1 && available_space.cross(dir).is_finite() {
-        flex_lines[0].cross_size = available_space.cross(dir);
+    if flex_lines.len() == 1 && tree[id].style.cross_size(dir).is_some() {
+        flex_lines[0].cross_size = tree[id].style.cross_size(dir).unwrap() - border_padding.cross(dir);
     } else {
         for line in &mut flex_lines {
             line.cross_size = line
@@ -527,7 +524,7 @@ fn layout<T>(
             {
                 item.target_size.set_cross(
                     dir,
-                    (line.cross_size - item.mbp.cross(dir))
+                    (line.cross_size - item.border_padding.cross(dir) - item.margin.cross(dir))
                         .min(item.max_size.cross(dir))
                         .max(item.min_size.cross(dir)),
                 );
@@ -542,7 +539,7 @@ fn layout<T>(
         let used_space: f32 = line
             .items
             .iter()
-            .map(|item| item.target_size.main(dir) + item.mbp.main(dir))
+            .map(|item| item.target_size.main(dir) + item.border_padding.main(dir))
             .sum();
         let free_space = available_space.main(dir) - used_space;
         let mut num_auto_margins = 0;
@@ -701,7 +698,7 @@ fn layout<T>(
     .min(max_size.cross(dir))
     .max(min_size.cross(dir));
 
-    container_size.set_cross(dir, bounds.cross(dir).finite_or_else(|| inner_cross + mbp.cross(dir)));
+    container_size.set_cross(dir, bounds.cross(dir).finite_or_else(|| inner_cross + border_padding.cross(dir)));
 
     if hypothetical {
         if bounds.is_infinite() {
@@ -767,29 +764,28 @@ fn layout<T>(
     }
 
     // Save final layouts
-    let mut total_offset_cross = border.cross_start(dir) + padding.cross_start(dir);
+    let mut total_offset_cross = border_padding.cross_start(dir);
     let layout_line = |line: &mut FlexLine| {
-        let mut total_offset_main =
-            tree[id].style.main_margin_start(dir).unwrap_or(0.0) + border.main_start(dir) + padding.main_start(dir);
+        let mut total_offset_main = border_padding.main_start(dir);
         let line_offset_cross = line.offset_cross;
 
         // TODO - support CSS position
         let layout_item = |item: &mut FlexItem| {
             // Now that we know the final size of an item, layout its children
-            layout(temp, tree, item.id, item.target_size, false, cache, output);
+            let result = layout(temp, tree, item.id, item.target_size + item.border_padding.size(), false, cache, output).max(Size::zero());
 
             let offset_main = total_offset_main + item.offset_main + item.margin.main_start(dir);
             let offset_cross = total_offset_cross + item.offset_cross + line_offset_cross + item.margin.cross_start(dir);
 
             output[item.id] = Layout {
-                size: item.target_size,
+                size: result,
                 position: Point {
                     x: if dir.is_row() { offset_main } else { offset_cross },
                     y: if !dir.is_row() { offset_main } else { offset_cross },
                 },
             };
 
-            total_offset_main += item.offset_main + item.mbp.main(dir) + item.target_size.main(dir);
+            total_offset_main += item.offset_main + item.target_size.main(dir) + item.border_padding.main(dir) + item.margin.main(dir);
         };
 
         if dir.is_reverse() {
