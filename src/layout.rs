@@ -250,7 +250,11 @@ fn layout<T>(temp: &Bump, tree: &[ArrayNode<T>], id: usize, size: Size, output: 
     // 6 - Determine main size of items
     for line in &mut flex_lines {
         // 9.7.1 - Determine used flex factor
-        let total_hypo_outer_size: f32 = line.items.iter().map(|item| item.hypo_outer_size.main(dir) + item.margin.main(dir)).sum();
+        let total_hypo_outer_size: f32 = line
+            .items
+            .iter()
+            .map(|item| item.hypo_outer_size.main(dir) + item.margin.main(dir))
+            .sum();
         let growing: bool = total_hypo_outer_size < available_space.main(dir);
 
         // 9.7.2 - Size inflexible items

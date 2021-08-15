@@ -6,14 +6,7 @@ use crate::prelude::*;
 use crate::style::*;
 use crate::window::*;
 
-use std::{
-    env, error,
-    fmt::Debug,
-    mem,
-    path::Path,
-    time::Duration,
-    time::Instant,
-};
+use std::{env, error, fmt::Debug, mem, path::Path, time::Duration, time::Instant};
 
 use glutin::{
     event::*,

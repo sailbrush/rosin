@@ -1,5 +1,7 @@
 #![forbid(unsafe_code)]
 
+use std::rc::Rc;
+
 use crate::prelude::*;
 
 pub use crate::button;
@@ -16,18 +18,25 @@ macro_rules! button {
 }
 
 // ---------- Slider ----------
+
 pub struct Slider<T> {
     key: Key,
-    lens: Box<Lens<T, Self>>,
+    lens: Rc<dyn Lensable<In = T, Out = Self>>,
     pub value: f32,
+}
+
+impl<T> std::fmt::Debug for Slider<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Slider {{ {:?} }}", self.key)
+    }
 }
 
 impl<T: 'static> Slider<T> {
     #[track_caller]
-    pub fn new(lens: Lens<T, Self>) -> Self {
+    pub fn new<L: 'static + Lensable<In = T, Out = Self>>(lens: L) -> Self {
         Self {
             key: new_key!(),
-            lens: Box::new(lens),
+            lens: Rc::new(lens),
             value: 0.0,
         }
     }
@@ -41,7 +50,7 @@ impl<T: 'static> Slider<T> {
         Stage::Paint
     }
 
-    pub fn view<'a>(&self, al: &'a Alloc) -> Node<'a, T> {
+    pub fn view<'b>(&self, al: &'b Alloc) -> Node<'b, T> {
         let lens = self.lens.clone();
         let key = self.key.clone();
 
@@ -87,6 +96,7 @@ impl<T: 'static> TextBox<T> {
 
     pub fn view<'a>(&self, al: &'a Alloc) -> Node<'a, T> {
         let lens = self.lens.clone();
+        let lens2 = self.lens.clone();
         let key = self.key.clone();
 
         ui!(al, "text-box" [
@@ -96,7 +106,7 @@ impl<T: 'static> TextBox<T> {
                 lens.get(state).text.as_str()
             })))
             .event(On::MouseDown, al.alloc(move |state: &mut T, app: &mut App<T>| {
-                let this = lens.get_mut(state);
+                let this = lens2.get_mut(state);
                 app.focus_on_ancestor(key);
                 this.clicked(app)
             }))
