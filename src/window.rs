@@ -12,7 +12,7 @@ use glutin::{
     PossiblyCurrent, WindowedContext,
 };
 
-// TODO Just re-export winit types for window creation / events
+// TODO - Just re-export winit types for window creation / events
 pub struct WindowDesc<T> {
     pub(crate) builder: WindowBuilder,
     pub(crate) view: View<T>,
