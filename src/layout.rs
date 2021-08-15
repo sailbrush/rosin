@@ -1,90 +1,30 @@
 #![forbid(unsafe_code)]
 
-/*
- * Copyright (c) 2018 Visly Inc.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-// Currently unsupported:
-//   - percentages
-//   - visibility:collapse
-//   - cases 3.c and 3.d (https://www.w3.org/TR/css-flexbox-1/#algo-main-item)
-
 use crate::geometry::*;
 use crate::style::*;
 use crate::tree::ArrayNode;
 
 use bumpalo::{collections::Vec as BumpVec, Bump};
 
-trait FiniteOrElse {
-    fn finite_or_else<F: FnOnce() -> Self>(self, func: F) -> Self;
-}
-
-impl FiniteOrElse for f32 {
-    fn finite_or_else<F: FnOnce() -> f32>(self, func: F) -> f32 {
-        if self.is_finite() {
-            self
-        } else {
-            func()
-        }
-    }
-}
-
 impl Style {
-    fn cross_size(&self, dir: FlexDirection) -> Option<f32> {
-        if !dir.is_row() {
-            self.width
-        } else {
-            self.height
+    fn size(&self) -> Size {
+        Size {
+            width: self.width.unwrap_or(0.0),
+            height: self.height.unwrap_or(0.0),
         }
     }
 
-    fn main_margin_start(&self, dir: FlexDirection) -> Option<f32> {
-        if dir.is_row() {
-            self.margin_left
-        } else {
-            self.margin_top
+    fn min_size(&self) -> Size {
+        Size {
+            width: self.min_width,
+            height: self.min_height,
         }
     }
 
-    fn main_margin_end(&self, dir: FlexDirection) -> Option<f32> {
-        if dir.is_row() {
-            self.margin_right
-        } else {
-            self.margin_bottom
-        }
-    }
-
-    fn cross_margin_start(&self, dir: FlexDirection) -> Option<f32> {
-        if !dir.is_row() {
-            self.margin_left
-        } else {
-            self.margin_top
-        }
-    }
-
-    fn cross_margin_end(&self, dir: FlexDirection) -> Option<f32> {
-        if !dir.is_row() {
-            self.margin_right
-        } else {
-            self.margin_bottom
+    fn max_size(&self) -> Size {
+        Size {
+            width: self.max_width,
+            height: self.max_height,
         }
     }
 
@@ -125,17 +65,11 @@ impl Style {
     }
 }
 
-#[derive(Debug, Default, Copy, Clone)]
-struct Cache {
-    // Either both bounds are infinite, or the main axis has been determined
-    inf_result: Option<Size>,
-    bounds: Size,
-    fin_result: Option<Size>,
-}
-
 #[derive(Debug)]
 struct FlexItem {
     id: usize,
+
+    align_self: AlignItems,
 
     min_size: Size,
     max_size: Size,
@@ -144,21 +78,25 @@ struct FlexItem {
     margin: Rect,
     border_padding: Rect,
 
+    auto_main_start: bool,
+    auto_main_end: bool,
+    auto_cross_start: bool,
+    auto_cross_end: bool,
+    auto_cross_size: bool,
+
     flex_basis: f32,
     flex_grow: f32,
     flex_shrink: f32,
 
+    hypo_inner_size: Size,
+    hypo_outer_size: Size,
+
     violation: f32,
     frozen: bool,
 
-    hypo_outer_size: Size,
-    hypo_inner_size: Size,
-    target_size: Size,
-
-    baseline: f32,
-
     offset_main: f32,
     offset_cross: f32,
+    target_size: Size,
 }
 
 #[derive(Debug)]
@@ -184,8 +122,7 @@ impl Default for Layout {
 }
 
 pub(crate) fn build_layout<T>(temp: &Bump, tree: &[ArrayNode<T>], root_size: Size, output: &mut [Layout]) {
-    let mut cache = bumpalo::vec![in &temp; Cache::default(); tree.len()];
-    layout(temp, tree, 0, root_size, false, &mut cache, output);
+    layout(temp, tree, 0, root_size, output);
     output[0] = Layout {
         size: root_size,
         position: Point::zero(),
@@ -208,31 +145,10 @@ fn round_layout<T>(tree: &[ArrayNode<T>], layout: &mut [Layout], id: usize, abs_
     }
 }
 
-fn layout<T>(
-    temp: &Bump,
-    tree: &[ArrayNode<T>],
-    id: usize,
-    bounds: Size,
-    hypothetical: bool,
-    cache: &mut [Cache],
-    output: &mut [Layout],
-) -> Size {
-    // Check cache for already calculated hypothetical outer size
-    if let Some(result) = cache[id].inf_result {
-        if hypothetical && bounds.is_infinite() {
-            return result;
-        }
-    }
-
-    if let Some(result) = cache[id].fin_result {
-        let width_compat =
-            (cache[id].bounds.width - bounds.width).abs() < f32::EPSILON || cache[id].bounds.width == bounds.width;
-        let height_compat =
-            (cache[id].bounds.height - bounds.height).abs() < f32::EPSILON || cache[id].bounds.height == bounds.height;
-
-        if hypothetical && !bounds.is_infinite() && width_compat && height_compat {
-            return result;
-        }
+fn layout<T>(temp: &Bump, tree: &[ArrayNode<T>], id: usize, size: Size, output: &mut [Layout]) {
+    // leaf nodes don't need to do anything
+    if tree[id].num_children == 0 {
+        return;
     }
 
     // Define some useful constants
@@ -241,46 +157,6 @@ fn layout<T>(
     let justify_content = tree[id].style.justify_content;
     let flex_wrap = tree[id].style.flex_wrap;
     let border_padding = tree[id].style.border() + tree[id].style.padding();
-    let min_size = Size::new(tree[id].style.min_width, tree[id].style.min_height);
-    let max_size = Size::new(tree[id].style.max_width, tree[id].style.max_height);
-
-    let mut container_size = Size::zero();
-
-    // leaf nodes can skip the rest of the function
-    if tree[id].num_children == 0 {
-        // TODO - measure content
-
-        let width = bounds.width.finite_or_else(|| {
-            tree[id]
-                .style
-                .width
-                .unwrap_or(0.0)
-                .min(tree[id].style.max_width)
-                .max(tree[id].style.min_width)
-                + border_padding.horizontal()
-        });
-
-        let height = bounds.height.finite_or_else(|| {
-            tree[id]
-                .style
-                .height
-                .unwrap_or(0.0)
-                .min(tree[id].style.max_height)
-                .max(tree[id].style.min_height)
-                + border_padding.vertical()
-        });
-
-        container_size = Size { width, height };
-
-        if bounds.is_infinite() {
-            cache[id].inf_result = Some(container_size);
-        } else {
-            cache[id].fin_result = Some(container_size);
-            cache[id].bounds = bounds;
-        }
-
-        return container_size;
-    }
 
     // 1 - Generate anonymous flex items
     let flex_items_iter = tree[id]
@@ -288,58 +164,54 @@ fn layout<T>(
         .rev()
         .map(|id| (id, &tree[id].style))
         .filter(|(_, style)| style.position != Position::Fixed)
-        .map(|(id, style)| FlexItem {
-            id,
+        .map(|(id, style)| {
+            let min_size = style.min_size();
+            let max_size = style.max_size();
+            let border_padding = style.border() + style.padding();
+            let flex_basis = style.flex_basis.unwrap_or_else(|| style.size().main(dir));
+            let hypo_inner_size = style.size().with_main(dir, flex_basis).clamp(min_size, max_size);
+            let hypo_outer_size = hypo_inner_size + border_padding.size();
 
-            min_size: Size::new(style.min_width, style.min_height),
-            max_size: Size::new(style.max_width, style.max_height),
+            FlexItem {
+                id,
 
-            position: style.position(),
-            margin: style.margin(),
-            border_padding: style.border() + style.padding(),
+                align_self: style.align_self,
 
-            flex_basis: 0.0,
-            flex_grow: style.flex_grow,
-            flex_shrink: style.flex_shrink,
+                min_size,
+                max_size,
 
-            violation: 0.0,
-            frozen: false,
+                position: style.position(),
+                margin: style.margin(),
+                border_padding,
 
-            hypo_outer_size: Size::zero(),
-            hypo_inner_size: Size::zero(),
-            target_size: Size::zero(),
+                auto_main_start: if dir.is_row() { style.margin_left } else { style.margin_top }.is_none(),
+                auto_main_end: if dir.is_row() { style.margin_right } else { style.margin_bottom }.is_none(),
+                auto_cross_start: if !dir.is_row() { style.margin_left } else { style.margin_top }.is_none(),
+                auto_cross_end: if !dir.is_row() { style.margin_right } else { style.margin_bottom }.is_none(),
+                auto_cross_size: if !dir.is_row() { style.width } else { style.height }.is_none(),
 
-            baseline: 0.0,
+                flex_basis,
+                flex_grow: style.flex_grow,
+                flex_shrink: style.flex_shrink,
 
-            offset_main: 0.0,
-            offset_cross: 0.0,
+                hypo_inner_size,
+                hypo_outer_size,
+
+                violation: 0.0,
+                frozen: false,
+
+                offset_main: 0.0,
+                offset_cross: 0.0,
+                target_size: Size::zero(),
+            }
         });
     let mut flex_items = BumpVec::from_iter_in(flex_items_iter, temp);
 
-    let has_baseline_child = flex_items
-        .iter()
-        .any(|item| tree[item.id].style.align_self == AlignItems::Baseline);
-
     // 2 - Determine the available main and cross space for the flex items
     let available_space = Size {
-        width: bounds.width - border_padding.horizontal(),
-        height: bounds.height - border_padding.vertical(),
+        width: size.width,
+        height: size.height,
     };
-
-    // 3 - Determine the flex base size and hypothetical main size of each item
-    for item in &mut flex_items {
-        let inf_result = layout(temp, tree, item.id, Size::infinite(), true, cache, output);
-
-        // A - If the item has a definite used flex basis, that’s the flex base size
-        if let Some(flex_basis) = tree[item.id].style.flex_basis {
-            item.flex_basis = flex_basis;
-        } else {
-            item.flex_basis = inf_result.main(dir) - item.border_padding.main(dir);
-        };
-
-        item.hypo_inner_size = (inf_result - item.border_padding.size()).min(item.max_size).max(item.min_size);
-        item.hypo_outer_size = item.hypo_inner_size + item.border_padding.size();
-    }
 
     // 5 - Collect flex items into flex lines
     let mut flex_lines: BumpVec<FlexLine> = BumpVec::new_in(temp);
@@ -360,7 +232,7 @@ fn layout<T>(
                 .enumerate()
                 .find(|&(i, item)| {
                     line_length += item.hypo_outer_size.main(dir);
-                    line_length > bounds.main(dir) && i != 0
+                    line_length > size.main(dir) && i != 0
                 })
                 .map(|(i, _)| i)
                 .unwrap_or(flex_items.len());
@@ -378,7 +250,7 @@ fn layout<T>(
     // 6 - Determine main size of items
     for line in &mut flex_lines {
         // 9.7.1 - Determine used flex factor
-        let total_hypo_outer_size: f32 = line.items.iter().map(|item| item.hypo_outer_size.main(dir)).sum();
+        let total_hypo_outer_size: f32 = line.items.iter().map(|item| item.hypo_outer_size.main(dir) + item.margin.main(dir)).sum();
         let growing: bool = total_hypo_outer_size < available_space.main(dir);
 
         // 9.7.2 - Size inflexible items
@@ -403,21 +275,28 @@ fn layout<T>(
             }
 
             // b. Calculate the remaining free space
-            let used_space: f32 = line.items.iter().map(|item| if item.frozen { item.target_size.main(dir) } else { item.flex_basis } + item.margin.main(dir) + item.border_padding.main(dir)).sum();
+            let used_space: f32 = line
+                .items
+                .iter()
+                .map(|item| {
+                    (if item.frozen { item.target_size.main(dir) } else { item.flex_basis })
+                        + item.margin.main(dir)
+                        + item.border_padding.main(dir)
+                })
+                .sum();
 
             let mut unfrozen = BumpVec::from_iter_in(line.items.iter_mut().filter(|item| !item.frozen), temp);
 
-            let (sum_flex_grow, sum_flex_shrink): (f32, f32) =
-                unfrozen.iter().fold((0.0, 0.0), |(flex_grow, flex_shrink), item| {
-                    (flex_grow + item.flex_grow, flex_shrink + item.flex_shrink)
-                });
+            let (sum_flex_grow, sum_flex_shrink): (f32, f32) = unfrozen.iter().fold((0.0, 0.0), |(flex_grow, flex_shrink), item| {
+                (flex_grow + item.flex_grow, flex_shrink + item.flex_shrink)
+            });
 
             let free_space = if growing && sum_flex_grow < 1.0 {
                 (initial_free_space * sum_flex_grow).min(available_space.main(dir) - used_space)
             } else if !growing && sum_flex_shrink < 1.0 {
                 (initial_free_space * sum_flex_shrink).max(available_space.main(dir) - used_space)
             } else {
-                (available_space.main(dir) - used_space).max(0.0)
+                available_space.main(dir) - used_space
             };
 
             // c. Distribute the free space proportional the the flex factors
@@ -435,7 +314,7 @@ fn layout<T>(
                             let scaled_shrink_factor = item.flex_basis * item.flex_shrink;
                             item.target_size.set_main(
                                 dir,
-                                item.flex_basis - free_space.abs() * (scaled_shrink_factor / sum_scaled_shrink_factor),
+                                item.flex_basis + free_space * (scaled_shrink_factor / sum_scaled_shrink_factor),
                             )
                         }
                     }
@@ -445,10 +324,8 @@ fn layout<T>(
             // d. Fix min/max violations
             let total_violation = unfrozen.iter_mut().fold(0.0, |acc, item| {
                 let prev_target = item.target_size.main(dir);
-                item.target_size.set_main(
-                    dir,
-                    prev_target.min(item.max_size.main(dir)).max(item.min_size.main(dir)).max(0.0),
-                );
+                item.target_size
+                    .set_main(dir, prev_target.min(item.max_size.main(dir)).max(item.min_size.main(dir)));
                 item.violation = item.target_size.main(dir) - prev_target;
 
                 acc + item.violation
@@ -465,32 +342,9 @@ fn layout<T>(
         }
     }
 
-    // Determine main size of container
-    let longest_line = flex_lines.iter().fold(f32::MIN, |acc, line| {
-        let length: f32 = line.items.iter().map(|item| item.target_size.main(dir) + item.margin.main(dir) + item.border_padding.main(dir)).sum();
-        acc.max(length)
-    });
-
-    container_size.set_main(dir, longest_line + border_padding.main(dir));
-
-    // 7 - Determine the hypothetical cross size of each item
-    for line in &mut flex_lines {
-        for item in line.items.iter_mut() {
-            let mut item_bounds = Size::infinite();
-            item_bounds.set_main(dir, item.target_size.main(dir) + item.border_padding.main(dir));
-            let fin_result = layout(temp, tree, item.id, item_bounds, true, cache, output);
-
-            let inner_cross = (fin_result.cross(dir) - item.border_padding.cross(dir)).min(item.max_size.cross(dir)).max(item.min_size.cross(dir)).max(0.0);
-
-            item.hypo_inner_size.set_cross(dir, inner_cross);
-            item.hypo_outer_size.set_cross(dir, inner_cross + item.border_padding.cross(dir));
-        }
-    }
-
     // 8 - Calculate the cross size of each flex line
-    // TODO - handle baselines
-    if flex_lines.len() == 1 && tree[id].style.cross_size(dir).is_some() {
-        flex_lines[0].cross_size = tree[id].style.cross_size(dir).unwrap() - border_padding.cross(dir);
+    if flex_lines.len() == 1 {
+        flex_lines[0].cross_size = size.cross(dir);
     } else {
         for line in &mut flex_lines {
             line.cross_size = line
@@ -502,7 +356,7 @@ fn layout<T>(
     }
 
     // 9 - Handle 'align-content: stretch'
-    if align_content == AlignContent::Stretch && available_space.cross(dir).is_finite() {
+    if align_content == AlignContent::Stretch {
         let total_cross: f32 = flex_lines.iter().map(|line| line.cross_size).sum();
         let inner_cross = available_space.cross(dir);
 
@@ -516,15 +370,10 @@ fn layout<T>(
     // 11 - Determine the used cross size of each flex item
     for line in &mut flex_lines {
         for item in line.items.iter_mut() {
-            let item_style = &tree[item.id].style;
-            if item_style.align_self == AlignItems::Stretch
-                && item_style.cross_margin_start(dir).is_some()
-                && item_style.cross_margin_end(dir).is_some()
-                && item_style.cross_size(dir).is_none()
-            {
+            if item.align_self == AlignItems::Stretch && !item.auto_cross_start && !item.auto_cross_end && item.auto_cross_size {
                 item.target_size.set_cross(
                     dir,
-                    (line.cross_size - item.border_padding.cross(dir) - item.margin.cross(dir))
+                    (line.cross_size - item.margin.cross(dir) - item.border_padding.cross(dir))
                         .min(item.max_size.cross(dir))
                         .max(item.min_size.cross(dir)),
                 );
@@ -545,11 +394,10 @@ fn layout<T>(
         let mut num_auto_margins = 0;
 
         for item in line.items.iter_mut() {
-            let item_style = &tree[item.id].style;
-            if item_style.main_margin_start(dir).is_none() {
+            if item.auto_main_start {
                 num_auto_margins += 1;
             }
-            if item_style.main_margin_end(dir).is_none() {
+            if item.auto_main_end {
                 num_auto_margins += 1;
             }
         }
@@ -558,15 +406,14 @@ fn layout<T>(
             let margin = free_space / num_auto_margins as f32;
 
             for item in line.items.iter_mut() {
-                let item_style = &tree[item.id].style;
-                if item_style.main_margin_start(dir).is_none() {
+                if item.auto_main_start {
                     if dir.is_row() {
                         item.margin.left = margin;
                     } else {
                         item.margin.top = margin;
                     }
                 }
-                if item_style.main_margin_end(dir).is_none() {
+                if item.auto_main_end {
                     if dir.is_row() {
                         item.margin.right = margin;
                     } else {
@@ -631,10 +478,9 @@ fn layout<T>(
     // 13 - Resolve cross-axis auto margins
     for line in &mut flex_lines {
         for item in line.items.iter_mut() {
-            let item_style = &tree[item.id].style;
             let free_space = line.cross_size - item.target_size.cross(dir);
 
-            if item_style.cross_margin_start(dir).is_none() && item_style.cross_margin_end(dir).is_none() {
+            if item.auto_cross_start && item.auto_cross_end {
                 if dir.is_row() {
                     item.margin.top = free_space / 2.0;
                     item.margin.bottom = free_space / 2.0;
@@ -642,13 +488,13 @@ fn layout<T>(
                     item.margin.left = free_space / 2.0;
                     item.margin.right = free_space / 2.0;
                 }
-            } else if item_style.cross_margin_start(dir).is_none() {
+            } else if item.auto_cross_start {
                 if dir.is_row() {
                     item.margin.top = free_space;
                 } else {
                     item.margin.left = free_space;
                 }
-            } else if item_style.cross_margin_end(dir).is_none() {
+            } else if item.auto_cross_end {
                 if dir.is_row() {
                     item.margin.bottom = free_space;
                 } else {
@@ -656,7 +502,7 @@ fn layout<T>(
                 }
             } else {
                 // 14 - Align all flex items along the cross-axis per align-self
-                item.offset_cross = match item_style.align_self {
+                item.offset_cross = match item.align_self {
                     AlignItems::Stretch => {
                         if dir.is_reverse() {
                             free_space
@@ -679,39 +525,13 @@ fn layout<T>(
                             free_space
                         }
                     }
-                    AlignItems::Baseline => {
-                        0.0 // TODO
-                    }
                 };
             }
         }
     }
 
-    // 15 - Determine the flex container’s used cross size
-    let total_cross_size: f32 = flex_lines.iter().map(|line| line.cross_size).sum();
-
-    let inner_cross = if let Some(cross_size) = tree[id].style.cross_size(dir) {
-        cross_size
-    } else {
-        total_cross_size
-    }
-    .min(max_size.cross(dir))
-    .max(min_size.cross(dir));
-
-    container_size.set_cross(dir, bounds.cross(dir).finite_or_else(|| inner_cross + border_padding.cross(dir)));
-
-    if hypothetical {
-        if bounds.is_infinite() {
-            cache[id].inf_result = Some(container_size);
-        } else {
-            cache[id].fin_result = Some(container_size);
-            cache[id].bounds = bounds;
-        }
-        return container_size;
-    }
-
     // 16 - Align all flex lines per align-content
-    let free_space = inner_cross - total_cross_size;
+    let free_space = size.cross(dir);
     let num_lines = flex_lines.len();
 
     let align_line = |(i, line): (usize, &mut FlexLine)| {
@@ -772,13 +592,13 @@ fn layout<T>(
         // TODO - support CSS position
         let layout_item = |item: &mut FlexItem| {
             // Now that we know the final size of an item, layout its children
-            let result = layout(temp, tree, item.id, item.target_size + item.border_padding.size(), false, cache, output).max(Size::zero());
+            layout(temp, tree, item.id, item.target_size, output);
 
             let offset_main = total_offset_main + item.offset_main + item.margin.main_start(dir);
             let offset_cross = total_offset_cross + item.offset_cross + line_offset_cross + item.margin.cross_start(dir);
 
             output[item.id] = Layout {
-                size: result,
+                size: item.target_size + item.border_padding.size(),
                 position: Point {
                     x: if dir.is_row() { offset_main } else { offset_cross },
                     y: if !dir.is_row() { offset_main } else { offset_cross },
@@ -802,6 +622,4 @@ fn layout<T>(
     } else {
         flex_lines.iter_mut().for_each(layout_line);
     }
-
-    container_size
 }

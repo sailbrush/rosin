@@ -69,6 +69,7 @@ pub(crate) struct RosinWindow<T> {
     tree_cache: Option<OrphanVec>,
     layout_cache: Option<OrphanVec>,
     temp: Bump,
+    font_table: Vec<(u32, femtovg::FontId)>,
 }
 
 impl<T> RosinWindow<T> {
@@ -82,8 +83,7 @@ impl<T> RosinWindow<T> {
         };
         let window_size = windowed_context.window().inner_size();
 
-        let renderer =
-            OpenGl::new(|s| windowed_context.get_proc_address(s) as *const _).expect("[Rosin] Cannot create renderer");
+        let renderer = OpenGl::new(|s| windowed_context.get_proc_address(s) as *const _).expect("[Rosin] Cannot create renderer");
         let mut canvas = Canvas::new(renderer).expect("[Rosin] Cannot create canvas");
         canvas.set_size(
             window_size.width as u32,
@@ -100,6 +100,7 @@ impl<T> RosinWindow<T> {
             tree_cache: None,
             layout_cache: None,
             temp: Bump::new(),
+            font_table: Vec::new(),
         })
     }
 
@@ -123,6 +124,12 @@ impl<T> RosinWindow<T> {
         // SAFETY: The returned borrow is guaranteed to remain valid because
         // it points to heap allocated memory that requires &mut to clear
         Some(unsafe { self.layout_cache.as_ref()?.adopt() })
+    }
+
+    pub fn add_font_bytes(&mut self, id: u32, data: &[u8]) -> Result<(), Box<dyn Error>> {
+        let font_id = self.canvas.add_font_mem(data)?;
+        self.font_table.push((id, font_id));
+        Ok(())
     }
 
     pub fn update_stage(&mut self, new_stage: Stage) {
@@ -151,7 +158,7 @@ impl<T> RosinWindow<T> {
         // ---------- Rebuild window tree ----------
         if self.stage == Stage::Build || self.tree_cache.is_none() {
             self.reset_cache();
-            let mut tree = self.view.get(loader)(&state, &self.alloc).finish(&self.alloc).unwrap();
+            let mut tree = self.view.get(loader)(state, &self.alloc).finish(&self.alloc).unwrap();
             stylesheet.style(&mut tree);
             // SAFETY: This is needed to store self references, which allows us to retain bump allocated data between redraws
             self.tree_cache = Some(unsafe { OrphanVec::orphan(tree) });
@@ -189,7 +196,7 @@ impl<T> RosinWindow<T> {
                 width: window_size.width as f32,
                 height: window_size.height as f32,
             };
-            build_layout(&self.temp, &tree, layout_size, layout);
+            build_layout(&self.temp, tree, layout_size, layout);
         }
 
         let layout: &BumpVec<Layout> = unsafe { self.layout_cache.as_ref().unwrap().adopt() };
@@ -203,15 +210,10 @@ impl<T> RosinWindow<T> {
         // TODO - If stage == Idle, re-issue commands from last frame
         self.canvas
             .set_size(window_size.width as u32, window_size.height as u32, dpi_factor as f32);
-        self.canvas.clear_rect(
-            0,
-            0,
-            window_size.width as u32,
-            window_size.height as u32,
-            femtovg::Color::black(),
-        );
+        self.canvas
+            .clear_rect(0, 0, window_size.width as u32, window_size.height as u32, femtovg::Color::black());
 
-        render::render(tree, layout, &mut self.canvas);
+        render::render(tree, layout, &mut self.canvas, &self.font_table);
 
         self.canvas.flush();
         self.windowed_context.swap_buffers().unwrap();

@@ -13,17 +13,17 @@ use bumpalo::{collections::Vec as BumpVec, Bump};
 /// {} - Call methods on parent node
 #[macro_export]
 macro_rules! ui {
-    ($al:ident, $($class:literal),* [ $($children:tt)* ]) => {
-        ui!($al, Node::new_in($al) $(.add_class($class))*; $($children)* )
+    ($al:ident, $classes:literal [ $($children:tt)* ]) => {
+        ui!($al, Node::new_in($al) .add_classes($classes); $($children)* )
     };
-    ($al:ident, $tree:expr; $($class:literal),* [ $($children:tt)* ] $($tail:tt)*) => {
-        ui!($al, $tree.add_child($al, ui!($al, Node::new_in($al) $(.add_class($class))*; $($children)* )); $($tail)* )
+    ($al:ident, $tree:expr; $classes:literal [ $($children:tt)* ] $($tail:tt)*) => {
+        ui!($al, $tree.add_child($al, ui!($al, Node::new_in($al) .add_classes($classes); $($children)* )); $($tail)* )
     };
-    ($al:ident, $tree:expr; $($class:literal),* ( $($child:tt)* ) $($tail:tt)*) => {
-        ui!($al, $tree.add_child($al, $($child)* $(.add_class($class))* ); $($tail)* )
+    ($al:ident, $tree:expr; $classes:literal ( $($child:tt)* ) $($tail:tt)*) => {
+        ui!($al, $tree.add_child($al, $($child)* .add_classes($classes) ); $($tail)* )
     };
-    ($al:ident, $tree:expr; $($class:literal),* { $($builder:tt)* } $($tail:tt)*) => {
-        ui!($al, $tree.add_child($al, Node::new_in($al) $(.add_class($class))* $($builder)* ); $($tail)* )
+    ($al:ident, $tree:expr; $classes:literal { $($builder:tt)* } $($tail:tt)*) => {
+        ui!($al, $tree.add_child($al, Node::new_in($al) .add_classes($classes) $($builder)* ); $($tail)* )
     };
     ($al:ident, $tree:expr; { $($body:tt)* } $($tail:tt)*) => {
         ui!($al, $tree $($body)*; $($tail)* )
@@ -90,6 +90,7 @@ impl Alloc {
     }
 }
 
+// TODO - replace with on_draw() callback. Labels, Images, etc. should just be widgets
 pub enum Content<'a, T> {
     None,
     Label(&'a str),
@@ -170,10 +171,12 @@ impl<'a, T> Node<'a, T> {
         self
     }
 
-    /// Add a CSS class
-    pub fn add_class(mut self, class: &'static str) -> Self {
-        if let Some(classes) = &mut self.classes {
-            classes.push(class);
+    /// Add CSS classes
+    pub fn add_classes(mut self, classes: &'static str) -> Self {
+        if let Some(class_vec) = &mut self.classes {
+            for class in classes.split_whitespace() {
+                class_vec.push(class);
+            }
         }
         self
     }

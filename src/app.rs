@@ -6,7 +6,14 @@ use crate::prelude::*;
 use crate::style::*;
 use crate::window::*;
 
-use std::{collections::HashMap, env, error, fmt::Debug, mem, path::Path, time::Duration, time::Instant};
+use std::{
+    env, error,
+    fmt::Debug,
+    mem,
+    path::Path,
+    time::Duration,
+    time::Instant,
+};
 
 use glutin::{
     event::*,
@@ -28,10 +35,10 @@ pub enum On {
 
 #[derive(Debug, Copy, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum Stage {
-    Idle,
-    Paint,
-    Layout,
-    Build,
+    Idle = 0,
+    Paint = 1,
+    Layout = 2,
+    Build = 3,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,50 +60,87 @@ struct Task<T> {
     callback: Box<TaskCallback<T>>,
 }
 
-pub struct App<T> {
-    event_loop: Option<EventLoop<()>>,
-    loader: Option<LibLoader>,
-    new_windows: Vec<WindowDesc<T>>,
-    windows: HashMap<WindowId, RosinWindow<T>>,
-    current_window: Option<WindowId>,
-    stylesheet: Stylesheet,
-    tasks: Vec<Task<T>>,
-}
+pub struct AppLauncher<T>(App<T>);
 
-impl<T: 'static> Default for App<T> {
+impl<T: 'static> Default for AppLauncher<T> {
     fn default() -> Self {
-        Self::new()
+        AppLauncher(App::new())
     }
 }
 
-// TODO add event_filters and event_handlers?
-// Need some way to access raw events for pen pressure, etc
-impl<T: 'static> App<T> {
-    pub fn new() -> Self {
-        Self {
-            event_loop: Some(EventLoop::new()),
-            loader: None,
-            new_windows: Vec::new(),
-            windows: HashMap::new(),
-            current_window: None,
-            stylesheet: Stylesheet::default(),
-            tasks: Vec::new(),
-        }
-    }
-
+impl<T: 'static> AppLauncher<T> {
     pub fn add_window(mut self, desc: WindowDesc<T>) -> Self {
-        self.new_windows.push(desc);
+        self.0.add_window(desc);
         self
     }
 
     pub fn use_stylesheet(mut self, stylesheet: Stylesheet) -> Self {
-        self.stylesheet = stylesheet;
+        self.0.use_stylesheet(stylesheet);
+        self
+    }
+
+    pub fn add_font_bytes(mut self, id: u32, data: &[u8]) -> Self {
+        self.0.add_font_bytes(id, data);
         self
     }
 
     // TODO add_anim_task
 
     // Similar to setInterval in JS
+    pub fn add_task(mut self, window_id: Option<WindowId>, frequency: Duration, callback: Box<TaskCallback<T>>) -> Self {
+        self.0.add_task(window_id, frequency, callback);
+        self
+    }
+
+    pub fn run(self, state: T) -> Result<(), Box<dyn error::Error>> {
+        self.0.run(state)
+    }
+}
+
+pub struct App<T> {
+    event_loop: Option<EventLoop<()>>,
+    loader: Option<LibLoader>,
+    new_windows: Vec<WindowDesc<T>>,
+    windows: Vec<(WindowId, RosinWindow<T>)>,
+    current_window: Option<WindowId>,
+    stylesheet: Stylesheet,
+    tasks: Vec<Task<T>>,
+    fonts: Vec<(u32, Vec<u8>)>,
+}
+
+// TODO add event_filters and event_handlers?
+// Need some way to access raw events for pen pressure, etc
+impl<T: 'static> App<T> {
+    fn new() -> Self {
+        Self {
+            event_loop: Some(EventLoop::new()),
+            loader: None,
+            windows: Vec::new(),
+            new_windows: Vec::new(),
+            current_window: None,
+            stylesheet: Stylesheet::default(),
+            tasks: Vec::new(),
+            fonts: Vec::new(),
+        }
+    }
+
+    // TODO - need some way to get the id of a new window
+    pub fn add_window(&mut self, desc: WindowDesc<T>) {
+        self.new_windows.push(desc);
+    }
+
+    pub fn use_stylesheet(&mut self, stylesheet: Stylesheet) {
+        self.stylesheet = stylesheet;
+    }
+
+    pub fn add_font_bytes(&mut self, id: u32, data: &[u8]) {
+        self.fonts.push((id, data.into()));
+    }
+
+    // TODO add_anim_task
+
+    // Similar to setInterval in JS
+    // TODO - do we really need the ability to associate tasks with a particular window? Maybe event callbacks should be able to update particular windows, too
     pub fn add_task(&mut self, window_id: Option<WindowId>, frequency: Duration, callback: Box<TaskCallback<T>>) {
         self.tasks.push(Task {
             window_id,
@@ -111,6 +155,7 @@ impl<T: 'static> App<T> {
     }
 
     // TODO - trigger a change event on self, and every ancestor node (need self for when a widget has only one node)
+    // NOTE - this is for client code to be able to respond to events emitted by widgets, which keeps business logic in the view function
     pub fn emit_change(&mut self) {
         // make sure to stop infinite loops of change handlers emitting changes
         // probably only one event per frame, so no need to batch them up
@@ -122,6 +167,7 @@ impl<T: 'static> App<T> {
     }
 
     // Avoids linear searching through all nodes
+    // Is this really needed?
     pub fn focus_on_ancestor(&mut self, key: Key) {
         todo!();
     }
@@ -131,7 +177,6 @@ impl<T: 'static> App<T> {
     }
 
     pub fn run(mut self, mut state: T) -> Result<(), Box<dyn error::Error>> {
-        let event_loop = self.event_loop.take().ok_or("[Rosin] Already launched")?;
         if self.new_windows.is_empty() {
             return Err("[Rosin] No windows".into());
         }
@@ -151,10 +196,7 @@ impl<T: 'static> App<T> {
                         Ok(true) => Stage::Build,
                         Ok(false) => Stage::Idle,
                         Err(error) => {
-                            eprintln!(
-                                "[Rosin] Failed to reload stylesheet: {:?} Error: {:?}",
-                                app.stylesheet.path, error
-                            );
+                            eprintln!("[Rosin] Failed to reload stylesheet: {:?} Error: {:?}", app.stylesheet.path, error);
                             Stage::Idle
                         }
                     };
@@ -180,6 +222,7 @@ impl<T: 'static> App<T> {
         let mut stopped_task_ids = Vec::new();
 
         //TODO what to do about unwraps in the event loop? Can't return error...
+        let event_loop = self.event_loop.take().unwrap();
         event_loop.run(move |event, event_loop, control_flow| {
             // Run tasks
             // TODO - find a better place to run them. In response to which sytem events?
@@ -196,7 +239,12 @@ impl<T: 'static> App<T> {
                         task.last_run = Instant::now();
                         let (stage, stoptask) = (task.callback)(&mut state, &mut self);
                         if let Some(window_id) = task.window_id {
-                            self.windows.get_mut(&window_id).unwrap().update_stage(stage);
+                            self.windows
+                                .iter_mut()
+                                .find(|(id, _)| *id == window_id)
+                                .expect("[Rosin] Window not found") // TODO - should log an error and continue - need to do an audit to remove panics
+                                .1
+                                .update_stage(stage);
                         } else {
                             new_stage = new_stage.max(stage);
                         }
@@ -228,25 +276,30 @@ impl<T: 'static> App<T> {
                 Event::WindowEvent { event, window_id } => {
                     match event {
                         WindowEvent::Resized(physical_size) => {
-                            self.windows.get_mut(&window_id).unwrap().resize(physical_size);
+                            self.windows
+                                .iter_mut()
+                                .find(|(id, _)| *id == window_id)
+                                .expect("[Rosin] Window not found")
+                                .1
+                                .resize(physical_size);
                         }
                         WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                            self.windows.get_mut(&window_id).unwrap().resize(*new_inner_size);
+                            self.windows
+                                .iter_mut()
+                                .find(|(id, _)| *id == window_id)
+                                .expect("[Rosin] Window not found")
+                                .1
+                                .resize(*new_inner_size);
                         }
                         WindowEvent::CloseRequested => {
                             // Remove any tasks associated with the closing window
-                            self.tasks.retain(|task| {
-                                if let Some(id) = task.window_id {
-                                    id != window_id
-                                } else {
-                                    true
-                                }
-                            });
+                            self.tasks
+                                .retain(|task| if let Some(id) = task.window_id { id != window_id } else { true });
 
                             // TODO - Remove anim tasks
 
                             // Drops the window, causing it to close.
-                            self.windows.remove(&window_id);
+                            self.windows.retain(|(id, _)| *id != window_id);
 
                             if self.windows.is_empty() {
                                 *control_flow = ControlFlow::Exit;
@@ -258,8 +311,10 @@ impl<T: 'static> App<T> {
                 }
                 Event::RedrawRequested(window_id) => {
                     self.windows
-                        .get_mut(&window_id)
-                        .unwrap()
+                        .iter_mut()
+                        .find(|(id, _)| *id == window_id)
+                        .expect("[Rosin] Window not found")
+                        .1
                         .redraw(&state, &self.stylesheet, &self.loader)
                         .unwrap();
                 }
@@ -268,8 +323,13 @@ impl<T: 'static> App<T> {
 
             // Build new windows
             for desc in self.new_windows.drain(..) {
-                let window = RosinWindow::new(desc, event_loop).unwrap();
-                self.windows.insert(window.id(), window);
+                let mut window = RosinWindow::new(desc, event_loop).unwrap();
+                // TODO - handle loading and unloading fonts correctly
+                // Currently, a window only has access to the fonts that are loaded before it's created
+                for (id, data) in &self.fonts {
+                    window.add_font_bytes(*id, data).unwrap();
+                }
+                self.windows.push((window.id(), window));
             }
         });
     }

@@ -14,12 +14,7 @@ pub struct Rect {
 
 impl Rect {
     pub fn new(top: f32, right: f32, bottom: f32, left: f32) -> Self {
-        Self {
-            top,
-            right,
-            bottom,
-            left,
-        }
+        Self { top, right, bottom, left }
     }
 
     pub fn vertical(&self) -> f32 {
@@ -176,6 +171,34 @@ impl Size {
         }
     }
 
+    pub fn with_main(&self, dir: FlexDirection, len: f32) -> Self {
+        if dir.is_row() {
+            Self {
+                width: len,
+                height: self.height,
+            }
+        } else {
+            Self {
+                width: self.width,
+                height: len,
+            }
+        }
+    }
+
+    pub fn with_cross(&self, dir: FlexDirection, len: f32) -> Self {
+        if !dir.is_row() {
+            Self {
+                width: len,
+                height: self.height,
+            }
+        } else {
+            Self {
+                width: self.width,
+                height: len,
+            }
+        }
+    }
+
     pub fn set_main(&mut self, dir: FlexDirection, len: f32) {
         if dir.is_row() {
             self.width = len;
@@ -204,6 +227,10 @@ impl Size {
             width: self.width.max(other.width),
             height: self.height.max(other.height),
         }
+    }
+
+    pub fn clamp(&self, min: Self, max: Self) -> Self {
+        self.min(max).max(min)
     }
 }
 

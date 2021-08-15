@@ -16,7 +16,7 @@ mod window;
 
 pub mod widgets;
 pub mod prelude {
-    pub use crate::app::{AnimCallback, App, EventCallback, On, Stage, StopTask, StyleCallback, TaskCallback, ViewCallback};
+    pub use crate::app::{AnimCallback, App, AppLauncher, EventCallback, On, Stage, StopTask, StyleCallback, TaskCallback, ViewCallback};
     pub use crate::key::Key;
     pub use crate::lens::Lens;
     pub use crate::style::{Style, Stylesheet};

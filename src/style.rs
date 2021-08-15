@@ -12,9 +12,9 @@ use cssparser::{Parser, ParserInput, RuleListParser, RGBA};
 macro_rules! new_stylesheet {
     ($path:expr) => {
         if cfg!(debug_assertions) {
-            Stylesheet::new_dynamic(concat!(env!("CARGO_MANIFEST_DIR"), $path))
+            Stylesheet::new_dynamic(concat!(env!("CARGO_MANIFEST_DIR"), "/", $path))
         } else {
-            Stylesheet::new_static(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), $path)))
+            Stylesheet::new_static(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", $path)))
         }
     };
 }
@@ -189,7 +189,6 @@ pub enum AlignItems {
     Center,
     FlexStart,
     FlexEnd,
-    Baseline,
 }
 
 impl AlignItems {
@@ -199,7 +198,6 @@ impl AlignItems {
             "center" => Ok(AlignItems::Center),
             "flex-start" => Ok(AlignItems::FlexStart),
             "flex-end" => Ok(AlignItems::FlexEnd),
-            "baseline" => Ok(AlignItems::Baseline),
             _ => Err(()),
         }
     }
@@ -414,7 +412,7 @@ pub struct Style {
     pub flex_grow: f32,
     pub flex_shrink: f32,
     pub flex_wrap: FlexWrap,
-    pub font_family: usize,
+    pub font_family: u32,
     pub font_size: f32,
     pub font_weight: u32,
     pub height: Option<f32>,
@@ -591,10 +589,8 @@ impl Stylesheet {
         let mut parser = Parser::new(&mut input);
         let mut rules_list = Vec::new();
 
-        for result in RuleListParser::new_for_stylesheet(&mut parser, RulesParser) {
-            if let Ok(rule) = result {
-                rules_list.push(rule);
-            }
+        for rule in RuleListParser::new_for_stylesheet(&mut parser, RulesParser).flatten() {
+            rules_list.push(rule);
         }
         rules_list
     }
@@ -683,11 +679,7 @@ impl Stylesheet {
                 })
                 .collect::<Vec<&Rule>>();
 
-            let par_style: Option<Style> = if id == 0 {
-                None
-            } else {
-                Some(tree[tree[id].parent].style.clone())
-            };
+            let par_style: Option<Style> = if id == 0 { None } else { Some(tree[tree[id].parent].style.clone()) };
 
             relevant_rules.sort();
 

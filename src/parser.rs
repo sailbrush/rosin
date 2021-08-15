@@ -9,14 +9,12 @@ use cssparser::*;
 
 macro_rules! parse {
     (@color, $parser:ident, $property_type:expr) => {
-        Ok(vec![$property_type(PropertyValue::Exact(cssparser::Color::parse(
-            $parser,
-        )?))])
+        Ok(vec![$property_type(PropertyValue::Exact(cssparser::Color::parse($parser)?))])
     };
     (@enum, $parser:ident, $property_type:expr, $enum:ident) => {{
         let token = $parser.next()?;
         match token {
-            Token::Ident(s) => match_ignore_ascii_case! { &s,
+            Token::Ident(s) => match_ignore_ascii_case! { s,
                 "auto" => Ok(vec![$property_type(PropertyValue::Auto)]),
                 "initial" => Ok(vec![$property_type(PropertyValue::Initial)]),
                 "inherit" => Ok(vec![$property_type(PropertyValue::Inherit)]),
@@ -35,7 +33,7 @@ macro_rules! parse {
         let token = $parser.next()?;
         match token {
             Token::Number { .. } | Token::Dimension { .. } => Ok(vec![$property_type(PropertyValue::Exact(token.into()))]),
-            Token::Ident(s) => match_ignore_ascii_case! { &s,
+            Token::Ident(s) => match_ignore_ascii_case! { s,
                 "auto" => Ok(vec![$property_type(PropertyValue::Auto)]),
                 "initial" => Ok(vec![$property_type(PropertyValue::Initial)]),
                 "inherit" => Ok(vec![$property_type(PropertyValue::Inherit)]),
@@ -54,7 +52,7 @@ macro_rules! parse {
                     Err($parser.new_error_for_next_token())
                 }
             }
-            Token::Ident(s) => match_ignore_ascii_case! { &s,
+            Token::Ident(s) => match_ignore_ascii_case! { s,
                 "auto" => Ok(vec![$property_type(PropertyValue::Auto)]),
                 "initial" => Ok(vec![$property_type(PropertyValue::Initial)]),
                 "inherit" => Ok(vec![$property_type(PropertyValue::Inherit)]),
@@ -73,7 +71,7 @@ macro_rules! parse {
                     Err($parser.new_error_for_next_token())
                 }
             }
-            Token::Ident(s) => match_ignore_ascii_case! { &s,
+            Token::Ident(s) => match_ignore_ascii_case! { s,
                 "auto" => Ok(vec![$property_type(PropertyValue::Auto)]),
                 "initial" => Ok(vec![$property_type(PropertyValue::Initial)]),
                 "inherit" => Ok(vec![$property_type(PropertyValue::Inherit)]),
@@ -86,7 +84,7 @@ macro_rules! parse {
         let token = $parser.next()?;
         match token {
             Token::Number { value, .. } => Ok(vec![$property_type(PropertyValue::Exact(*value))]),
-            Token::Ident(s) => match_ignore_ascii_case! { &s,
+            Token::Ident(s) => match_ignore_ascii_case! { s,
                 "auto" => Ok(vec![$property_type(PropertyValue::Auto)]),
                 "initial" => Ok(vec![$property_type(PropertyValue::Initial)]),
                 "inherit" => Ok(vec![$property_type(PropertyValue::Inherit)]),
@@ -105,7 +103,7 @@ macro_rules! parse {
                 Token::Number { .. } | Token::Dimension { .. } => {
                     sizes.push(PropertyValue::Exact(token.into()));
                 }
-                Token::Ident(s) => match_ignore_ascii_case! { &s,
+                Token::Ident(s) => match_ignore_ascii_case! { s,
                     "auto" => sizes.push(PropertyValue::Auto),
                     "initial" => sizes.push(PropertyValue::Initial),
                     "inherit" => sizes.push(PropertyValue::Inherit),
@@ -225,7 +223,7 @@ pub enum Property {
     FlexGrow(PropertyValue<f32>),
     FlexShrink(PropertyValue<f32>),
     FlexWrap(PropertyValue<FlexWrap>),
-    FontFamily(PropertyValue<usize>),
+    FontFamily(PropertyValue<u32>),
     FontSize(PropertyValue<Length>),
     FontWeight(PropertyValue<u32>),
     Height(PropertyValue<Length>),
@@ -340,10 +338,8 @@ impl<'i> QualifiedRuleParser<'i> for RulesParser {
     ) -> Result<Self::QualifiedRule, ParseError<'i, Self::Error>> {
         let mut property_list = Vec::new();
 
-        for result in DeclarationListParser::new(parser, PropertiesParser) {
-            if let Ok(mut property) = result {
-                property_list.append(&mut property);
-            }
+        for mut property in DeclarationListParser::new(parser, PropertiesParser).flatten() {
+            property_list.append(&mut property);
         }
 
         Ok(Rule {
@@ -393,7 +389,7 @@ impl<'i> DeclarationParser<'i> for PropertiesParser {
                             result.push(Property::BorderRightWidth(PropertyValue::Exact(token.into())));
                             result.push(Property::BorderTopWidth(PropertyValue::Exact(token.into())));
                         }
-                        Token::Ident(s) => match_ignore_ascii_case! { &s,
+                        Token::Ident(s) => match_ignore_ascii_case! { s,
                             "initial" => {
                                 result.push(Property::BorderBottomColor(PropertyValue::Initial));
                                 result.push(Property::BorderLeftColor(PropertyValue::Initial));
@@ -430,7 +426,7 @@ impl<'i> DeclarationParser<'i> for PropertiesParser {
                         Token::Number { .. } | Token::Dimension { .. } => {
                             result.push(Property::BorderBottomWidth(PropertyValue::Exact(token.into())));
                         }
-                        Token::Ident(s) => match_ignore_ascii_case! { &s,
+                        Token::Ident(s) => match_ignore_ascii_case! { s,
                             "initial" => result.push(Property::BorderBottomColor(PropertyValue::Initial)),
                             "inherit" => result.push(Property::BorderBottomColor(PropertyValue::Inherit)),
                             _ => {
@@ -455,7 +451,7 @@ impl<'i> DeclarationParser<'i> for PropertiesParser {
                 while !parser.is_exhausted() {
                     let token = parser.next()?;
                     match token {
-                        Token::Ident(s) => match_ignore_ascii_case! { &s,
+                        Token::Ident(s) => match_ignore_ascii_case! { s,
                             "initial" => colors.push(PropertyValue::Initial),
                             "inherit" => colors.push(PropertyValue::Inherit),
                             _ => {
@@ -506,7 +502,7 @@ impl<'i> DeclarationParser<'i> for PropertiesParser {
                         Token::Number { .. } | Token::Dimension { .. } => {
                             result.push(Property::BorderLeftWidth(PropertyValue::Exact(token.into())));
                         }
-                        Token::Ident(s) => match_ignore_ascii_case! { &s,
+                        Token::Ident(s) => match_ignore_ascii_case! { s,
                             "initial" => result.push(Property::BorderLeftColor(PropertyValue::Initial)),
                             "inherit" => result.push(Property::BorderLeftColor(PropertyValue::Inherit)),
                             _ => {
@@ -532,7 +528,7 @@ impl<'i> DeclarationParser<'i> for PropertiesParser {
                         Token::Number { .. } | Token::Dimension { .. } => {
                             result.push(Property::BorderRightWidth(PropertyValue::Exact(token.into())));
                         }
-                        Token::Ident(s) => match_ignore_ascii_case! { &s,
+                        Token::Ident(s) => match_ignore_ascii_case! { s,
                             "initial" => result.push(Property::BorderRightColor(PropertyValue::Initial)),
                             "inherit" => result.push(Property::BorderRightColor(PropertyValue::Inherit)),
                             _ => {
@@ -557,7 +553,7 @@ impl<'i> DeclarationParser<'i> for PropertiesParser {
                         Token::Number { .. } | Token::Dimension { .. } => {
                             result.push(Property::BorderTopWidth(PropertyValue::Exact(token.into())));
                         }
-                        Token::Ident(s) => match_ignore_ascii_case! { &s,
+                        Token::Ident(s) => match_ignore_ascii_case! { s,
                             "initial" => result.push(Property::BorderTopColor(PropertyValue::Initial)),
                             "inherit" => result.push(Property::BorderTopColor(PropertyValue::Inherit)),
                             _ => {
@@ -585,7 +581,7 @@ impl<'i> DeclarationParser<'i> for PropertiesParser {
                         Token::Number { .. } | Token::Dimension { .. } => {
                             sizes.push(PropertyValue::Exact(token.into()));
                         }
-                        Token::Ident(s) => match_ignore_ascii_case! { &s,
+                        Token::Ident(s) => match_ignore_ascii_case! { s,
                             "initial" => sizes.push(PropertyValue::Initial),
                             "inherit" => sizes.push(PropertyValue::Inherit),
                             "thin" => sizes.push(PropertyValue::Exact(Length::Px(2.0))),
@@ -655,7 +651,7 @@ impl<'i> DeclarationParser<'i> for PropertiesParser {
                                 return Err(parser.new_error_for_next_token());
                             }
                         },
-                        Token::Ident(s) => match_ignore_ascii_case! { &s,
+                        Token::Ident(s) => match_ignore_ascii_case! { s,
                             "auto" => {
                                 result.push(Property::FlexGrow(PropertyValue::Exact(1.0)));
                                 result.push(Property::FlexShrink(PropertyValue::Exact(1.0)));
@@ -696,7 +692,7 @@ impl<'i> DeclarationParser<'i> for PropertiesParser {
                 while !parser.is_exhausted() {
                     let token = parser.next()?;
                     match token {
-                        Token::Ident(s) => match_ignore_ascii_case! { &s,
+                        Token::Ident(s) => match_ignore_ascii_case! { s,
                             "initial" => {
                                 result.push(Property::FlexDirection(PropertyValue::Initial));
                                 result.push(Property::FlexWrap(PropertyValue::Initial));
@@ -706,9 +702,9 @@ impl<'i> DeclarationParser<'i> for PropertiesParser {
                                 result.push(Property::FlexWrap(PropertyValue::Inherit));
                             },
                             _ => {
-                                if let Ok(value) = FlexDirection::from_css_token(&s) {
+                                if let Ok(value) = FlexDirection::from_css_token(s) {
                                     result.push(Property::FlexDirection(PropertyValue::Exact(value)));
-                                } else if let Ok(value) = FlexWrap::from_css_token(&s) {
+                                } else if let Ok(value) = FlexWrap::from_css_token(s) {
                                     result.push(Property::FlexWrap(PropertyValue::Exact(value)));
                                 } else {
                                     return Err(parser.new_error_for_next_token())
@@ -725,7 +721,7 @@ impl<'i> DeclarationParser<'i> for PropertiesParser {
             "flex-shrink" => parse!(@f32, parser, Property::FlexShrink),
             "flex-wrap" => parse!(@enum, parser, Property::FlexWrap, FlexWrap),
             "font" => todo!(),
-            "font-family" => todo!(),
+            "font-family" => parse!(@u32, parser, Property::FontFamily),
             "font-size" => parse!(@length, parser, Property::FontSize),
             "font-weight" => parse!(@u32, parser, Property::FontWeight),
             "height" => parse!(@length, parser, Property::Height),

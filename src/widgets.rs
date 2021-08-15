@@ -36,7 +36,7 @@ impl<T: 'static> Slider<T> {
         self.value
     }
 
-    pub fn set_text(&mut self, new_value: f32) -> Stage {
+    pub fn set_value(&mut self, new_value: f32) -> Stage {
         self.value = new_value;
         Stage::Paint
     }
@@ -45,7 +45,7 @@ impl<T: 'static> Slider<T> {
         let lens = self.lens.clone();
         let key = self.key.clone();
 
-        ui!(al, "text-box" [
+        ui!(al, "slider" [
             .key(key)
             .event(On::MouseDown, al.alloc(move |state: &mut T, app: &mut App<T>| {
                 let this = lens.get_mut(state);
@@ -91,13 +91,13 @@ impl<T: 'static> TextBox<T> {
 
         ui!(al, "text-box" [
             .key(key)
+            .style_on_draw(&|_, style: &mut Style| style.min_height = style.min_height.max(style.font_size))
             .content(Content::DynamicLabel(al.alloc(move |state: &'a T| {
                 lens.get(state).text.as_str()
             })))
             .event(On::MouseDown, al.alloc(move |state: &mut T, app: &mut App<T>| {
                 let this = lens.get_mut(state);
                 app.focus_on_ancestor(key);
-                app.emit_change(); // TODO - only emit change when text is modified
                 this.clicked(app)
             }))
         ])

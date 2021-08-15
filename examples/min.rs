@@ -17,18 +17,21 @@ impl State {
 
 pub fn main_view<'a>(_state: &State, al: &'a Alloc) -> Node<'a, State> {
     ui!(al, "root" [
+
         "display" []
+
         "row" [
             "btn" []
             "btn" []
             "btn" []
+            "btn" []
+            "btn" []
+
         ]
+
         "row" [
             "btn" []
             "btn" []
-            "btn" []
-        ]
-        "row" [
             "btn" []
             "btn" []
             "btn" []
@@ -43,12 +46,13 @@ fn main() {
     };
 
     let view = new_view!(main_view);
-    let style = new_style!("/examples/min.css");
-    let window = WindowDesc::new(view).with_title("Rosin Window").with_size(250.0, 250.0);
+    let stylesheet = new_stylesheet!("examples/min.css");
+    let window = WindowDesc::new(view).with_title("Rosin Window").with_size(650.0, 650.0);
 
-    App::new()
-        .use_style(style)
+    AppLauncher::default()
+        .use_stylesheet(stylesheet)
         .add_window(window)
+        .add_font_bytes(0, include_bytes!("fonts/Roboto-Regular.ttf"))
         .run(state)
         .expect("Failed to launch");
 }

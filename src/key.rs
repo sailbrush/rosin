@@ -4,7 +4,7 @@
 macro_rules! new_key {
     () => {{
         let loc = std::panic::Location::caller();
-        Key::new()
+        Key::default()
             .hash_djb2(file!().as_bytes())
             .hash_djb2(&(line!()).to_ne_bytes())
             .hash_djb2(&(column!()).to_ne_bytes())
@@ -23,12 +23,14 @@ macro_rules! new_key {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct Key(u64);
 
-impl Key {
+impl Default for Key {
     // TODO - make sure to hide from docs
-    pub fn new() -> Self {
+    fn default() -> Self {
         Self(5381)
     }
+}
 
+impl Key {
     // TODO - use a better hash function once track_caller is const, 64 bits should be enough
     // No collisions between u32's under 8,192 so this should be fine for hashing line numbers
     pub const fn hash_djb2(mut self, input: &[u8]) -> Self {
