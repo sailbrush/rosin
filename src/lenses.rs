@@ -124,12 +124,3 @@ where
         self.rhs.get_mut(self.lhs.get_mut(obj))
     }
 }
-
-impl<A, B> From<Lens<A, B>> for CompoundLens<Lens<A, B>, Lens<B, B>> {
-    fn from(lens: Lens<A, B>) -> CompoundLens<Lens<A, B>, Lens<B, B>> {
-        CompoundLens {
-            lhs: lens,
-            rhs: Lens::new(|obj: &B| obj, |obj: &mut B| obj),
-        }
-    }
-}

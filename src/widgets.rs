@@ -51,7 +51,7 @@ impl<T: 'static> Slider<T> {
     }
 
     pub fn view<'b>(&self, al: &'b Alloc) -> Node<'b, T> {
-        let lens = self.lens.clone();
+        let lens = Rc::clone(&self.lens);
         let key = self.key.clone();
 
         ui!(al, "slider" [
@@ -69,16 +69,16 @@ impl<T: 'static> Slider<T> {
 // ---------- TextBox ----------
 pub struct TextBox<T> {
     key: Key,
-    lens: Lens<T, Self>,
+    lens: Rc<dyn Lensable<In = T, Out = Self>>,
     text: String,
 }
 
 impl<T: 'static> TextBox<T> {
     #[track_caller]
-    pub fn new(lens: Lens<T, Self>) -> Self {
+    pub fn new<L: 'static + Lensable<In = T, Out = Self>>(lens: L) -> Self {
         Self {
             key: new_key!(),
-            lens,
+            lens: Rc::new(lens),
             text: String::new(),
         }
     }
@@ -95,15 +95,15 @@ impl<T: 'static> TextBox<T> {
     }
 
     pub fn view<'a>(&self, al: &'a Alloc) -> Node<'a, T> {
-        let lens = self.lens.clone();
-        let lens2 = self.lens.clone();
+        let lens1 = Rc::clone(&self.lens);
+        let lens2 = Rc::clone(&self.lens);
         let key = self.key.clone();
 
         ui!(al, "text-box" [
             .key(key)
             .style_on_draw(&|_, style: &mut Style| style.min_height = style.min_height.max(style.font_size))
             .content(Content::DynamicLabel(al.alloc(move |state: &'a T| {
-                lens.get(state).text.as_str()
+                lens1.get(state).text.as_str()
             })))
             .event(On::MouseDown, al.alloc(move |state: &mut T, app: &mut App<T>| {
                 let this = lens2.get_mut(state);
