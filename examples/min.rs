@@ -46,7 +46,7 @@ fn main() {
     };
 
     let view = new_view!(main_view);
-    let stylesheet = new_stylesheet!("examples/min.css");
+    let stylesheet = new_style!("examples/min.css");
     let window = WindowDesc::new(view).with_title("Rosin Window").with_size(650.0, 650.0);
 
     AppLauncher::default()

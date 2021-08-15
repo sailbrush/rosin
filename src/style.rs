@@ -9,7 +9,7 @@ use std::{cmp::Ordering, error::Error, fs, time::SystemTime};
 use cssparser::{Parser, ParserInput, RuleListParser, RGBA};
 
 #[macro_export]
-macro_rules! new_stylesheet {
+macro_rules! new_style {
     ($path:expr) => {
         if cfg!(debug_assertions) {
             Stylesheet::new_dynamic(concat!(env!("CARGO_MANIFEST_DIR"), "/", $path))
