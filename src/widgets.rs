@@ -54,7 +54,7 @@ macro_rules! button {
 pub struct Slider<T: 'static> {
     lens: &'static dyn Lens<In = T, Out = Self>,
     key: Key,
-    pub value: f32,
+    value: f32,
 }
 
 impl<T> Slider<T> {
