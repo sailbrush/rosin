@@ -16,7 +16,7 @@ pub struct Example<T: 'static> {
 
 impl<T> Example<T> {
     #[track_caller]
-    pub fn new(lens: impl 'static + Lens<In = T, Out = Self>) -> Self {
+    pub fn new(lens: impl Lens<In = T, Out = Self>) -> Self {
         Self {
             lens: lens.leak(),
             key: new_key!(),
@@ -59,7 +59,7 @@ pub struct Slider<T: 'static> {
 
 impl<T> Slider<T> {
     #[track_caller]
-    pub fn new(lens: impl 'static + Lens<In = T, Out = Self>) -> Self {
+    pub fn new(lens: impl Lens<In = T, Out = Self>) -> Self {
         Self {
             lens: lens.leak(),
             key: new_key!(),
@@ -102,7 +102,7 @@ pub struct TextBox<T: 'static> {
 
 impl<T> TextBox<T> {
     #[track_caller]
-    pub fn new(lens: impl 'static + Lens<In = T, Out = Self>) -> Self {
+    pub fn new(lens: impl Lens<In = T, Out = Self>) -> Self {
         Self {
             lens: lens.leak(),
             key: new_key!(),
