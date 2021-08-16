@@ -1,5 +1,7 @@
 #![forbid(unsafe_code)]
 
+use std::{fmt, fmt::Debug};
+
 use crate::libloader::LibLoader;
 use crate::prelude::*;
 
@@ -12,8 +14,8 @@ macro_rules! new_view {
 
 pub struct View<T>(&'static [u8], pub ViewCallback<T>);
 
-impl<T> std::fmt::Debug for View<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<T> Debug for View<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}()", self.0)
     }
 }
