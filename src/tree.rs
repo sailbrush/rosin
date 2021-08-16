@@ -85,6 +85,7 @@ pub struct Alloc {
 }
 
 impl Alloc {
+    #[allow(clippy::mut_from_ref)]
     pub fn alloc<U>(&self, val: U) -> &mut U {
         self.bump.alloc(val)
     }
@@ -104,9 +105,9 @@ impl<'a, T> Default for Content<'a, T> {
 }
 
 pub(crate) struct ArrayNode<'a, T> {
-    pub key: Option<Key>,
+    pub _key: Option<Key>, // TODO
     pub classes: BumpVec<'a, &'static str>,
-    pub callbacks: BumpVec<'a, (On, &'a EventCallback<T>)>,
+    pub _callbacks: BumpVec<'a, (On, &'a EventCallback<T>)>, // TODO
     pub style: Style,
     pub style_on_draw: Option<&'a StyleCallback<T>>,
     pub parent: usize,
@@ -125,9 +126,10 @@ impl<'a, T> ArrayNode<'a, T> {
         }
     }
 
-    pub(crate) fn trigger(&self, event_type: On, state: &mut T, app: &mut App<T>) -> Stage {
+    // TODO
+    pub(crate) fn _trigger(&self, event_type: On, state: &mut T, app: &mut App<T>) -> Stage {
         let mut stage = Stage::Idle;
-        for (et, callback) in &self.callbacks {
+        for (et, callback) in &self._callbacks {
             if *et == event_type {
                 stage = stage.max((callback)(state, app));
             }
@@ -233,9 +235,9 @@ impl<'a, T> Node<'a, T> {
             }
 
             tree.push(ArrayNode {
-                key: curr_node.key,
+                _key: curr_node.key,
                 classes: curr_node.classes.take()?,
-                callbacks: curr_node.callbacks.take()?,
+                _callbacks: curr_node.callbacks.take()?,
                 style: curr_node.style_default.unwrap_or(Style::default)(),
                 style_on_draw: curr_node.style_on_draw,
                 parent,

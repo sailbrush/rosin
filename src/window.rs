@@ -114,13 +114,15 @@ impl<T> RosinWindow<T> {
         self.windowed_context.window().id()
     }
 
-    pub fn borrow_tree_cache(&self) -> Option<&BumpVec<ArrayNode<T>>> {
+    // TODO
+    pub fn _borrow_tree_cache(&self) -> Option<&BumpVec<ArrayNode<T>>> {
         // SAFETY: The returned borrow is guaranteed to remain valid because
         // it points to heap allocated memory that requires &mut to clear
         Some(unsafe { self.tree_cache.as_ref()?.adopt() })
     }
 
-    pub fn borrow_layout_cache(&self) -> Option<&BumpVec<Layout>> {
+    // TODO
+    pub fn _borrow_layout_cache(&self) -> Option<&BumpVec<Layout>> {
         // SAFETY: The returned borrow is guaranteed to remain valid because
         // it points to heap allocated memory that requires &mut to clear
         Some(unsafe { self.layout_cache.as_ref()?.adopt() })
