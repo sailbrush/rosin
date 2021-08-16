@@ -41,7 +41,7 @@ pub fn main_view<'a>(_state: &State, al: &'a Alloc) -> Node<'a, State> {
 
 fn main() {
     let state = State {
-        text_box: TextBox::new(lens!(State -> text_box)),
+        text_box: TextBox::new(lens!(State => text_box)),
         other: String::new(),
     };
 

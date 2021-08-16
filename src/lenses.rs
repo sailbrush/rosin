@@ -7,10 +7,10 @@ use std::{
 
 #[macro_export]
 macro_rules! lens {
-    ($obj_type:ident -> $($path:tt)*) => {
+    ($obj_type:ty => $($path:tt)*) => {
         SingleLens::new(|state: &$obj_type| { &state.$($path)* }, |state: &mut $obj_type| { &mut state.$($path)* })
     };
-    ($first_lens:ident, $obj_type:ident -> $($path:tt)*) => {
+    ($first_lens:expr, $obj_type:ty => $($path:tt)*) => {
         CompoundLens::new($first_lens, SingleLens::new(|state: &$obj_type| { &state.$($path)* }, |state: &mut $obj_type| { &mut state.$($path)* }))
     };
 }
