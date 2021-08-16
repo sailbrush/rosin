@@ -1,10 +1,42 @@
 #![forbid(unsafe_code)]
 
-use std::rc::Rc;
+use std::fmt::Debug;
 
 use crate::prelude::*;
 
 pub use crate::button;
+
+/*
+// ---------- Example ----------
+#[derive(Debug)]
+pub struct Example<T: 'static> {
+    lens: &'static dyn Lens<In = T, Out = Self>,
+    key: Key,
+}
+
+impl<T> Example<T> {
+    #[track_caller]
+    pub fn new(lens: impl 'static + Lens<In = T, Out = Self>) -> Self {
+        Self {
+            lens: lens.leak(),
+            key: new_key!(),
+        }
+    }
+
+    pub fn view(&self) -> Node<T> {
+        let lens = self.lens;
+        let key = self.key;
+
+        ui!("example" [
+            .key(key)
+            .event(On::MouseDown, move |state: &mut T, _ctx: &mut App<T>| {
+                let this = lens.get_mut(state);
+                Stage::Paint
+            })
+        ])
+    }
+}
+*/
 
 // ---------- Button ----------
 #[macro_export]
@@ -18,25 +50,19 @@ macro_rules! button {
 }
 
 // ---------- Slider ----------
-
-pub struct Slider<T> {
+#[derive(Debug)]
+pub struct Slider<T: 'static> {
+    lens: &'static dyn Lens<In = T, Out = Self>,
     key: Key,
-    lens: Rc<dyn Lensable<In = T, Out = Self>>,
     pub value: f32,
 }
 
-impl<T> std::fmt::Debug for Slider<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Slider {{ {:?} }}", self.key)
-    }
-}
-
-impl<T: 'static> Slider<T> {
+impl<T> Slider<T> {
     #[track_caller]
-    pub fn new<L: 'static + Lensable<In = T, Out = Self>>(lens: L) -> Self {
+    pub fn new(lens: impl 'static + Lens<In = T, Out = Self>) -> Self {
         Self {
+            lens: lens.leak(),
             key: new_key!(),
-            lens: Rc::new(lens),
             value: 0.0,
         }
     }
@@ -50,16 +76,16 @@ impl<T: 'static> Slider<T> {
         Stage::Paint
     }
 
-    pub fn view<'b>(&self, al: &'b Alloc) -> Node<'b, T> {
-        let lens = Rc::clone(&self.lens);
-        let key = self.key.clone();
+    pub fn view<'a>(&self, al: &'a Alloc) -> Node<'a, T> {
+        let lens = self.lens;
+        let key = self.key;
 
         ui!(al, "slider" [
             .key(key)
-            .event(On::MouseDown, al.alloc(move |state: &mut T, app: &mut App<T>| {
-                let this = lens.get_mut(state);
-                app.focus_on_ancestor(key);
-                app.emit_change();
+            .event(On::MouseDown, al.alloc(move |state: &mut T, ctx: &mut App<T>| {
+                let _this = lens.get_mut(state);
+                ctx.focus_on_ancestor(key);
+                ctx.emit_change();
                 Stage::Paint
             }))
         ])
@@ -67,18 +93,19 @@ impl<T: 'static> Slider<T> {
 }
 
 // ---------- TextBox ----------
-pub struct TextBox<T> {
+#[derive(Debug)]
+pub struct TextBox<T: 'static> {
+    lens: &'static dyn Lens<In = T, Out = Self>,
     key: Key,
-    lens: Rc<dyn Lensable<In = T, Out = Self>>,
     text: String,
 }
 
-impl<T: 'static> TextBox<T> {
+impl<T> TextBox<T> {
     #[track_caller]
-    pub fn new<L: 'static + Lensable<In = T, Out = Self>>(lens: L) -> Self {
+    pub fn new(lens: impl 'static + Lens<In = T, Out = Self>) -> Self {
         Self {
+            lens: lens.leak(),
             key: new_key!(),
-            lens: Rc::new(lens),
             text: String::new(),
         }
     }
@@ -94,26 +121,25 @@ impl<T: 'static> TextBox<T> {
         Stage::Layout
     }
 
+    pub fn clicked(&mut self, _app: &mut App<T>) -> Stage {
+        Stage::Build
+    }
+
     pub fn view<'a>(&self, al: &'a Alloc) -> Node<'a, T> {
-        let lens1 = Rc::clone(&self.lens);
-        let lens2 = Rc::clone(&self.lens);
-        let key = self.key.clone();
+        let lens = self.lens;
+        let key = self.key;
 
         ui!(al, "text-box" [
             .key(key)
             .style_on_draw(&|_, style: &mut Style| style.min_height = style.min_height.max(style.font_size))
             .content(Content::DynamicLabel(al.alloc(move |state: &'a T| {
-                lens1.get(state).text.as_str()
+                lens.get(state).text.as_str()
             })))
-            .event(On::MouseDown, al.alloc(move |state: &mut T, app: &mut App<T>| {
-                let this = lens2.get_mut(state);
-                app.focus_on_ancestor(key);
-                this.clicked(app)
+            .event(On::MouseDown, al.alloc(move |state: &mut T, ctx: &mut App<T>| {
+                let this = lens.get_mut(state);
+                ctx.focus_on_ancestor(key);
+                this.clicked(ctx)
             }))
         ])
-    }
-
-    pub fn clicked(&mut self, _app: &mut App<T>) -> Stage {
-        Stage::Build
     }
 }
