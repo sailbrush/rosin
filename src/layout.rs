@@ -193,12 +193,6 @@ fn layout<T>(temp: &Bump, tree: &[ArrayNode<T>], id: usize, size: Size, output: 
         });
     let mut flex_items = BumpVec::from_iter_in(flex_items_iter, temp);
 
-    // 2 - Determine the available main and cross space for the flex items
-    let available_space = Size {
-        width: size.width,
-        height: size.height,
-    };
-
     // 5 - Collect flex items into flex lines
     let mut flex_lines: BumpVec<FlexLine> = BumpVec::new_in(temp);
 
@@ -241,7 +235,7 @@ fn layout<T>(temp: &Bump, tree: &[ArrayNode<T>], id: usize, size: Size, output: 
             .iter()
             .map(|item| item.hypo_outer_size.main(dir) + item.margin.main(dir))
             .sum();
-        let growing: bool = total_hypo_outer_size < available_space.main(dir);
+        let growing: bool = total_hypo_outer_size < size.main(dir);
 
         // 9.7.2 - Size inflexible items
         for item in line.items.iter_mut() {
@@ -255,7 +249,7 @@ fn layout<T>(temp: &Bump, tree: &[ArrayNode<T>], id: usize, size: Size, output: 
         }
 
         // 9.7.3 - Calculate initial free space
-        let initial_free_space: f32 = available_space.main(dir) - total_hypo_outer_size;
+        let initial_free_space: f32 = size.main(dir) - total_hypo_outer_size;
 
         // 9.7.4 - Loop
         loop {
@@ -282,11 +276,11 @@ fn layout<T>(temp: &Bump, tree: &[ArrayNode<T>], id: usize, size: Size, output: 
             });
 
             let free_space = if growing && sum_flex_grow < 1.0 {
-                (initial_free_space * sum_flex_grow).min(available_space.main(dir) - used_space)
+                (initial_free_space * sum_flex_grow).min(size.main(dir) - used_space)
             } else if !growing && sum_flex_shrink < 1.0 {
-                (initial_free_space * sum_flex_shrink).max(available_space.main(dir) - used_space)
+                (initial_free_space * sum_flex_shrink).max(size.main(dir) - used_space)
             } else {
-                available_space.main(dir) - used_space
+                size.main(dir) - used_space
             };
 
             // c. Distribute the free space proportional the the flex factors
@@ -348,7 +342,7 @@ fn layout<T>(temp: &Bump, tree: &[ArrayNode<T>], id: usize, size: Size, output: 
     // 9 - Handle 'align-content: stretch'
     if align_content == AlignContent::Stretch {
         let total_cross: f32 = flex_lines.iter().map(|line| line.cross_size).sum();
-        let inner_cross = available_space.cross(dir);
+        let inner_cross = size.cross(dir);
 
         if total_cross < inner_cross {
             let remaining = inner_cross - total_cross;
@@ -380,7 +374,7 @@ fn layout<T>(temp: &Bump, tree: &[ArrayNode<T>], id: usize, size: Size, output: 
             .iter()
             .map(|item| item.target_size.main(dir) + item.border_padding.main(dir))
             .sum();
-        let free_space = available_space.main(dir) - used_space;
+        let free_space = size.main(dir) - used_space;
         let mut num_auto_margins = 0;
 
         for item in line.items.iter_mut() {
