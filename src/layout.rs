@@ -8,60 +8,46 @@ use bumpalo::{collections::Vec as BumpVec, Bump};
 
 impl Style {
     fn size(&self) -> Size {
-        Size {
-            width: self.width.unwrap_or(0.0),
-            height: self.height.unwrap_or(0.0),
-        }
+        Size::new(self.width.unwrap_or(0.0), self.height.unwrap_or(0.0))
     }
 
     fn min_size(&self) -> Size {
-        Size {
-            width: self.min_width,
-            height: self.min_height,
-        }
+        Size::new(self.min_width, self.min_height)
     }
 
     fn max_size(&self) -> Size {
-        Size {
-            width: self.max_width,
-            height: self.max_height,
-        }
+        Size::new(self.max_width, self.max_height)
     }
 
     fn position(&self) -> Rect {
-        Rect {
-            top: self.top.unwrap_or(0.0),
-            right: self.right.unwrap_or(0.0),
-            bottom: self.bottom.unwrap_or(0.0),
-            left: self.left.unwrap_or(0.0),
-        }
+        Rect::new(
+            self.top.unwrap_or(0.0),
+            self.right.unwrap_or(0.0),
+            self.bottom.unwrap_or(0.0),
+            self.left.unwrap_or(0.0),
+        )
     }
 
     fn margin(&self) -> Rect {
-        Rect {
-            top: self.margin_top.unwrap_or(0.0),
-            right: self.margin_right.unwrap_or(0.0),
-            bottom: self.margin_bottom.unwrap_or(0.0),
-            left: self.margin_left.unwrap_or(0.0),
-        }
+        Rect::new(
+            self.margin_top.unwrap_or(0.0),
+            self.margin_right.unwrap_or(0.0),
+            self.margin_bottom.unwrap_or(0.0),
+            self.margin_left.unwrap_or(0.0),
+        )
     }
 
     fn border(&self) -> Rect {
-        Rect {
-            top: self.border_top_width,
-            right: self.border_right_width,
-            bottom: self.border_bottom_width,
-            left: self.border_left_width,
-        }
+        Rect::new(
+            self.border_top_width,
+            self.border_right_width,
+            self.border_bottom_width,
+            self.border_left_width,
+        )
     }
 
     fn padding(&self) -> Rect {
-        Rect {
-            top: self.padding_top,
-            right: self.padding_right,
-            bottom: self.padding_bottom,
-            left: self.padding_left,
-        }
+        Rect::new(self.padding_top, self.padding_right, self.padding_bottom, self.padding_left)
     }
 }
 

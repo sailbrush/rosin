@@ -17,14 +17,6 @@ impl Rect {
         Self { top, right, bottom, left }
     }
 
-    pub fn vertical(&self) -> f32 {
-        self.top + self.bottom
-    }
-
-    pub fn horizontal(&self) -> f32 {
-        self.left + self.right
-    }
-
     pub fn size(&self) -> Size {
         Size {
             width: self.left + self.right,
@@ -48,14 +40,6 @@ impl Rect {
         }
     }
 
-    pub fn main_end(&self, dir: FlexDirection) -> f32 {
-        if dir.is_row() {
-            self.right
-        } else {
-            self.bottom
-        }
-    }
-
     pub fn cross(&self, dir: FlexDirection) -> f32 {
         if !dir.is_row() {
             self.left + self.right
@@ -69,14 +53,6 @@ impl Rect {
             self.left
         } else {
             self.top
-        }
-    }
-
-    pub fn cross_end(&self, dir: FlexDirection) -> f32 {
-        if !dir.is_row() {
-            self.right
-        } else {
-            self.bottom
         }
     }
 }
@@ -144,17 +120,6 @@ impl Size {
         Self { width: 0.0, height: 0.0 }
     }
 
-    pub fn infinite() -> Self {
-        Self {
-            width: f32::INFINITY,
-            height: f32::INFINITY,
-        }
-    }
-
-    pub fn is_infinite(&self) -> bool {
-        self.width.is_infinite() && self.height.is_infinite()
-    }
-
     pub fn main(&self, dir: FlexDirection) -> f32 {
         if dir.is_row() {
             self.width
@@ -173,20 +138,6 @@ impl Size {
 
     pub fn with_main(&self, dir: FlexDirection, len: f32) -> Self {
         if dir.is_row() {
-            Self {
-                width: len,
-                height: self.height,
-            }
-        } else {
-            Self {
-                width: self.width,
-                height: len,
-            }
-        }
-    }
-
-    pub fn with_cross(&self, dir: FlexDirection, len: f32) -> Self {
-        if !dir.is_row() {
             Self {
                 width: len,
                 height: self.height,
