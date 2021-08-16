@@ -67,8 +67,8 @@ impl<T: 'static> AppLauncher<T> {
         self
     }
 
-    pub fn use_stylesheet(mut self, stylesheet: Stylesheet) -> Self {
-        self.0.use_stylesheet(stylesheet);
+    pub fn use_style(mut self, stylesheet: Stylesheet) -> Self {
+        self.0.use_style(stylesheet);
         self
     }
 
@@ -122,7 +122,7 @@ impl<T: 'static> App<T> {
         self.new_windows.push(desc);
     }
 
-    pub fn use_stylesheet(&mut self, stylesheet: Stylesheet) {
+    pub fn use_style(&mut self, stylesheet: Stylesheet) {
         self.stylesheet = stylesheet;
     }
 
@@ -155,13 +155,13 @@ impl<T: 'static> App<T> {
         todo!();
     }
 
-    pub fn focus_on(&mut self, key: Key) {
+    pub fn focus_on(&mut self, _key: Key) {
         todo!();
     }
 
     // Avoids linear searching through all nodes
     // Is this really needed?
-    pub fn focus_on_ancestor(&mut self, key: Key) {
+    pub fn focus_on_ancestor(&mut self, _key: Key) {
         todo!();
     }
 

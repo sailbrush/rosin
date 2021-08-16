@@ -3,7 +3,7 @@
 use rosin::prelude::*;
 use rosin::widgets::*;
 
-//#[derive(Debug)]
+#[derive(Debug)]
 pub struct State {
     text_box: TextBox<Self>,
     other: String,
@@ -50,7 +50,7 @@ fn main() {
     let window = WindowDesc::new(view).with_title("Rosin Window").with_size(650.0, 650.0);
 
     AppLauncher::default()
-        .use_stylesheet(stylesheet)
+        .use_style(stylesheet)
         .add_window(window)
         .add_font_bytes(0, include_bytes!("fonts/Roboto-Regular.ttf"))
         .run(state)
