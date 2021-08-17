@@ -114,7 +114,6 @@ impl<T> RosinWindow<T> {
     }
 
     pub fn redraw(&mut self, state: &T, stylesheet: &Stylesheet, loader: &Option<LibLoader>) -> Result<(), Box<dyn Error>> {
-        self.stage = Stage::Build;
         // Reset scratch allocator
         self.temp.reset();
 
@@ -126,11 +125,7 @@ impl<T> RosinWindow<T> {
         if self.stage == Stage::Build || self.tree_cache.is_none() {
             self.reset_cache();
 
-            let start = std::time::Instant::now();
             let mut tree = self.view.get(loader)(state).finish().unwrap();
-            let elapsed = start.elapsed();
-            println!("{}, {:?}", tree.len(), elapsed);
-
             stylesheet.style(&mut tree);
             self.tree_cache = Some(tree);
         }
