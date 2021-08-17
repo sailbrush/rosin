@@ -25,7 +25,6 @@ impl Alloc {
 
     /// SAFETY: All references to allocations must be out of scope before it is safe to call `reset()`
     pub unsafe fn reset(&self) {
-        let mut bump = self.0.borrow_mut();
-        bump.reset();
+        self.0.borrow_mut().reset();
     }
 }
