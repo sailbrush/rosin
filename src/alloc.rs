@@ -3,7 +3,7 @@ use std::{cell::RefCell, fmt::Debug};
 use bumpalo::{collections::Vec as BumpVec, Bump};
 
 #[derive(Debug, Default)]
-pub struct Alloc(RefCell<Bump>);
+pub(crate) struct Alloc(RefCell<Bump>);
 
 impl Alloc {
     pub fn alloc<T>(&self, val: T) -> &'static mut T {
