@@ -27,7 +27,7 @@ macro_rules! ui {
         ui!($tree.add_child($($child)* .add_classes($classes) ); $($tail)* )
     };
     ($tree:expr; $classes:literal { $($builder:tt)* } $($tail:tt)*) => {
-        ui!($tree.add_child(Node::new() .add_classes($classes) $($builder)* ); $($tail)* )
+        ui!($tree.add_child(Node::default() .add_classes($classes) $($builder)* ); $($tail)* )
     };
     ($tree:expr; { $($body:tt)* } $($tail:tt)*) => {
         ui!($tree $($body)*; $($tail)* )
