@@ -76,18 +76,18 @@ impl<T> Slider<T> {
         Stage::Paint
     }
 
-    pub fn view<'a>(&self, al: &'a Alloc) -> Node<'a, T> {
+    pub fn view(&self) -> Node<T> {
         let lens = self.lens;
         let key = self.key;
 
-        ui!(al, "slider" [
+        ui!("slider" [
             .key(key)
-            .event(On::MouseDown, al.alloc(move |state: &mut T, ctx: &mut App<T>| {
+            .event(On::MouseDown, move |state: &mut T, ctx: &mut App<T>| {
                 let _this = lens.get_mut(state);
                 ctx.focus_on_ancestor(key);
                 ctx.emit_change();
                 Stage::Paint
-            }))
+            })
         ])
     }
 }
@@ -125,21 +125,18 @@ impl<T> TextBox<T> {
         Stage::Build
     }
 
-    pub fn view<'a>(&self, al: &'a Alloc) -> Node<'a, T> {
+    pub fn view(&self) -> Node<T> {
         let lens = self.lens;
         let key = self.key;
 
-        ui!(al, "text-box" [
+        ui!("text-box" [
             .key(key)
-            .style_on_draw(&|_, style: &mut Style| style.min_height = style.min_height.max(style.font_size))
-            .content(Content::DynamicLabel(al.alloc(move |state: &'a T| {
-                lens.get(state).text.as_str()
-            })))
-            .event(On::MouseDown, al.alloc(move |state: &mut T, ctx: &mut App<T>| {
+            .style_on_draw(move |_: &T, style: &mut Style| style.min_height = style.min_height.max(style.font_size))
+            .event(On::MouseDown, move |state: &mut T, ctx: &mut App<T>| {
                 let this = lens.get_mut(state);
                 ctx.focus_on_ancestor(key);
                 this.clicked(ctx)
-            }))
+            })
         ])
     }
 }

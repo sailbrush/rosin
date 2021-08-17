@@ -15,27 +15,19 @@ impl State {
     }
 }
 
-pub fn main_view<'a>(_state: &State, al: &'a Alloc) -> Node<'a, State> {
-    ui!(al, "root" [
-
-        "display" []
-
-        "row" [
-            "btn" []
-            "btn" []
-            "btn" []
-            "btn" []
-            "btn" []
-
-        ]
-
-        "row" [
-            "btn" []
-            "btn" []
-            "btn" []
-            "btn" []
-            "btn" []
-        ]
+pub fn main_view(_state: &State) -> Node<State> {
+    ui!("root" [
+        for _ in 0..10 {
+            "first" [
+                for _ in 0..10 {
+                    "second" [
+                        for _ in 0..10 {
+                            "third" []
+                        }
+                    ]
+                }
+            ]
+        }
     ])
 }
 

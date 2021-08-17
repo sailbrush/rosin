@@ -1,7 +1,7 @@
 use crate::prelude::*;
 use crate::{geometry::Size, layout::*, libloader::LibLoader, render, tree::*};
 
-use std::{error::Error, mem, ptr::NonNull};
+use std::error::Error;
 
 use bumpalo::{collections::Vec as BumpVec, Bump};
 use femtovg::{renderer::OpenGl, Canvas};
@@ -13,7 +13,7 @@ use glutin::{
 };
 
 // TODO - Just re-export winit types for window creation / events
-pub struct WindowDesc<T> {
+pub struct WindowDesc<T: 'static> {
     pub(crate) builder: WindowBuilder,
     pub(crate) view: View<T>,
 }
@@ -37,37 +37,13 @@ impl<T> WindowDesc<T> {
     }
 }
 
-// A struct with the same size as BumpVec used to erase lifetimes
-// A BumpVec that has been orphaned from its allocator
-struct OrphanVec {
-    _a: NonNull<()>,
-    _b: NonNull<()>,
-    _c: NonNull<()>,
-    _d: NonNull<()>,
-}
-
-impl OrphanVec {
-    pub unsafe fn orphan<U>(vec: BumpVec<U>) -> OrphanVec {
-        mem::transmute::<BumpVec<U>, OrphanVec>(vec)
-    }
-
-    pub unsafe fn adopt<U>(&self) -> &BumpVec<U> {
-        &*(self as *const OrphanVec as *const BumpVec<U>)
-    }
-
-    pub unsafe fn adopt_mut<U>(&mut self) -> &mut BumpVec<U> {
-        &mut *(self as *mut OrphanVec as *mut BumpVec<U>)
-    }
-}
-
-pub(crate) struct RosinWindow<T> {
+pub(crate) struct RosinWindow<T: 'static> {
     windowed_context: WindowedContext<PossiblyCurrent>,
     canvas: Canvas<OpenGl>,
     view: View<T>,
     stage: Stage,
-    alloc: Alloc,
-    tree_cache: Option<OrphanVec>,
-    layout_cache: Option<OrphanVec>,
+    tree_cache: Option<Vec<ArrayNode<T>>>,
+    layout_cache: Option<Vec<Layout>>,
     temp: Bump,
     font_table: Vec<(u32, femtovg::FontId)>,
 }
@@ -96,7 +72,6 @@ impl<T> RosinWindow<T> {
             canvas,
             view: desc.view,
             stage: Stage::Build,
-            alloc: Alloc::default(),
             tree_cache: None,
             layout_cache: None,
             temp: Bump::new(),
@@ -107,25 +82,10 @@ impl<T> RosinWindow<T> {
     fn reset_cache(&mut self) {
         self.layout_cache = None;
         self.tree_cache = None;
-        self.alloc.bump.reset();
     }
 
     pub fn id(&self) -> WindowId {
         self.windowed_context.window().id()
-    }
-
-    // TODO
-    pub fn _borrow_tree_cache(&self) -> Option<&BumpVec<ArrayNode<T>>> {
-        // SAFETY: The returned borrow is guaranteed to remain valid because
-        // it points to heap allocated memory that requires &mut to clear
-        Some(unsafe { self.tree_cache.as_ref()?.adopt() })
-    }
-
-    // TODO
-    pub fn _borrow_layout_cache(&self) -> Option<&BumpVec<Layout>> {
-        // SAFETY: The returned borrow is guaranteed to remain valid because
-        // it points to heap allocated memory that requires &mut to clear
-        Some(unsafe { self.layout_cache.as_ref()?.adopt() })
     }
 
     pub fn add_font_bytes(&mut self, id: u32, data: &[u8]) -> Result<(), Box<dyn Error>> {
@@ -150,6 +110,7 @@ impl<T> RosinWindow<T> {
     }
 
     pub fn redraw(&mut self, state: &T, stylesheet: &Stylesheet, loader: &Option<LibLoader>) -> Result<(), Box<dyn Error>> {
+self.stage = Stage::Build;
         // Reset scratch allocator
         self.temp.reset();
 
@@ -160,19 +121,23 @@ impl<T> RosinWindow<T> {
         // ---------- Rebuild window tree ----------
         if self.stage == Stage::Build || self.tree_cache.is_none() {
             self.reset_cache();
-            let mut tree = self.view.get(loader)(state, &self.alloc).finish(&self.alloc).unwrap();
+            
+let start = std::time::Instant::now();
+            let mut tree = self.view.get(loader)(state).finish().unwrap();
+let elapsed = start.elapsed();
+println!("{}, {:?}", tree.len(), elapsed);
+
             stylesheet.style(&mut tree);
-            // SAFETY: This is needed to store self references, which allows us to retain bump allocated data between redraws
-            self.tree_cache = Some(unsafe { OrphanVec::orphan(tree) });
+            self.tree_cache = Some(tree);
         }
 
-        let tree: &mut BumpVec<ArrayNode<T>> = unsafe { self.tree_cache.as_mut().unwrap().adopt_mut() };
+        let tree: &mut Vec<ArrayNode<T>> = self.tree_cache.as_mut().unwrap();
 
         // Stash default styles, and run style callbacks
         let mut default_styles: BumpVec<(usize, Style)> = BumpVec::new_in(&self.temp);
         if self.stage != Stage::Idle {
             for (id, node) in tree.iter_mut().enumerate() {
-                if let Some(modify_style) = node.style_on_draw {
+                if let Some(modify_style) = &node.style_on_draw {
                     default_styles.push((id, node.style.clone()));
                     modify_style(state, &mut node.style);
                 }
@@ -182,12 +147,11 @@ impl<T> RosinWindow<T> {
         // ---------- Recalculate layout ----------
         if self.stage >= Stage::Layout || self.layout_cache.is_none() {
             if self.layout_cache.is_none() {
-                let new_layout: BumpVec<Layout> = BumpVec::with_capacity_in(tree.len(), &self.alloc.bump);
-                // SAFETY: This is needed to store self references, which allows us to retain bump allocated data between redraws
-                self.layout_cache = Some(unsafe { OrphanVec::orphan(new_layout) });
+                let new_layout: Vec<Layout> = Vec::with_capacity(tree.len());
+                self.layout_cache = Some(new_layout);
             }
 
-            let layout = unsafe { self.layout_cache.as_mut().unwrap().adopt_mut() };
+            let layout = self.layout_cache.as_mut().unwrap();
 
             layout.clear();
             for _ in 0..tree.len() {
@@ -201,7 +165,7 @@ impl<T> RosinWindow<T> {
             build_layout(&self.temp, tree, layout_size, layout);
         }
 
-        let layout: &BumpVec<Layout> = unsafe { self.layout_cache.as_ref().unwrap().adopt() };
+        let layout: &Vec<Layout> = self.layout_cache.as_ref().unwrap();
 
         //println!("BEGIN TREE ------------------------------------------");
         //let test: Vec<(&str, &Layout)> = tree.into_iter().map(|item| item.classes[0]).zip(layout.into_iter()).collect();

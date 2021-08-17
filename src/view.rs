@@ -12,7 +12,7 @@ macro_rules! new_view {
     };
 }
 
-pub struct View<T>(&'static [u8], pub ViewCallback<T>);
+pub struct View<T: 'static>(&'static [u8], pub ViewCallback<T>);
 
 impl<T> Debug for View<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

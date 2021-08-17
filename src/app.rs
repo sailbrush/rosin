@@ -40,20 +40,25 @@ pub enum StopTask {
     No,
 }
 
-pub type EventCallback<T> = dyn Fn(&mut T, &mut App<T>) -> Stage;
-pub type StyleCallback<T> = dyn Fn(&T, &mut Style);
-pub type TaskCallback<T> = dyn Fn(&mut T, &mut App<T>) -> (Stage, StopTask);
-pub type AnimCallback<T> = dyn Fn(&mut T, Duration) -> (Stage, StopTask);
-pub type ViewCallback<T> = for<'a> fn(&T, &'a Alloc) -> Node<'a, T>;
+// This is a hack until trait aliases stabilize
+pub trait EventCallback<T>: 'static + Fn(&mut T, &mut App<T>) -> Stage {}
+impl<F, T> EventCallback<T> for F where F: 'static + Fn(&mut T, &mut App<T>) -> Stage {}
+pub trait StyleCallback<T>: 'static + Fn(&T, &mut Style) {}
+impl<F, T> StyleCallback<T> for F where F: 'static + Fn(&T, &mut Style) {}
+pub trait TaskCallback<T>: 'static + Fn(&mut T, &mut App<T>) -> (Stage, StopTask) {}
+impl<F, T> TaskCallback<T> for F where F: 'static + Fn(&mut T, &mut App<T>) -> (Stage, StopTask) {}
+pub trait AnimCallback<T>: 'static + Fn(&mut T, Duration) -> (Stage, StopTask) {}
+impl<F, T> AnimCallback<T> for F where F: 'static + Fn(&mut T, Duration) -> (Stage, StopTask) {}
+pub type ViewCallback<T> = fn(&T) -> Node<T>;
 
-struct Task<T> {
+struct Task<T: 'static> {
     window_id: Option<WindowId>,
     last_run: Instant,
     frequency: Duration,
-    callback: Box<TaskCallback<T>>,
+    callback: Box<dyn TaskCallback<T>>,
 }
 
-pub struct AppLauncher<T>(App<T>);
+pub struct AppLauncher<T: 'static>(App<T>);
 
 impl<T: 'static> Default for AppLauncher<T> {
     fn default() -> Self {
@@ -80,7 +85,7 @@ impl<T: 'static> AppLauncher<T> {
     // TODO add_anim_task
 
     // Similar to setInterval in JS
-    pub fn add_task(mut self, window_id: Option<WindowId>, frequency: Duration, callback: Box<TaskCallback<T>>) -> Self {
+    pub fn add_task(mut self, window_id: Option<WindowId>, frequency: Duration, callback: impl TaskCallback<T>) -> Self {
         self.0.add_task(window_id, frequency, callback);
         self
     }
@@ -90,7 +95,7 @@ impl<T: 'static> AppLauncher<T> {
     }
 }
 
-pub struct App<T> {
+pub struct App<T: 'static> {
     event_loop: Option<EventLoop<()>>,
     loader: Option<LibLoader>,
     new_windows: Vec<WindowDesc<T>>,
@@ -134,12 +139,12 @@ impl<T: 'static> App<T> {
 
     // Similar to setInterval in JS
     // TODO - do we really need the ability to associate tasks with a particular window? Maybe event callbacks should be able to update particular windows, too
-    pub fn add_task(&mut self, window_id: Option<WindowId>, frequency: Duration, callback: Box<TaskCallback<T>>) {
+    pub fn add_task(&mut self, window_id: Option<WindowId>, frequency: Duration, callback: impl TaskCallback<T>) {
         self.tasks.push(Task {
             window_id,
             last_run: Instant::now(),
             frequency: Duration::from_millis(10).max(frequency),
-            callback,
+            callback: Box::new(callback),
         });
     }
 
@@ -184,18 +189,18 @@ impl<T: 'static> App<T> {
             self.add_task(
                 None,
                 Duration::from_millis(100),
-                Box::new(|_, app| {
-                    let mut stage = match app.stylesheet.poll() {
+                |_: &mut T, ctx: &mut App<T>| {
+                    let mut stage = match ctx.stylesheet.poll() {
                         Ok(true) => Stage::Build,
                         Ok(false) => Stage::Idle,
                         Err(error) => {
-                            eprintln!("[Rosin] Failed to reload stylesheet: {:?} Error: {:?}", app.stylesheet.path, error);
+                            eprintln!("[Rosin] Failed to reload stylesheet: {:?} Error: {:?}", ctx.stylesheet.path, error);
                             Stage::Idle
                         }
                     };
 
                     if cfg!(feature = "hot-reload") {
-                        if let Some(loader) = &mut app.loader {
+                        if let Some(loader) = &mut ctx.loader {
                             match loader.poll() {
                                 Ok(true) => stage = Stage::Build,
                                 Err(error) => {
@@ -207,7 +212,7 @@ impl<T: 'static> App<T> {
                     }
 
                     (stage, StopTask::No)
-                }),
+                },
             );
         }
 
