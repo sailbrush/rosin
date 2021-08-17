@@ -1,8 +1,14 @@
 #![forbid(unsafe_code)]
 
+use crate::alloc::Alloc;
 use crate::prelude::*;
 
 use std::num::NonZeroUsize;
+
+use bumpalo::collections::Vec as BumpVec;
+use once_cell::sync::Lazy;
+
+thread_local!(pub(crate) static A: Lazy<Alloc> = Lazy::new(|| { Alloc::default() }));
 
 /// Macro for describing the structure and style of a UI
 ///
@@ -12,10 +18,10 @@ use std::num::NonZeroUsize;
 #[macro_export]
 macro_rules! ui {
     ($classes:literal [ $($children:tt)* ]) => {
-        ui!(Node::new() .add_classes($classes); $($children)* )
+        ui!(Node::default() .add_classes($classes); $($children)* )
     };
     ($tree:expr; $classes:literal [ $($children:tt)* ] $($tail:tt)*) => {
-        ui!($tree.add_child(ui!(Node::new() .add_classes($classes); $($children)* )); $($tail)* )
+        ui!($tree.add_child(ui!(Node::default() .add_classes($classes); $($children)* )); $($tail)* )
     };
     ($tree:expr; $classes:literal ( $($child:tt)* ) $($tail:tt)*) => {
         ui!($tree.add_child($($child)* .add_classes($classes) ); $($tail)* )
@@ -91,10 +97,10 @@ impl<'a, T> Default for Content<'a, T> {
 
 pub(crate) struct ArrayNode<T: 'static> {
     pub _key: Option<Key>, // TODO
-    pub classes: Vec<&'static str>,
-    pub _callbacks: Vec<(On, Box<dyn EventCallback<T>>)>, // TODO
+    pub classes: BumpVec<'static, &'static str>,
+    pub _callbacks: BumpVec<'static, (On, &'static mut dyn EventCallback<T>)>, // TODO
     pub style: Style,
-    pub style_on_draw: Option<Box<dyn StyleCallback<T>>>,
+    pub style_on_draw: Option<&'static mut dyn StyleCallback<T>>,
     pub parent: usize,
     pub num_children: usize,
     pub last_child: Option<NonZeroUsize>,
@@ -112,9 +118,9 @@ impl<T> ArrayNode<T> {
     }
 
     // TODO
-    pub(crate) fn _trigger(&self, event_type: On, state: &'static mut T, app: &mut App<T>) -> Stage {
+    pub(crate) fn _trigger(&mut self, event_type: On, state: &'static mut T, app: &mut App<T>) -> Stage {
         let mut stage = Stage::Idle;
-        for (et, callback) in &self._callbacks {
+        for (et, callback) in &mut self._callbacks {
             if *et == event_type {
                 stage = stage.max((callback)(state, app));
             }
@@ -125,33 +131,35 @@ impl<T> ArrayNode<T> {
 
 pub struct Node<T: 'static> {
     key: Option<Key>,
-    classes: Option<Vec<&'static str>>,
-    callbacks: Option<Vec<(On, Box<dyn EventCallback<T>>)>>,
+    classes: Option<BumpVec<'static, &'static str>>,
+    callbacks: Option<BumpVec<'static, (On, &'static mut dyn EventCallback<T>)>>,
     style_default: Option<fn() -> Style>,
-    style_on_draw: Option<Box<dyn StyleCallback<T>>>,
+    style_on_draw: Option<&'static mut dyn StyleCallback<T>>,
     size: usize,
     num_children: usize,
-    prev_sibling: Option<Box<Node<T>>>,
-    last_child: Option<Box<Node<T>>>,
+    prev_sibling: Option<&'static mut Node<T>>,
+    last_child: Option<&'static mut Node<T>>,
     content: Content<'static, T>,
 }
 
-impl<T> Node<T> {
-    pub fn new() -> Self {
-            Self {
-                key: None,
-                classes: Some(Vec::new()),
-                callbacks: Some(Vec::new()),
-                style_default: None,
-                style_on_draw: None,
-                size: 1,
-                num_children: 0,
-                prev_sibling: None,
-                last_child: None,
-                content: Content::None,
-            }
+impl<T> Default for Node<T> {
+    fn default() -> Self {
+        Self {
+            key: None,
+            classes: Some(A.with(|a| a.vec())),
+            callbacks: Some(A.with(|a| a.vec())),
+            style_default: None,
+            style_on_draw: None,
+            size: 1,
+            num_children: 0,
+            prev_sibling: None,
+            last_child: None,
+            content: Content::None,
+        }
     }
+}
 
+impl<T> Node<T> {
     /// Set a key on a node, providing a stable identity between rebuilds
     pub fn key(mut self, key: Key) -> Self {
         self.key = Some(key);
@@ -171,7 +179,7 @@ impl<T> Node<T> {
     /// Register an event callback
     pub fn event(mut self, event_type: On, callback: impl EventCallback<T>) -> Self {
         if let Some(callbacks) = &mut self.callbacks {
-            callbacks.push((event_type, Box::new(callback)));
+            callbacks.push((event_type, A.with(|a| a.alloc(callback))));
         }
         self
     }
@@ -184,7 +192,7 @@ impl<T> Node<T> {
 
     /// Register a function to modify this node's style right before redrawing
     pub fn style_on_draw(mut self, func: impl StyleCallback<T>) -> Self {
-        self.style_on_draw = Some(Box::new(func));
+        self.style_on_draw = Some(A.with(|a| a.alloc(func)));
         self
     }
 
@@ -204,16 +212,16 @@ impl<T> Node<T> {
             new_child.prev_sibling = Some(last_child);
         }
 
-        self.last_child = Some(Box::new(new_child));
+        self.last_child = Some(A.with(|a| a.alloc(new_child)));
         self
     }
 
-    pub(crate) fn finish(self) -> Option<Vec<ArrayNode<T>>> {
-        let mut tree: Vec<ArrayNode<T>> = Vec::with_capacity(self.size);
-        let mut stack: Vec<(bool, usize, Box<Node<T>>)> = Vec::new();
+    pub(crate) fn finish(mut self) -> Option<BumpVec<'static, ArrayNode<T>>> {
+        let mut tree: BumpVec<ArrayNode<T>> = A.with(|a| a.vec_capacity(self.size));
+        let mut stack: BumpVec<(bool, usize, &mut Node<T>)> = A.with(|a| a.vec());
 
-        stack.push((false, 0, Box::new(self)));
-        while let Some((is_last_child, parent, mut curr_node)) = stack.pop() {
+        stack.push((false, 0, &mut self));
+        while let Some((is_last_child, parent, curr_node)) = stack.pop() {
             let index = tree.len();
             if is_last_child {
                 tree[parent].last_child = NonZeroUsize::new(index);

@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests;
 
+mod alloc;
 mod app;
 mod geometry;
 mod key;

@@ -186,34 +186,30 @@ impl<T: 'static> App<T> {
         }
 
         if cfg!(debug_assertions) {
-            self.add_task(
-                None,
-                Duration::from_millis(100),
-                |_: &mut T, ctx: &mut App<T>| {
-                    let mut stage = match ctx.stylesheet.poll() {
-                        Ok(true) => Stage::Build,
-                        Ok(false) => Stage::Idle,
-                        Err(error) => {
-                            eprintln!("[Rosin] Failed to reload stylesheet: {:?} Error: {:?}", ctx.stylesheet.path, error);
-                            Stage::Idle
-                        }
-                    };
+            self.add_task(None, Duration::from_millis(100), |_: &mut T, ctx: &mut App<T>| {
+                let mut stage = match ctx.stylesheet.poll() {
+                    Ok(true) => Stage::Build,
+                    Ok(false) => Stage::Idle,
+                    Err(error) => {
+                        eprintln!("[Rosin] Failed to reload stylesheet: {:?} Error: {:?}", ctx.stylesheet.path, error);
+                        Stage::Idle
+                    }
+                };
 
-                    if cfg!(feature = "hot-reload") {
-                        if let Some(loader) = &mut ctx.loader {
-                            match loader.poll() {
-                                Ok(true) => stage = Stage::Build,
-                                Err(error) => {
-                                    eprintln!("[Rosin] Failed to hot-reload. Error: {:?}", error);
-                                }
-                                _ => (),
+                if cfg!(feature = "hot-reload") {
+                    if let Some(loader) = &mut ctx.loader {
+                        match loader.poll() {
+                            Ok(true) => stage = Stage::Build,
+                            Err(error) => {
+                                eprintln!("[Rosin] Failed to hot-reload. Error: {:?}", error);
                             }
+                            _ => (),
                         }
                     }
+                }
 
-                    (stage, StopTask::No)
-                },
-            );
+                (stage, StopTask::No)
+            });
         }
 
         let mut active_tasks = Vec::new();

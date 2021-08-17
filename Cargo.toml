@@ -19,6 +19,7 @@ femtovg = "0.1.2"
 font-kit = "0.10"
 glutin = "0.26"
 libloading = "0.7"
+once_cell = "1.8"
 
 [features]
 hot-reload = []

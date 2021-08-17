@@ -42,8 +42,8 @@ pub(crate) struct RosinWindow<T: 'static> {
     canvas: Canvas<OpenGl>,
     view: View<T>,
     stage: Stage,
-    tree_cache: Option<Vec<ArrayNode<T>>>,
-    layout_cache: Option<Vec<Layout>>,
+    tree_cache: Option<BumpVec<'static, ArrayNode<T>>>,
+    layout_cache: Option<BumpVec<'static, Layout>>,
     temp: Bump,
     font_table: Vec<(u32, femtovg::FontId)>,
 }
@@ -82,6 +82,10 @@ impl<T> RosinWindow<T> {
     fn reset_cache(&mut self) {
         self.layout_cache = None;
         self.tree_cache = None;
+        // SAFETY: This is safe because the caches contained the only outstanding references
+        unsafe {
+            A.with(|a| a.reset());
+        }
     }
 
     pub fn id(&self) -> WindowId {
@@ -110,7 +114,7 @@ impl<T> RosinWindow<T> {
     }
 
     pub fn redraw(&mut self, state: &T, stylesheet: &Stylesheet, loader: &Option<LibLoader>) -> Result<(), Box<dyn Error>> {
-self.stage = Stage::Build;
+        self.stage = Stage::Build;
         // Reset scratch allocator
         self.temp.reset();
 
@@ -121,23 +125,23 @@ self.stage = Stage::Build;
         // ---------- Rebuild window tree ----------
         if self.stage == Stage::Build || self.tree_cache.is_none() {
             self.reset_cache();
-            
-let start = std::time::Instant::now();
+
+            let start = std::time::Instant::now();
             let mut tree = self.view.get(loader)(state).finish().unwrap();
-let elapsed = start.elapsed();
-println!("{}, {:?}", tree.len(), elapsed);
+            let elapsed = start.elapsed();
+            println!("{}, {:?}", tree.len(), elapsed);
 
             stylesheet.style(&mut tree);
             self.tree_cache = Some(tree);
         }
 
-        let tree: &mut Vec<ArrayNode<T>> = self.tree_cache.as_mut().unwrap();
+        let tree: &mut BumpVec<ArrayNode<T>> = self.tree_cache.as_mut().unwrap();
 
         // Stash default styles, and run style callbacks
         let mut default_styles: BumpVec<(usize, Style)> = BumpVec::new_in(&self.temp);
         if self.stage != Stage::Idle {
             for (id, node) in tree.iter_mut().enumerate() {
-                if let Some(modify_style) = &node.style_on_draw {
+                if let Some(modify_style) = &mut node.style_on_draw {
                     default_styles.push((id, node.style.clone()));
                     modify_style(state, &mut node.style);
                 }
@@ -147,7 +151,7 @@ println!("{}, {:?}", tree.len(), elapsed);
         // ---------- Recalculate layout ----------
         if self.stage >= Stage::Layout || self.layout_cache.is_none() {
             if self.layout_cache.is_none() {
-                let new_layout: Vec<Layout> = Vec::with_capacity(tree.len());
+                let new_layout: BumpVec<Layout> = A.with(|a| a.vec_capacity(tree.len()));
                 self.layout_cache = Some(new_layout);
             }
 
@@ -165,7 +169,7 @@ println!("{}, {:?}", tree.len(), elapsed);
             build_layout(&self.temp, tree, layout_size, layout);
         }
 
-        let layout: &Vec<Layout> = self.layout_cache.as_ref().unwrap();
+        let layout: &BumpVec<Layout> = self.layout_cache.as_ref().unwrap();
 
         //println!("BEGIN TREE ------------------------------------------");
         //let test: Vec<(&str, &Layout)> = tree.into_iter().map(|item| item.classes[0]).zip(layout.into_iter()).collect();
