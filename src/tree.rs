@@ -6,7 +6,7 @@ use crate::prelude::*;
 use std::num::NonZeroUsize;
 
 use bumpalo::collections::Vec as BumpVec;
-use once_cell::sync::Lazy;
+use once_cell::unsync::Lazy;
 
 thread_local!(pub(crate) static A: Lazy<Alloc> = Lazy::new(|| { Alloc::default() }));
 
