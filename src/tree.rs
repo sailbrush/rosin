@@ -17,17 +17,17 @@ thread_local!(pub(crate) static A: Lazy<Alloc> = Lazy::new(|| { Alloc::default()
 /// {} - Call methods on parent node
 #[macro_export]
 macro_rules! ui {
-    ($classes:literal [ $($children:tt)* ]) => {
-        ui!(Node::default() .add_classes($classes); $($children)* )
+    ($($classes:literal)? [ $($children:tt)* ]) => {
+        ui!(Node::default() $(.add_classes($classes))*; $($children)* )
     };
-    ($tree:expr; $classes:literal [ $($children:tt)* ] $($tail:tt)*) => {
-        ui!($tree.add_child(ui!(Node::default() .add_classes($classes); $($children)* )); $($tail)* )
+    ($tree:expr; $($classes:literal)? [ $($children:tt)* ] $($tail:tt)*) => {
+        ui!($tree.add_child(ui!(Node::default() $(.add_classes($classes))*; $($children)* )); $($tail)* )
     };
-    ($tree:expr; $classes:literal ( $($child:tt)* ) $($tail:tt)*) => {
-        ui!($tree.add_child($($child)* .add_classes($classes) ); $($tail)* )
+    ($tree:expr; $($classes:literal)? ( $($child:tt)* ) $($tail:tt)*) => {
+        ui!($tree.add_child($($child)* $(.add_classes($classes))* ); $($tail)* )
     };
-    ($tree:expr; $classes:literal { $($builder:tt)* } $($tail:tt)*) => {
-        ui!($tree.add_child(Node::default() .add_classes($classes) $($builder)* ); $($tail)* )
+    ($tree:expr; $($classes:literal)? { $($builder:tt)* } $($tail:tt)*) => {
+        ui!($tree.add_child(Node::default() $(.add_classes($classes))* $($builder)* ); $($tail)* )
     };
     ($tree:expr; { $($body:tt)* } $($tail:tt)*) => {
         ui!($tree $($body)*; $($tail)* )
