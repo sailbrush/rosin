@@ -8,10 +8,10 @@ use std::{
 #[macro_export]
 macro_rules! lens {
     ($obj_type:ty => $($path:tt)*) => {
-        SingleLens::new(|state: &$obj_type| { &state.$($path)* }, |state: &mut $obj_type| { &mut state.$($path)* })
+        SingleLens::new(|obj: &$obj_type| { &obj.$($path)* }, |obj: &mut $obj_type| { &mut obj.$($path)* })
     };
     ($first_lens:expr, $obj_type:ty => $($path:tt)*) => {
-        CompoundLens::new($first_lens, SingleLens::new(|state: &$obj_type| { &state.$($path)* }, |state: &mut $obj_type| { &mut state.$($path)* }))
+        CompoundLens::new($first_lens, SingleLens::new(|obj: &$obj_type| { &obj.$($path)* }, |obj: &mut $obj_type| { &mut obj.$($path)* }))
     };
 }
 
@@ -46,7 +46,7 @@ impl<A, B> Clone for SingleLens<A, B> {
 
 impl<A, B> Debug for SingleLens<A, B> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Lens({} -> {})", any::type_name::<A>(), any::type_name::<B>())
+        write!(f, "Lens({} => {})", any::type_name::<A>(), any::type_name::<B>())
     }
 }
 
@@ -102,7 +102,7 @@ where
     Y: Lens + Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "CompoundLens({} -> {} -> {})", self.lhs, self.rhs, any::type_name::<Y::Out>())
+        write!(f, "CompoundLens({} => {} => {})", self.lhs, self.rhs, any::type_name::<Y::Out>())
     }
 }
 
@@ -112,7 +112,7 @@ where
     Y: Lens,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} -> {}", any::type_name::<X::In>(), any::type_name::<X::Out>())
+        write!(f, "{} => {}", any::type_name::<X::In>(), any::type_name::<X::Out>())
     }
 }
 
