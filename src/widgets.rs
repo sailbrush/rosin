@@ -29,8 +29,8 @@ impl<T> Example<T> {
 
         ui!("example" [
             .key(key)
-            .event(On::MouseDown, move |state: &mut T, _ctx: &mut App<T>| {
-                let this = lens.get_mut(state);
+            .event(On::MouseDown, move |t: &mut T, _app: &mut App<T>| {
+                let this = lens.get_mut(t);
                 Stage::Paint
             })
         ])
@@ -82,10 +82,10 @@ impl<T> Slider<T> {
 
         ui!("slider" [
             .key(key)
-            .event(On::MouseDown, move |state: &mut T, ctx: &mut App<T>| {
-                let _this = lens.get_mut(state);
-                ctx.focus_on_ancestor(key);
-                ctx.emit_change();
+            .event(On::MouseDown, move |t: &mut T, app: &mut App<T>| {
+                let _this = lens.get_mut(t);
+                app.focus_on_ancestor(key);
+                app.emit_change();
                 Stage::Paint
             })
         ])
@@ -131,11 +131,11 @@ impl<T> TextBox<T> {
 
         ui!("text-box" [
             .key(key)
-            .style_on_draw(move |_: &T, style: &mut Style| style.min_height = style.min_height.max(style.font_size))
-            .event(On::MouseDown, move |state: &mut T, ctx: &mut App<T>| {
-                let this = lens.get_mut(state);
-                ctx.focus_on_ancestor(key);
-                this.clicked(ctx)
+            .style_on_draw(move |_: &T, t: &mut Style| t.min_height = t.min_height.max(t.font_size))
+            .event(On::MouseDown, move |t: &mut T, app: &mut App<T>| {
+                let this = lens.get_mut(t);
+                app.focus_on_ancestor(key);
+                this.clicked(app)
             })
         ])
     }
