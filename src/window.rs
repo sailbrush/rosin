@@ -124,16 +124,18 @@ impl<T> RosinWindow<T> {
         // ---------- Rebuild window tree ----------
         if self.stage == Stage::Build || self.tree_cache.is_none() {
             self.reset_cache();
-        
+
             // Runtime checks to make sure that every node is accounted for
             NODE_COUNT.with(|c| c.set(0));
             A.with(|a| a.enable());
 
             let mut tree = self.view.get(loader)(state).finish().unwrap();
-            
+
             A.with(|a| a.disable());
-            NODE_COUNT.with(|c| if c.get() != tree.len() {
-                panic!("[Rosin] Nodes missing")
+            NODE_COUNT.with(|c| {
+                if c.get() != tree.len() {
+                    panic!("[Rosin] Nodes missing")
+                }
             });
 
             stylesheet.style(&mut tree);

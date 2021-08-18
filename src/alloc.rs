@@ -8,21 +8,27 @@ pub(crate) struct Alloc(RefCell<(bool, Bump)>);
 impl Alloc {
     pub fn alloc<T>(&self, val: T) -> &'static mut T {
         let cell = self.0.borrow();
-        if !cell.0 { panic!("[Rosin] Bump allocator used while disabled") };
+        if !cell.0 {
+            panic!("[Rosin] Bump allocator used while disabled")
+        };
         let ptr: *mut T = cell.1.alloc(val);
         unsafe { &mut *ptr }
     }
 
     pub fn vec<T>(&self) -> BumpVec<'static, T> {
         let cell = self.0.borrow();
-        if !cell.0 { panic!("[Rosin] Bump allocator used while disabled") };
+        if !cell.0 {
+            panic!("[Rosin] Bump allocator used while disabled")
+        };
         let vec: BumpVec<T> = BumpVec::new_in(&cell.1);
         unsafe { std::mem::transmute(vec) }
     }
 
     pub fn vec_capacity<T>(&self, size: usize) -> BumpVec<'static, T> {
         let cell = self.0.borrow();
-        if !cell.0 { panic!("[Rosin] Bump allocator used while disabled") };
+        if !cell.0 {
+            panic!("[Rosin] Bump allocator used while disabled")
+        };
         let vec: BumpVec<T> = BumpVec::with_capacity_in(size, &cell.1);
         unsafe { std::mem::transmute(vec) }
     }
