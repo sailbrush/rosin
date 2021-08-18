@@ -3,12 +3,14 @@
 use crate::alloc::Alloc;
 use crate::prelude::*;
 
+use std::cell::Cell;
 use std::num::NonZeroUsize;
 
 use bumpalo::collections::Vec as BumpVec;
 use once_cell::unsync::Lazy;
 
 thread_local!(pub(crate) static A: Lazy<Alloc> = Lazy::new(|| { Alloc::default() }));
+thread_local!(pub(crate) static NODE_COUNT: Cell<usize> = Cell::new(0));
 
 /// Macro for describing the structure and style of a UI
 ///
@@ -144,6 +146,8 @@ pub struct Node<T: 'static> {
 
 impl<T> Default for Node<T> {
     fn default() -> Self {
+        NODE_COUNT.with(|c| c.set(c.get() + 1));
+
         Self {
             key: None,
             classes: Some(A.with(|a| a.vec())),
