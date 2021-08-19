@@ -121,6 +121,7 @@ impl<T: 'static> App<T> {
     fn new() -> Self {
         #[cfg(all(debug_assertions, feature = "hot-reload"))]
         let loader = {
+            // TODO - can probably set an env variable in a build script or something
             // Use the name of the current binary to find the library
             let mut exe = env::args().next().unwrap();
             exe.push('_');
