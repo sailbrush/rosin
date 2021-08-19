@@ -27,16 +27,13 @@ impl<T> View<T> {
 
     // Default behaviour
     #[cfg(not(all(debug_assertions, feature = "hot-reload")))]
-    pub(crate) fn get(&self, _: &Option<LibLoader>) -> ViewCallback<T> {
+    pub(crate) fn get(&self, _: &LibLoader) -> ViewCallback<T> {
         self.1
     }
 
     #[cfg(all(debug_assertions, feature = "hot-reload"))]
-    pub(crate) fn get(&self, lib: &Option<LibLoader>) -> ViewCallback<T> {
+    pub(crate) fn get(&self, lib: &LibLoader) -> ViewCallback<T> {
         // Better to panic so it's obvious that hot-reloading failed
-        *lib.as_ref()
-            .expect("[Rosin] Hot-reload: Not initialized properly")
-            .get(self.0)
-            .expect("[Rosin] Hot-reload: LibLoading returned an error")
+        *lib.get(self.0).expect("[Rosin] Hot-reload: LibLoading returned an error")
     }
 }

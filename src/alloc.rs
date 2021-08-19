@@ -60,15 +60,23 @@ impl Alloc {
         }
     }
 
+    pub fn begin(&self) {
+        self.enabled.replace(true);
+    }
+
+    pub fn end(&self) {
+        self.enabled.replace(false);
+    }
+
     // SAFETY: Ensure that all allocations made within a scope are
     //         exclusively owned by T to prevent dangling pointers
     pub unsafe fn scope<T>(&self, func: impl FnOnce() -> T) -> Scope<T> {
-        self.enabled.replace(true);
+        self.begin();
         let scope = Scope {
             value: Arc::new(RwLock::new(func())),
             count: self.count.clone(),
         };
-        self.enabled.replace(false);
+        self.end();
         scope
     }
 }

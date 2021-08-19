@@ -1,6 +1,9 @@
 #[cfg(test)]
 mod tests;
 
+#[cfg(all(debug_assertions, feature = "hot-reload"))]
+mod hot_reload;
+
 mod alloc;
 mod app;
 mod geometry;

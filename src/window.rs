@@ -1,5 +1,6 @@
+use crate::libloader::LibLoader;
 use crate::prelude::*;
-use crate::{alloc::Scope, geometry::Size, layout::*, libloader::LibLoader, render, tree::*};
+use crate::{alloc::Scope, geometry::Size, layout::*, render, tree::*};
 
 use std::error::Error;
 
@@ -79,10 +80,16 @@ impl<T> RosinWindow<T> {
         })
     }
 
-    fn reset_cache(&mut self) {
+    fn reset_cache(&mut self, _loader: &LibLoader) {
         self.layout_cache = None;
         self.tree_cache = None;
         A.with(|a| a.reset().expect("[Rosin] Failed to reset cache"));
+
+        #[cfg(all(debug_assertions, feature = "hot-reload"))]
+        {
+            let reset: fn() -> Result<(), ()> = *_loader.get(b"_rosin_reset_alloc").unwrap();
+            reset().expect("[Rosin] Hot-reload: Failed to reset cache");
+        }
     }
 
     pub fn id(&self) -> WindowId {
@@ -110,7 +117,7 @@ impl<T> RosinWindow<T> {
         }
     }
 
-    pub fn redraw(&mut self, state: &T, stylesheet: &Stylesheet, loader: &Option<LibLoader>) -> Result<(), Box<dyn Error>> {
+    pub fn redraw(&mut self, state: &T, stylesheet: &Stylesheet, loader: &LibLoader) -> Result<(), Box<dyn Error>> {
         // Reset scratch allocator
         self.temp.reset();
 
@@ -120,21 +127,37 @@ impl<T> RosinWindow<T> {
 
         // ---------- Rebuild window tree ----------
         if self.stage == Stage::Build || self.tree_cache.is_none() {
-            self.reset_cache();
+            self.reset_cache(loader);
 
             // Reset NODE_COUNT so we can track how many nodes are allocated
+            #[cfg(all(debug_assertions, feature = "hot-reload"))]
+            {
+                // If hot-reloading, also manually begin a scope on dylib's allocator
+                loader.get::<fn()>(b"_rosin_begin_alloc").unwrap()();
+                loader.get::<fn()>(b"_rosin_reset_node_count").unwrap()();
+            }
+
+            #[cfg(not(all(debug_assertions, feature = "hot-reload")))]
             NODE_COUNT.with(|c| c.set(0));
 
-            // SAFETY: This is safe because we panic if client code doesn't meet scope()'s requirements
+            // SAFETY: This is safe because we panic if client code breaks scope()'s contract
             let tree = A.with(|a| unsafe {
                 // Load and run the view function
                 a.scope(|| self.view.get(loader)(state).finish().unwrap())
             });
 
+            #[cfg(all(debug_assertions, feature = "hot-reload"))]
+            let node_count = {
+                // If hot-reloading, manually end the dylib's scope
+                loader.get::<fn()>(b"_rosin_end_alloc").unwrap()();
+                loader.get::<fn() -> usize>(b"_rosin_get_node_count").unwrap()()
+            };
+
+            #[cfg(not(all(debug_assertions, feature = "hot-reload")))]
+            let node_count = NODE_COUNT.with(|c| c.get());
+
             // Panic if the view function didn't return the number of nodes we expected
-            NODE_COUNT.with(|c| {
-                assert!(c.get() == tree.read().unwrap().len(), "[Rosin] Nodes missing");
-            });
+            assert!(node_count == tree.read().unwrap().len(), "[Rosin] Nodes missing");
 
             stylesheet.style(&mut tree.write().unwrap());
             self.tree_cache = Some(tree);

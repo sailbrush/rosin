@@ -1,12 +1,17 @@
 #![forbid(unsafe_code)]
 
-use crate::libloader::LibLoader;
+#[cfg(all(debug_assertions, feature = "hot-reload"))]
 use crate::libloader::DYLIB_EXT;
+use crate::libloader::LibLoader;
+
 use crate::prelude::*;
 use crate::style::*;
 use crate::window::*;
 
-use std::{env, error, fmt::Debug, mem, path::Path, time::Duration, time::Instant};
+#[cfg(all(debug_assertions, feature = "hot-reload"))]
+use std::{env, path::Path};
+
+use std::{error, fmt::Debug, mem, time::Duration, time::Instant};
 
 use glutin::{
     event::*,
@@ -101,7 +106,7 @@ impl<T: 'static> AppLauncher<T> {
 
 pub struct App<T: 'static> {
     event_loop: Option<EventLoop<()>>,
-    loader: Option<LibLoader>,
+    loader: LibLoader,
     new_windows: Vec<WindowDesc<T>>,
     windows: Vec<(WindowId, RosinWindow<T>)>,
     current_window: Option<WindowId>,
@@ -114,9 +119,19 @@ pub struct App<T: 'static> {
 // Need some way to access raw events for pen pressure, etc
 impl<T: 'static> App<T> {
     fn new() -> Self {
+        #[cfg(all(debug_assertions, feature = "hot-reload"))]
+        let loader = {
+            // Use the name of the current binary to find the library
+            let lib_path = env::current_dir().unwrap().join(Path::new(&env::args().next().unwrap()).with_extension(DYLIB_EXT));
+            LibLoader::new(lib_path).expect("[Rosin] Hot-reload: Failed to init")
+        };
+
+        #[cfg(not(all(debug_assertions, feature = "hot-reload")))]
+        let loader = LibLoader {};
+
         Self {
             event_loop: Some(EventLoop::new()),
-            loader: None,
+            loader,
             windows: Vec::new(),
             new_windows: Vec::new(),
             current_window: None,
@@ -183,38 +198,29 @@ impl<T: 'static> App<T> {
             return Err("[Rosin] No windows".into());
         }
 
-        if cfg!(debug_assertions) && cfg!(feature = "hot-reload") {
-            // Use the name of the current binary to find the library
-            let lib_path = env::current_dir()?.join(Path::new(&env::args().next().unwrap()).with_extension(DYLIB_EXT));
-            self.loader = Some(LibLoader::new(lib_path).expect("[Rosin] Hot-reload: Failed to init"));
-        }
-
-        if cfg!(debug_assertions) {
-            self.add_task(None, Duration::from_millis(100), |_: &mut T, ctx: &mut App<T>| {
-                let mut stage = match ctx.stylesheet.poll() {
-                    Ok(true) => Stage::Build,
-                    Ok(false) => Stage::Idle,
-                    Err(error) => {
-                        eprintln!("[Rosin] Failed to reload stylesheet: {:?} Error: {:?}", ctx.stylesheet.path, error);
-                        Stage::Idle
-                    }
-                };
-
-                if cfg!(feature = "hot-reload") {
-                    if let Some(loader) = &mut ctx.loader {
-                        match loader.poll() {
-                            Ok(true) => stage = Stage::Build,
-                            Err(error) => {
-                                eprintln!("[Rosin] Failed to hot-reload. Error: {:?}", error);
-                            }
-                            _ => (),
-                        }
-                    }
+        #[cfg(debug_assertions)]
+        #[allow(unused_mut)]
+        self.add_task(None, Duration::from_millis(100), |_: &mut T, ctx: &mut App<T>| {
+            let mut stage = match ctx.stylesheet.poll() {
+                Ok(true) => Stage::Build,
+                Ok(false) => Stage::Idle,
+                Err(error) => {
+                    eprintln!("[Rosin] Failed to reload stylesheet: {:?} Error: {:?}", ctx.stylesheet.path, error);
+                    Stage::Idle
                 }
+            };
 
-                (stage, StopTask::No)
-            });
-        }
+            #[cfg(feature = "hot-reload")]
+            match ctx.loader.poll() {
+                Ok(true) => stage = Stage::Build,
+                Err(error) => {
+                    eprintln!("[Rosin] Failed to hot-reload. Error: {:?}", error);
+                }
+                _ => (),
+            }
+
+            (stage, StopTask::No)
+        });
 
         let mut active_tasks = Vec::new();
         let mut stopped_task_ids = Vec::new();
