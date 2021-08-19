@@ -122,7 +122,9 @@ impl<T: 'static> App<T> {
         #[cfg(all(debug_assertions, feature = "hot-reload"))]
         let loader = {
             // Use the name of the current binary to find the library
-            let lib_path = env::current_dir().unwrap().join(Path::new(&env::args().next().unwrap()).with_extension(DYLIB_EXT));
+            let mut exe = env::args().next().unwrap();
+            exe.push('_');
+            let lib_path = env::current_dir().unwrap().join(Path::new(&exe).with_extension(DYLIB_EXT));
             LibLoader::new(lib_path).expect("[Rosin] Hot-reload: Failed to init")
         };
 
