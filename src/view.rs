@@ -3,7 +3,7 @@
 use std::{fmt, fmt::Debug};
 
 use crate::libloader::LibLoader;
-use crate::prelude::*;
+use crate::prelude::ViewCallback;
 
 #[macro_export]
 macro_rules! new_view {
