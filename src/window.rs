@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use crate::{geometry::Size, layout::*, libloader::LibLoader, render, tree::*};
+use crate::{alloc::Scope, geometry::Size, layout::*, libloader::LibLoader, render, tree::*};
 
 use std::error::Error;
 
@@ -42,8 +42,8 @@ pub(crate) struct RosinWindow<T: 'static> {
     canvas: Canvas<OpenGl>,
     view: View<T>,
     stage: Stage,
-    tree_cache: Option<BumpVec<'static, ArrayNode<T>>>,
-    layout_cache: Option<BumpVec<'static, Layout>>,
+    tree_cache: Option<Scope<BumpVec<'static, ArrayNode<T>>>>,
+    layout_cache: Option<Scope<BumpVec<'static, Layout>>>,
     temp: Bump,
     font_table: Vec<(u32, femtovg::FontId)>,
 }
@@ -82,10 +82,7 @@ impl<T> RosinWindow<T> {
     fn reset_cache(&mut self) {
         self.layout_cache = None;
         self.tree_cache = None;
-        // SAFETY: This is safe because the caches contained the only outstanding references
-        unsafe {
-            A.with(|a| a.reset());
-        }
+        A.with(|a| a.reset().expect("[Rosin] Failed to reset cache"));
     }
 
     pub fn id(&self) -> WindowId {
@@ -125,24 +122,25 @@ impl<T> RosinWindow<T> {
         if self.stage == Stage::Build || self.tree_cache.is_none() {
             self.reset_cache();
 
-            // Runtime checks to make sure that every node is accounted for
+            // Reset NODE_COUNT so we can track how many nodes are allocated
             NODE_COUNT.with(|c| c.set(0));
-            A.with(|a| a.enable());
 
-            let mut tree = self.view.get(loader)(state).finish().unwrap();
-
-            A.with(|a| a.disable());
-            NODE_COUNT.with(|c| {
-                if c.get() != tree.len() {
-                    panic!("[Rosin] Nodes missing")
-                }
+            // SAFETY: This is safe because we panic if client code doesn't meet scope()'s requirements
+            let tree = A.with(|a| unsafe {
+                // Load and run the view function
+                a.scope(|| self.view.get(loader)(state).finish().unwrap())
             });
 
-            stylesheet.style(&mut tree);
+            // Panic if the view function didn't return the number of nodes we expected
+            NODE_COUNT.with(|c| {
+                assert!(c.get() == tree.read().unwrap().len(), "[Rosin] Nodes missing");
+            });
+
+            stylesheet.style(&mut tree.write().unwrap());
             self.tree_cache = Some(tree);
         }
 
-        let tree: &mut BumpVec<ArrayNode<T>> = self.tree_cache.as_mut().unwrap();
+        let tree: &mut BumpVec<ArrayNode<T>> = &mut self.tree_cache.as_mut().unwrap().write().unwrap();
 
         // Stash default styles, and run style callbacks
         let mut default_styles: BumpVec<(usize, Style)> = BumpVec::new_in(&self.temp);
@@ -158,14 +156,15 @@ impl<T> RosinWindow<T> {
         // ---------- Recalculate layout ----------
         if self.stage >= Stage::Layout || self.layout_cache.is_none() {
             if self.layout_cache.is_none() {
-                A.with(|a| a.enable());
-                let new_layout: BumpVec<Layout> = A.with(|a| a.vec_capacity(tree.len()));
-                A.with(|a| a.disable());
+                let new_layout = A.with(|a| unsafe {
+                    // SAFETY: This is safe because we meet scope()'s requirements
+                    a.scope(|| A.with(|a| a.vec_capacity(tree.len())))
+                });
 
                 self.layout_cache = Some(new_layout);
             }
 
-            let layout = self.layout_cache.as_mut().unwrap();
+            let mut layout = self.layout_cache.as_mut().unwrap().write().unwrap();
 
             layout.clear();
             for _ in 0..tree.len() {
@@ -176,15 +175,10 @@ impl<T> RosinWindow<T> {
                 width: window_size.width as f32,
                 height: window_size.height as f32,
             };
-            build_layout(&self.temp, tree, layout_size, layout);
+            build_layout(&self.temp, tree, layout_size, &mut layout);
         }
 
-        let layout: &BumpVec<Layout> = self.layout_cache.as_ref().unwrap();
-
-        //println!("BEGIN TREE ------------------------------------------");
-        //let test: Vec<(&str, &Layout)> = tree.into_iter().map(|item| item.classes[0]).zip(layout.into_iter()).collect();
-        //dbg!(test);
-        //println!("END TREE ------------------------------------------");
+        let layout: &BumpVec<Layout> = &self.layout_cache.as_ref().unwrap().read().unwrap();
 
         // ---------- Render ----------
         // TODO - If stage == Idle, re-issue commands from last frame
