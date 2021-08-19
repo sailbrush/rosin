@@ -7,9 +7,8 @@ use std::cell::Cell;
 use std::num::NonZeroUsize;
 
 use bumpalo::collections::Vec as BumpVec;
-use once_cell::unsync::Lazy;
 
-thread_local!(pub(crate) static A: Lazy<Alloc> = Lazy::new(|| { Alloc::default() }));
+thread_local!(pub(crate) static A: Alloc = Alloc::default());
 thread_local!(pub(crate) static NODE_COUNT: Cell<usize> = Cell::new(0));
 
 /// Macro for describing the structure and style of a UI
