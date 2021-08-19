@@ -1,8 +1,8 @@
 #![forbid(unsafe_code)]
 
+use crate::libloader::LibLoader;
 #[cfg(all(debug_assertions, feature = "hot-reload"))]
 use crate::libloader::DYLIB_EXT;
-use crate::libloader::LibLoader;
 
 use crate::prelude::*;
 use crate::style::*;
@@ -203,18 +203,18 @@ impl<T: 'static> App<T> {
 
         #[cfg(debug_assertions)]
         #[allow(unused_mut)]
-        self.add_task(None, Duration::from_millis(100), |_: &mut T, ctx: &mut App<T>| {
-            let mut stage = match ctx.stylesheet.poll() {
+        self.add_task(None, Duration::from_millis(100), |_: &mut T, app: &mut App<T>| {
+            let mut stage = match app.stylesheet.poll() {
                 Ok(true) => Stage::Build,
                 Ok(false) => Stage::Idle,
                 Err(error) => {
-                    eprintln!("[Rosin] Failed to reload stylesheet: {:?} Error: {:?}", ctx.stylesheet.path, error);
+                    eprintln!("[Rosin] Failed to reload stylesheet: {:?} Error: {:?}", app.stylesheet.path, error);
                     Stage::Idle
                 }
             };
 
             #[cfg(feature = "hot-reload")]
-            match ctx.loader.poll() {
+            match app.loader.poll() {
                 Ok(true) => stage = Stage::Build,
                 Err(error) => {
                     eprintln!("[Rosin] Failed to hot-reload. Error: {:?}", error);

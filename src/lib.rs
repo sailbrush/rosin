@@ -3,6 +3,13 @@ mod tests;
 
 #[cfg(all(debug_assertions, feature = "hot-reload"))]
 mod hot_reload;
+#[cfg(all(debug_assertions, feature = "hot-reload"))]
+mod libloader;
+
+#[cfg(not(all(debug_assertions, feature = "hot-reload")))]
+mod libloader {
+    pub(crate) struct LibLoader {}
+}
 
 mod alloc;
 mod app;
@@ -10,7 +17,6 @@ mod geometry;
 mod key;
 mod layout;
 mod lenses;
-mod libloader;
 mod parser;
 mod render;
 mod style;

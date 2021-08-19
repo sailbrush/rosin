@@ -130,15 +130,15 @@ impl<T> RosinWindow<T> {
             self.reset_cache(loader);
 
             // Reset NODE_COUNT so we can track how many nodes are allocated
+            #[cfg(not(all(debug_assertions, feature = "hot-reload")))]
+            NODE_COUNT.with(|c| c.set(0));
+
             #[cfg(all(debug_assertions, feature = "hot-reload"))]
             {
                 // If hot-reloading, also manually begin a scope on dylib's allocator
                 loader.get::<fn()>(b"_rosin_begin_alloc").unwrap()();
                 loader.get::<fn()>(b"_rosin_reset_node_count").unwrap()();
             }
-
-            #[cfg(not(all(debug_assertions, feature = "hot-reload")))]
-            NODE_COUNT.with(|c| c.set(0));
 
             // SAFETY: This is safe because we panic if client code breaks scope()'s contract
             let tree = A.with(|a| unsafe {

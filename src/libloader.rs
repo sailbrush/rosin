@@ -1,25 +1,16 @@
-#[cfg(all(debug_assertions, feature = "hot-reload"))]
 use std::{error::Error, fs, path::PathBuf, time::SystemTime};
 
-#[cfg(all(debug_assertions, feature = "hot-reload"))]
 use libloading::{Library, Symbol};
 
-#[cfg(all(debug_assertions, feature = "hot-reload"))]
 #[cfg(target_os = "windows")]
 pub const DYLIB_EXT: &str = "dll";
 
-#[cfg(all(debug_assertions, feature = "hot-reload"))]
 #[cfg(target_os = "macos")]
 pub const DYLIB_EXT: &str = "dylib";
 
-#[cfg(all(debug_assertions, feature = "hot-reload"))]
 #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
 pub const DYLIB_EXT: &str = "so";
 
-#[cfg(not(all(debug_assertions, feature = "hot-reload")))]
-pub(crate) struct LibLoader {}
-
-#[cfg(all(debug_assertions, feature = "hot-reload"))]
 pub(crate) struct LibLoader {
     lib: Option<Library>,
     lib_path: PathBuf,
@@ -27,7 +18,6 @@ pub(crate) struct LibLoader {
     temp_ext: u32,
 }
 
-#[cfg(all(debug_assertions, feature = "hot-reload"))]
 impl LibLoader {
     pub fn new(path: PathBuf) -> Result<Self, Box<dyn Error>> {
         let last_modified = fs::metadata(&path)?.modified()?;
@@ -82,7 +72,6 @@ impl LibLoader {
     }
 }
 
-#[cfg(all(debug_assertions, feature = "hot-reload"))]
 impl Drop for LibLoader {
     fn drop(&mut self) {
         self.lib = None;
