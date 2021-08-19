@@ -241,7 +241,7 @@ impl<T: 'static> App<T> {
                 let mut next_update = Instant::now() + Duration::from_secs(3600);
                 let mut new_stage = Stage::Idle;
 
-                // TODO - save control_flow, and only loop through tasks if one is due for update
+                // TODO - save next_update, and only loop through tasks if one is due for update
                 for (i, task) in active_tasks.iter_mut().enumerate() {
                     if Instant::now().duration_since(task.last_run) >= task.frequency {
                         task.last_run = Instant::now();
