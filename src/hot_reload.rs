@@ -1,3 +1,4 @@
+use crate::alloc::ScopeToken;
 use crate::tree::{A, NODE_COUNT};
 
 #[no_mangle]
@@ -6,13 +7,18 @@ pub fn _rosin_reset_alloc() -> Result<(), ()> {
 }
 
 #[no_mangle]
-pub fn _rosin_begin_alloc() {
+pub unsafe fn _rosin_begin_alloc() {
     A.with(|a| a.begin())
 }
 
 #[no_mangle]
-pub fn _rosin_end_alloc() {
+pub unsafe fn _rosin_end_alloc() {
     A.with(|a| a.end())
+}
+
+#[no_mangle]
+pub unsafe fn _rosin_new_scope_token() -> ScopeToken {
+    A.with(|a| a.new_scope_token())
 }
 
 #[no_mangle]

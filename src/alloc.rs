@@ -1,24 +1,32 @@
 use std::{
     cell::{Cell, RefCell},
     fmt::Debug,
-    sync::{Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard},
+    sync::Arc,
 };
 
 use bumpalo::{collections::Vec as BumpVec, Bump};
 
+#[cfg(all(debug_assertions, feature = "hot-reload"))]
+pub(crate) type ScopeToken = Arc<()>;
+
 #[derive(Clone)]
 pub(crate) struct Scope<T> {
-    value: Arc<RwLock<T>>,
-    count: Arc<()>,
+    token: Arc<()>,
+    value: T,
 }
 
 impl<T> Scope<T> {
-    pub fn read(&self) -> LockResult<RwLockReadGuard<T>> {
-        self.value.read()
+    pub fn borrow(&self) -> &T {
+        &self.value
     }
 
-    pub fn write(&self) -> LockResult<RwLockWriteGuard<T>> {
-        self.value.write()
+    pub fn borrow_mut(&mut self) -> &mut T {
+        &mut self.value
+    }
+
+    #[cfg(all(debug_assertions, feature = "hot-reload"))]
+    pub fn bind(token: Arc<()>, value: T) -> Scope<T> {
+        Self { token, value }
     }
 }
 
@@ -27,7 +35,7 @@ impl<T> Scope<T> {
 pub(crate) struct Alloc {
     bump: RefCell<Bump>,
     enabled: Cell<bool>,
-    count: Arc<()>,
+    token: Arc<()>,
 }
 
 impl Alloc {
@@ -52,7 +60,7 @@ impl Alloc {
     }
 
     pub fn reset(&self) -> Result<(), ()> {
-        if Arc::strong_count(&self.count) == 1 {
+        if Arc::strong_count(&self.token) == 1 {
             self.bump.borrow_mut().reset();
             Ok(())
         } else {
@@ -60,23 +68,31 @@ impl Alloc {
         }
     }
 
-    pub fn begin(&self) {
-        self.enabled.replace(true);
-    }
-
-    pub fn end(&self) {
-        self.enabled.replace(false);
-    }
-
     // SAFETY: Ensure that all allocations made within a scope are
     //         exclusively owned by T to prevent dangling pointers
     pub unsafe fn scope<T>(&self, func: impl FnOnce() -> T) -> Scope<T> {
-        self.begin();
+        self.enabled.replace(true);
         let scope = Scope {
-            value: Arc::new(RwLock::new(func())),
-            count: self.count.clone(),
+            token: self.token.clone(),
+            value: func(),
         };
-        self.end();
+        self.enabled.replace(false);
         scope
+    }
+}
+
+// An alternate API suitable for FFI
+#[cfg(all(debug_assertions, feature = "hot-reload"))]
+impl Alloc {
+    pub unsafe fn begin(&self) {
+        self.enabled.replace(true);
+    }
+
+    pub unsafe fn end(&self) {
+        self.enabled.replace(false);
+    }
+
+    pub unsafe fn new_scope_token(&self) -> ScopeToken {
+        self.token.clone()
     }
 }

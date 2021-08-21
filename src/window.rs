@@ -1,3 +1,6 @@
+#[cfg(all(debug_assertions, feature = "hot-reload"))]
+use crate::alloc::ScopeToken;
+
 use crate::libloader::LibLoader;
 use crate::prelude::*;
 use crate::{alloc::Scope, geometry::Size, layout::*, render, tree::*};
@@ -129,41 +132,48 @@ impl<T> RosinWindow<T> {
         if self.stage == Stage::Build || self.tree_cache.is_none() {
             self.reset_cache(loader);
 
-            // Reset NODE_COUNT so we can track how many nodes are allocated
             #[cfg(not(all(debug_assertions, feature = "hot-reload")))]
-            NODE_COUNT.with(|c| c.set(0));
+            let (mut tree, node_count) = {
+                // Reset NODE_COUNT so we can track how many nodes are allocated
+                NODE_COUNT.with(|c| c.set(0));
 
-            #[cfg(all(debug_assertions, feature = "hot-reload"))]
-            {
-                // If hot-reloading, also manually begin a scope on dylib's allocator
-                loader.get::<fn()>(b"_rosin_begin_alloc").unwrap()();
-                loader.get::<fn()>(b"_rosin_reset_node_count").unwrap()();
-            }
+                // SAFETY: This is safe because we panic if client code breaks scope()'s contract
+                let tree = A.with(|a| unsafe {
+                    // Load and run the view function
+                    a.scope(|| self.view.get(loader)(state).finish().unwrap())
+                });
 
-            // SAFETY: This is safe because we panic if client code breaks scope()'s contract
-            let tree = A.with(|a| unsafe {
-                // Load and run the view function
-                a.scope(|| self.view.get(loader)(state).finish().unwrap())
-            });
-
-            #[cfg(all(debug_assertions, feature = "hot-reload"))]
-            let node_count = {
-                // If hot-reloading, manually end the dylib's scope
-                loader.get::<fn()>(b"_rosin_end_alloc").unwrap()();
-                loader.get::<fn() -> usize>(b"_rosin_get_node_count").unwrap()()
+                (tree, NODE_COUNT.with(|c| c.get()))
             };
 
-            #[cfg(not(all(debug_assertions, feature = "hot-reload")))]
-            let node_count = NODE_COUNT.with(|c| c.get());
+            #[cfg(all(debug_assertions, feature = "hot-reload"))]
+            let (mut tree, node_count) = {
+                // Reset NODE_COUNT so we can track how many nodes are allocated
+                loader.get::<fn()>(b"_rosin_reset_node_count").unwrap()();
+
+                // Manually begin a scope on dylib's allocator
+                loader.get::<fn()>(b"_rosin_begin_alloc").unwrap()();
+
+                // Manually get a scope token from dylib
+                let token = loader.get::<fn() -> ScopeToken>(b"_rosin_new_scope_token").unwrap()();
+
+                // Load, run, and bind the results of the view function to the scope token
+                let tree = Scope::bind(token, self.view.get(loader)(state).finish().unwrap());
+
+                // Manually end the dylib's scope
+                loader.get::<fn()>(b"_rosin_end_alloc").unwrap()();
+
+                (tree, loader.get::<fn() -> usize>(b"_rosin_get_node_count").unwrap()())
+            };
 
             // Panic if the view function didn't return the number of nodes we expected
-            assert!(node_count == tree.read().unwrap().len(), "[Rosin] Nodes missing");
+            assert!(node_count == tree.borrow().len(), "[Rosin] Nodes missing");
 
-            stylesheet.style(&mut tree.write().unwrap());
+            stylesheet.style(&mut tree.borrow_mut());
             self.tree_cache = Some(tree);
         }
 
-        let tree: &mut BumpVec<ArrayNode<T>> = &mut self.tree_cache.as_mut().unwrap().write().unwrap();
+        let tree: &mut BumpVec<ArrayNode<T>> = &mut self.tree_cache.as_mut().unwrap().borrow_mut();
 
         // Stash default styles, and run style callbacks
         let mut default_styles: BumpVec<(usize, Style)> = BumpVec::new_in(&self.temp);
@@ -187,7 +197,7 @@ impl<T> RosinWindow<T> {
                 self.layout_cache = Some(new_layout);
             }
 
-            let mut layout = self.layout_cache.as_mut().unwrap().write().unwrap();
+            let mut layout = self.layout_cache.as_mut().unwrap().borrow_mut();
 
             layout.clear();
             for _ in 0..tree.len() {
@@ -201,7 +211,7 @@ impl<T> RosinWindow<T> {
             build_layout(&self.temp, tree, layout_size, &mut layout);
         }
 
-        let layout: &BumpVec<Layout> = &self.layout_cache.as_ref().unwrap().read().unwrap();
+        let layout: &BumpVec<Layout> = self.layout_cache.as_ref().unwrap().borrow();
 
         // ---------- Render ----------
         // TODO - If stage == Idle, re-issue commands from last frame
