@@ -123,9 +123,10 @@ impl<T: 'static> App<T> {
         let loader = {
             // TODO - can probably set an env variable in a build script or something
             // Use the name of the current binary to find the library
-            let mut exe = env::args().next().unwrap();
-            exe.push('_');
-            let lib_path = env::current_dir().unwrap().join(Path::new(&exe).with_extension(DYLIB_EXT));
+            let cmd = env::args().next().unwrap();
+            let cmd_path = Path::new(&cmd);
+            let lib_name = cmd_path.with_file_name(format!("_{}", cmd_path.with_extension(DYLIB_EXT).file_name().unwrap().to_str().unwrap()));
+            let lib_path = env::current_dir().unwrap().join(&lib_name);
             LibLoader::new(lib_path).expect("[Rosin] Hot-reload: Failed to init")
         };
 
@@ -331,7 +332,7 @@ impl<T: 'static> App<T> {
 
             // Build new windows
             for desc in self.new_windows.drain(..) {
-                let mut window = RosinWindow::new(desc, event_loop).unwrap();
+                let mut window = RosinWindow::new(desc, event_loop, &self.loader).unwrap();
                 // TODO - handle loading and unloading fonts correctly
                 // Currently, a window only has access to the fonts that are loaded before it's created
                 for (id, data) in &self.fonts {

@@ -1,11 +1,9 @@
-#[cfg(all(debug_assertions, feature = "hot-reload"))]
-use crate::alloc::ScopeToken;
-
 use crate::libloader::LibLoader;
 use crate::prelude::*;
 use crate::{alloc::Scope, geometry::Size, layout::*, render, tree::*};
 
 use std::error::Error;
+use std::sync::Arc;
 
 use bumpalo::{collections::Vec as BumpVec, Bump};
 use femtovg::{renderer::OpenGl, Canvas};
@@ -53,7 +51,7 @@ pub(crate) struct RosinWindow<T: 'static> {
 }
 
 impl<T> RosinWindow<T> {
-    pub fn new(desc: WindowDesc<T>, event_loop: &EventLoopWindowTarget<()>) -> Result<Self, Box<dyn Error>> {
+    pub fn new(desc: WindowDesc<T>, event_loop: &EventLoopWindowTarget<()>, loader: &LibLoader) -> Result<Self, Box<dyn Error>> {
         // TODO - handle errors better
         let windowed_context = unsafe {
             glutin::ContextBuilder::new()
@@ -70,6 +68,11 @@ impl<T> RosinWindow<T> {
             window_size.height as u32,
             windowed_context.window().scale_factor() as f32,
         );
+
+        #[cfg(all(debug_assertions, feature = "hot-reload"))]
+        A.with(|a| unsafe {
+            loader.get::<fn(Arc<()>)>(b"_rosin_entangle_alloc").unwrap()(a.get_token());
+        });
 
         Ok(Self {
             windowed_context,
@@ -154,11 +157,11 @@ impl<T> RosinWindow<T> {
                 // Manually begin a scope on dylib's allocator
                 loader.get::<fn()>(b"_rosin_begin_alloc").unwrap()();
 
-                // Manually get a scope token from dylib
-                let token = loader.get::<fn() -> ScopeToken>(b"_rosin_new_scope_token").unwrap()();
-
-                // Load, run, and bind the results of the view function to the scope token
-                let tree = Scope::bind(token, self.view.get(loader)(state).finish().unwrap());
+                // SAFETY: This is safe because we panic if client code breaks scope()'s contract
+                let tree = A.with(|a| unsafe {
+                    // Load and run the view function
+                    a.scope(|| self.view.get(loader)(state).finish().unwrap())
+                });
 
                 // Manually end the dylib's scope
                 loader.get::<fn()>(b"_rosin_end_alloc").unwrap()();

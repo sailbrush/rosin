@@ -1,5 +1,16 @@
-use crate::alloc::ScopeToken;
+use std::sync::Arc;
+
 use crate::tree::{A, NODE_COUNT};
+
+#[no_mangle]
+pub fn _rosin_dbg_alloc() {
+    A.with(|a| println!("{:?}", &a));
+}
+
+#[no_mangle]
+pub unsafe fn _rosin_entangle_alloc(token: Arc<()>) {
+    A.with(|a| a.entangle(token))
+}
 
 #[no_mangle]
 pub fn _rosin_reset_alloc() -> Result<(), ()> {
@@ -14,11 +25,6 @@ pub unsafe fn _rosin_begin_alloc() {
 #[no_mangle]
 pub unsafe fn _rosin_end_alloc() {
     A.with(|a| a.end())
-}
-
-#[no_mangle]
-pub unsafe fn _rosin_new_scope_token() -> ScopeToken {
-    A.with(|a| a.new_scope_token())
 }
 
 #[no_mangle]

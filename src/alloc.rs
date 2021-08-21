@@ -1,13 +1,11 @@
 use std::{
     cell::{Cell, RefCell},
     fmt::Debug,
+    fmt,
     sync::Arc,
 };
 
 use bumpalo::{collections::Vec as BumpVec, Bump};
-
-#[cfg(all(debug_assertions, feature = "hot-reload"))]
-pub(crate) type ScopeToken = Arc<()>;
 
 #[derive(Clone)]
 pub(crate) struct Scope<T> {
@@ -23,19 +21,20 @@ impl<T> Scope<T> {
     pub fn borrow_mut(&mut self) -> &mut T {
         &mut self.value
     }
-
-    #[cfg(all(debug_assertions, feature = "hot-reload"))]
-    pub fn bind(token: Arc<()>, value: T) -> Scope<T> {
-        Self { token, value }
-    }
 }
 
 // Allows client code to use a custom allocator without passing an ugly handle around
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub(crate) struct Alloc {
     bump: RefCell<Bump>,
     enabled: Cell<bool>,
-    token: Arc<()>,
+    token: RefCell<Arc<()>>,
+}
+
+impl Debug for Alloc {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Alloc {{ enabled: {}, token: {} }}", self.enabled.get(), Arc::strong_count(&self.token.borrow()))
+    }
 }
 
 impl Alloc {
@@ -60,7 +59,7 @@ impl Alloc {
     }
 
     pub fn reset(&self) -> Result<(), ()> {
-        if Arc::strong_count(&self.token) == 1 {
+        if Arc::strong_count(&self.token.borrow()) == 1 {
             self.bump.borrow_mut().reset();
             Ok(())
         } else {
@@ -73,7 +72,7 @@ impl Alloc {
     pub unsafe fn scope<T>(&self, func: impl FnOnce() -> T) -> Scope<T> {
         self.enabled.replace(true);
         let scope = Scope {
-            token: self.token.clone(),
+            token: self.token.borrow().clone(),
             value: func(),
         };
         self.enabled.replace(false);
@@ -81,18 +80,28 @@ impl Alloc {
     }
 }
 
-// An alternate API suitable for FFI
+// An alternate API for FFI
 #[cfg(all(debug_assertions, feature = "hot-reload"))]
 impl Alloc {
+    pub unsafe fn get_token(&self) -> Arc<()> {
+        self.token.borrow().clone()
+    }
+
+    pub unsafe fn entangle(&self, token: Arc<()>) {
+        if self.enabled.get() || Arc::strong_count(&self.token.borrow()) != 1 {
+            panic!("[Rosin] Can't entangle an active allocator");
+        }
+
+        let ptr = Arc::into_raw(token);
+        Arc::decrement_strong_count(ptr);
+        self.token.replace(Arc::from_raw(ptr));
+    }
+
     pub unsafe fn begin(&self) {
         self.enabled.replace(true);
     }
 
     pub unsafe fn end(&self) {
         self.enabled.replace(false);
-    }
-
-    pub unsafe fn new_scope_token(&self) -> ScopeToken {
-        self.token.clone()
     }
 }
