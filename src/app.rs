@@ -332,7 +332,7 @@ impl<T: 'static> App<T> {
 
             // Build new windows
             for desc in self.new_windows.drain(..) {
-                let mut window = RosinWindow::new(desc, event_loop, &self.loader).unwrap();
+                let mut window = RosinWindow::new(desc, event_loop).unwrap();
                 // TODO - handle loading and unloading fonts correctly
                 // Currently, a window only has access to the fonts that are loaded before it's created
                 for (id, data) in &self.fonts {

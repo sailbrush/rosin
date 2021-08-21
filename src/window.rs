@@ -3,7 +3,6 @@ use crate::prelude::*;
 use crate::{alloc::Scope, geometry::Size, layout::*, render, tree::*};
 
 use std::error::Error;
-use std::sync::Arc;
 
 use bumpalo::{collections::Vec as BumpVec, Bump};
 use femtovg::{renderer::OpenGl, Canvas};
@@ -51,7 +50,7 @@ pub(crate) struct RosinWindow<T: 'static> {
 }
 
 impl<T> RosinWindow<T> {
-    pub fn new(desc: WindowDesc<T>, event_loop: &EventLoopWindowTarget<()>, loader: &LibLoader) -> Result<Self, Box<dyn Error>> {
+    pub fn new(desc: WindowDesc<T>, event_loop: &EventLoopWindowTarget<()>) -> Result<Self, Box<dyn Error>> {
         // TODO - handle errors better
         let windowed_context = unsafe {
             glutin::ContextBuilder::new()
@@ -68,11 +67,6 @@ impl<T> RosinWindow<T> {
             window_size.height as u32,
             windowed_context.window().scale_factor() as f32,
         );
-
-        #[cfg(all(debug_assertions, feature = "hot-reload"))]
-        A.with(|a| unsafe {
-            loader.get::<fn(Arc<()>)>(b"_rosin_entangle_alloc").unwrap()(a.get_token());
-        });
 
         Ok(Self {
             windowed_context,
