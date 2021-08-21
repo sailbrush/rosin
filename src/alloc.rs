@@ -1,7 +1,7 @@
 use std::{
     cell::{Cell, RefCell},
-    fmt::Debug,
     fmt,
+    fmt::Debug,
     sync::Arc,
 };
 
@@ -33,7 +33,12 @@ pub(crate) struct Alloc {
 
 impl Debug for Alloc {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Alloc {{ enabled: {}, token: {} }}", self.enabled.get(), Arc::strong_count(&self.token.borrow()))
+        write!(
+            f,
+            "Alloc {{ enabled: {}, token: {} }}",
+            self.enabled.get(),
+            Arc::strong_count(&self.token.borrow())
+        )
     }
 }
 
