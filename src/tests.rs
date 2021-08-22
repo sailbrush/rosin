@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 mod parser {
     // TODO check that each property is parsing correctly
 }
@@ -15,17 +13,23 @@ mod style {
 
         #[test]
         fn basic_class() {
+            let alloc = crate::alloc::Alloc::default();
             let stylesheet = Stylesheet::new_static(".root { height: 100px; }");
 
-            let mut tree: BumpVec<ArrayNode<()>> = ui! {
-                "root" [] // 0
-            }
-            .finish()
-            .unwrap();
+            let tree: crate::alloc::Scope<BumpVec<ArrayNode<()>>> = unsafe {
+                alloc.scope(|| {
+                    let mut tree = ui! {
+                        "root" [] // 0
+                    }
+                    .finish()
+                    .unwrap();
 
-            stylesheet.style(&mut tree);
+                    stylesheet.style(&mut tree);
+                    tree
+                })
+            };
 
-            assert_eq!(tree[0].style.height, Some(100.0));
+            assert_eq!(tree.borrow()[0].style.height, Some(100.0));
         }
 
         #[test]

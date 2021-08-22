@@ -4,6 +4,7 @@ use crate::libloader::LibLoader;
 #[cfg(all(debug_assertions, feature = "hot-reload"))]
 use crate::libloader::DYLIB_EXT;
 
+use crate::geometry::Size;
 use crate::prelude::*;
 use crate::style::*;
 use crate::window::*;
@@ -13,12 +14,14 @@ use std::{env, path::Path};
 
 use std::{error, fmt::Debug, mem, time::Duration, time::Instant};
 
+use femtovg::{renderer::OpenGl, Canvas};
 use glutin::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
     window::WindowId,
 };
 
+/// A list of events that Nodes can register callbacks for.
 #[non_exhaustive]
 #[derive(Debug, PartialEq, Eq)]
 pub enum On {
@@ -31,6 +34,7 @@ pub enum On {
     Blur, // TODO - cache id on focus, so blur doesn't have to search
 }
 
+/// A return type for callbacks to signal which render stage to skip to.
 #[derive(Debug, Copy, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum Stage {
     Idle = 0,
@@ -39,25 +43,34 @@ pub enum Stage {
     Build = 3,
 }
 
+/// A return type for tasks to signal if they should stop running.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StopTask {
     Yes,
     No,
 }
 
-// This is a hack until trait aliases stabilize
+// NOTE: This is a hack until trait aliases stabilize
+/// `Fn(&mut T, &mut App<T>) -> Stage`
 pub trait EventCallback<T>: 'static + Fn(&mut T, &mut App<T>) -> Stage {}
 impl<F, T> EventCallback<T> for F where F: 'static + Fn(&mut T, &mut App<T>) -> Stage {}
 
+/// `Fn(&T, &mut Style)`
 pub trait StyleCallback<T>: 'static + Fn(&T, &mut Style) {}
 impl<F, T> StyleCallback<T> for F where F: 'static + Fn(&T, &mut Style) {}
 
+/// `Fn(&mut T, &mut App<T>) -> (Stage, StopTask)`
 pub trait TaskCallback<T>: 'static + Fn(&mut T, &mut App<T>) -> (Stage, StopTask) {}
 impl<F, T> TaskCallback<T> for F where F: 'static + Fn(&mut T, &mut App<T>) -> (Stage, StopTask) {}
 
+/// `Fn(&mut T, Duration) -> (Stage, StopTask)`
 pub trait AnimCallback<T>: 'static + Fn(&mut T, Duration) -> (Stage, StopTask) {}
 impl<F, T> AnimCallback<T> for F where F: 'static + Fn(&mut T, Duration) -> (Stage, StopTask) {}
 
+/// `fn(&T, Size, &mut Canvas<OpenGl>)`
+pub type DrawCallback<T> = fn(&T, Size, &mut Canvas<OpenGl>);
+
+/// `fn(&T) -> Node<T>`
 pub type ViewCallback<T> = fn(&T) -> Node<T>;
 
 struct Task<T: 'static> {
@@ -67,6 +80,7 @@ struct Task<T: 'static> {
     callback: Box<dyn TaskCallback<T>>,
 }
 
+/// Used to setup and begin execution of an app.
 pub struct AppLauncher<T: 'static>(App<T>);
 
 impl<T: 'static> Default for AppLauncher<T> {
@@ -104,6 +118,7 @@ impl<T: 'static> AppLauncher<T> {
     }
 }
 
+/// The main interface to app-wide functionality.
 pub struct App<T: 'static> {
     event_loop: Option<EventLoop<()>>,
     loader: LibLoader,
@@ -200,6 +215,7 @@ impl<T: 'static> App<T> {
         todo!();
     }
 
+    #[doc(hidden)]
     pub fn run(mut self, mut state: T) -> Result<(), Box<dyn error::Error>> {
         if self.new_windows.is_empty() {
             return Err("[Rosin] No windows".into());

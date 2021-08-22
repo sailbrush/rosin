@@ -14,6 +14,7 @@ use glutin::{
 };
 
 // TODO - Just re-export winit types for window creation / events
+/// A description of a window.
 pub struct WindowDesc<T: 'static> {
     pub(crate) builder: WindowBuilder,
     pub(crate) view: View<T>,
@@ -217,7 +218,7 @@ impl<T> RosinWindow<T> {
         self.canvas
             .clear_rect(0, 0, window_size.width as u32, window_size.height as u32, femtovg::Color::black());
 
-        render::render(tree, layout, &mut self.canvas, &self.font_table);
+        render::render(state, tree, layout, &mut self.canvas, &self.font_table);
 
         self.canvas.flush();
         self.windowed_context.swap_buffers().unwrap();

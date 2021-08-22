@@ -8,6 +8,7 @@ use std::{cmp::Ordering, error::Error, fs, time::SystemTime};
 
 use cssparser::{Parser, ParserInput, RuleListParser, RGBA};
 
+/// Load a CSS file. In debug builds, the file will be reloaded when changed.
 #[macro_export]
 macro_rules! new_style {
     ($path:expr) => {
@@ -380,6 +381,7 @@ impl Position {
     }
 }
 
+/// Computed style properties of a Node.
 #[derive(Debug, Clone)]
 pub struct Style {
     pub align_content: AlignContent,
@@ -503,24 +505,24 @@ impl Default for Style {
 
 #[derive(Debug, Clone)]
 pub enum Selector {
-    /// Represents a `*` selector
+    // Represents a `*` selector
     Wildcard,
 
-    /// Represents selectors beginning with `#`
+    // Represents selectors beginning with `#`
     Id(String),
 
-    /// Represents selectors beginning with `.`
+    // Represents selectors beginning with `.`
     Class(String),
 
-    /// Represents a ` ` selector relationship
+    // Represents a ` ` selector relationship
     Children,
 
-    /// Represents a `>` selector relationship
+    // Represents a `>` selector relationship
     DirectChildren,
 }
 
 impl Selector {
-    /// Check if this selector applies to a node
+    // Check if this selector applies to a node
     pub(crate) fn check<T>(&self, node: &ArrayNode<T>) -> bool {
         match self {
             Selector::Wildcard => true,
@@ -557,6 +559,7 @@ impl PartialOrd for Rule {
     }
 }
 
+/// A CSS file. Create a Stylesheet with the `new_style!()` macro.
 #[derive(Debug, Default, Clone)]
 pub struct Stylesheet {
     pub(crate) path: Option<&'static str>,
@@ -564,6 +567,7 @@ pub struct Stylesheet {
     pub(crate) rules: Vec<Rule>,
 }
 
+#[doc(hidden)]
 impl Stylesheet {
     pub fn new_static(text: &'static str) -> Self {
         Self {
@@ -583,7 +587,7 @@ impl Stylesheet {
         new
     }
 
-    /// Parse CSS text into rule list
+    // Parse CSS text into rule list
     pub fn parse(text: &str) -> Vec<Rule> {
         let mut input = ParserInput::new(text);
         let mut parser = Parser::new(&mut input);
@@ -595,7 +599,7 @@ impl Stylesheet {
         rules_list
     }
 
-    /// Reload stylesheet if it changed on disk
+    // Reload stylesheet if it changed on disk
     pub(crate) fn poll(&mut self) -> Result<bool, Box<dyn Error>> {
         if let Some(path) = self.path {
             let mut reload = true;
@@ -619,7 +623,7 @@ impl Stylesheet {
         }
     }
 
-    /// Perform selector matching and apply styles to a tree
+    // Perform selector matching and apply styles to a tree
     pub(crate) fn style<T>(&self, tree: &mut [ArrayNode<T>]) {
         for id in 0..tree.len() {
             // TODO benchmark hash map

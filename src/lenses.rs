@@ -5,6 +5,7 @@ use std::{
     fmt::{Debug, Display},
 };
 
+/// Create a new Lens.
 #[macro_export]
 macro_rules! lens {
     ($obj_type:ty => $($path:tt)*) => {
@@ -16,6 +17,7 @@ macro_rules! lens {
 }
 
 // ---------- Trait ----------
+/// A datatype that returns a reference to an internal component of another type. Used by widgets.
 pub trait Lens: Debug {
     type In;
     type Out;
@@ -26,6 +28,7 @@ pub trait Lens: Debug {
 }
 
 // ---------- SingleLens ----------
+#[doc(hidden)]
 pub struct SingleLens<A, B> {
     get: fn(&A) -> &B,
     get_mut: fn(&mut A) -> &mut B,
@@ -74,6 +77,7 @@ impl<A, B> Lens for SingleLens<A, B> {
 }
 
 // ---------- CompoundLens ----------
+#[doc(hidden)]
 pub struct CompoundLens<X, Y> {
     pub lhs: X,
     pub rhs: Y,

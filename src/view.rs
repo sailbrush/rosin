@@ -5,6 +5,7 @@ use std::{fmt, fmt::Debug};
 use crate::libloader::LibLoader;
 use crate::prelude::ViewCallback;
 
+/// Create a View.
 #[macro_export]
 macro_rules! new_view {
     ($($id:tt)*) => {
@@ -12,6 +13,7 @@ macro_rules! new_view {
     };
 }
 
+/// A handle to a function that will be called to construct a view tree. Create a View with the `new_view!()` macro.
 pub struct View<T: 'static>(&'static [u8], pub ViewCallback<T>);
 
 impl<T> Debug for View<T> {
@@ -20,6 +22,7 @@ impl<T> Debug for View<T> {
     }
 }
 
+#[doc(hidden)]
 impl<T> View<T> {
     pub fn new(name: &'static [u8], func: ViewCallback<T>) -> Self {
         View::<T>(name, func)

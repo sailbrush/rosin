@@ -4,8 +4,6 @@ use std::fmt::Debug;
 
 use crate::prelude::*;
 
-pub use crate::button;
-
 /*
 // ---------- Example ----------
 #[derive(Debug)]
@@ -37,17 +35,6 @@ impl<T> Example<T> {
     }
 }
 */
-
-// ---------- Button ----------
-#[macro_export]
-macro_rules! button {
-    ($al:ident, $text:literal, $($callback:tt)*) => {
-        ui!($al, [
-            .content(Content::Label($text))
-            .event(On::MouseDown, $($callback)*)
-        ])
-    }
-}
 
 // ---------- Slider ----------
 #[derive(Debug)]

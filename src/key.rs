@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+/// Create a unique Key. Optionally accepts a discriminant to tell otherwise identical call-sites apart. (Such as in a loop)
 #[macro_export]
 macro_rules! new_key {
     () => {{
@@ -19,12 +20,13 @@ macro_rules! new_key {
     };
 }
 
-/// A unique identifier for a node
+/// A unique identifier for a node.
+/// Create a Key with the `new_key!()` macro.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct Key(u64);
 
+#[doc(hidden)]
 impl Default for Key {
-    // TODO - make sure to hide from docs
     fn default() -> Self {
         Self(5381)
     }
@@ -33,6 +35,7 @@ impl Default for Key {
 impl Key {
     // TODO - use a better hash function once track_caller is const, 64 bits should be enough
     // No collisions between u32's under 8,192 so this should be fine for hashing line numbers
+    #[doc(hidden)]
     pub const fn hash_djb2(mut self, input: &[u8]) -> Self {
         let mut i = 0;
 
@@ -44,6 +47,7 @@ impl Key {
         self
     }
 
+    #[doc(hidden)]
     pub const fn add(mut self, val: u64) -> Self {
         self.0 = self.0.wrapping_add(val);
         self

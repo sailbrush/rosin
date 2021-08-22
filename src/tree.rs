@@ -11,11 +11,11 @@ use bumpalo::collections::Vec as BumpVec;
 thread_local!(pub(crate) static A: Alloc = Alloc::default());
 thread_local!(pub(crate) static NODE_COUNT: Cell<usize> = Cell::new(0));
 
-/// Macro for describing the structure and style of a UI
+/// Macro for describing the structure and style of a UI.
 ///
-/// [] - Create and set classes on a new node
-/// () - Set classes on interior instead of creating a new node
-/// {} - Call methods on parent node
+/// [ ] - Create and set classes on a new node.
+/// ( ) - Set classes on interior instead of creating a new node.
+/// { } - Call methods on parent node.
 #[macro_export]
 macro_rules! ui {
     ($($classes:literal)? [ $($children:tt)* ]) => {
@@ -83,29 +83,16 @@ macro_rules! ui {
     };
 }
 
-// TODO - replace with on_draw() callback. Labels, Images, etc. should just be widgets
-pub enum Content<'a, T> {
-    None,
-    Label(&'a str),
-    DynamicLabel(&'a dyn Fn(&'a T) -> &'a str),
-}
-
-impl<'a, T> Default for Content<'a, T> {
-    fn default() -> Self {
-        Self::None
-    }
-}
-
 pub(crate) struct ArrayNode<T: 'static> {
     pub _key: Option<Key>, // TODO
     pub classes: BumpVec<'static, &'static str>,
     pub _callbacks: BumpVec<'static, (On, &'static mut dyn EventCallback<T>)>, // TODO
     pub style: Style,
     pub style_on_draw: Option<&'static mut dyn StyleCallback<T>>,
+    pub on_draw: Option<DrawCallback<T>>,
     pub parent: usize,
     pub num_children: usize,
     pub last_child: Option<NonZeroUsize>,
-    pub content: Content<'static, T>,
 }
 
 impl<T> ArrayNode<T> {
@@ -130,17 +117,18 @@ impl<T> ArrayNode<T> {
     }
 }
 
+/// A node in the view tree. Panics if created outside of a `ViewCallback`.
 pub struct Node<T: 'static> {
     key: Option<Key>,
     classes: Option<BumpVec<'static, &'static str>>,
     callbacks: Option<BumpVec<'static, (On, &'static mut dyn EventCallback<T>)>>,
     style_default: Option<fn() -> Style>,
     style_on_draw: Option<&'static mut dyn StyleCallback<T>>,
+    on_draw: Option<DrawCallback<T>>,
     size: usize,
     num_children: usize,
     prev_sibling: Option<&'static mut Node<T>>,
     last_child: Option<&'static mut Node<T>>,
-    content: Content<'static, T>,
 }
 
 impl<T> Default for Node<T> {
@@ -153,23 +141,23 @@ impl<T> Default for Node<T> {
             callbacks: Some(A.with(|a| a.vec())),
             style_default: None,
             style_on_draw: None,
+            on_draw: None,
             size: 1,
             num_children: 0,
             prev_sibling: None,
             last_child: None,
-            content: Content::None,
         }
     }
 }
 
 impl<T> Node<T> {
-    /// Set a key on a node, providing a stable identity between rebuilds
+    /// Set a key on a node, providing a stable identity between rebuilds.
     pub fn key(mut self, key: Key) -> Self {
         self.key = Some(key);
         self
     }
 
-    /// Add CSS classes
+    /// Add CSS classes.
     pub fn add_classes(mut self, classes: &'static str) -> Self {
         if let Some(class_vec) = &mut self.classes {
             for class in classes.split_whitespace() {
@@ -179,7 +167,7 @@ impl<T> Node<T> {
         self
     }
 
-    /// Register an event callback
+    /// Register an event callback.
     pub fn event(mut self, event_type: On, callback: impl EventCallback<T>) -> Self {
         if let Some(callbacks) = &mut self.callbacks {
             callbacks.push((event_type, A.with(|a| a.alloc(callback))));
@@ -187,25 +175,25 @@ impl<T> Node<T> {
         self
     }
 
-    /// Register a function that will provide an alternate default Style for this node
+    /// Register a function that will provide an alternate default Style for this node.
     pub fn style_default(mut self, func: fn() -> Style) -> Self {
         self.style_default = Some(func);
         self
     }
 
-    /// Register a function to modify this node's style right before redrawing
+    /// Register a function to modify this node's style right before redrawing.
     pub fn style_on_draw(mut self, func: impl StyleCallback<T>) -> Self {
         self.style_on_draw = Some(A.with(|a| a.alloc(func)));
         self
     }
 
-    /// Set the contents of a node
-    pub fn content(mut self, content: Content<'static, T>) -> Self {
-        self.content = content;
+    /// Register a function to draw the contents of a node.
+    pub fn draw(mut self, func: DrawCallback<T>) -> Self {
+        self.on_draw = Some(func);
         self
     }
 
-    /// Add a child node
+    /// Add a child node.
     pub fn add_child(mut self, mut new_child: Self) -> Self {
         self.size += new_child.size;
         self.num_children += 1;
@@ -236,10 +224,10 @@ impl<T> Node<T> {
                 _callbacks: curr_node.callbacks.take()?,
                 style: curr_node.style_default.unwrap_or(Style::default)(),
                 style_on_draw: curr_node.style_on_draw.take(),
+                on_draw: std::mem::take(&mut curr_node.on_draw),
                 parent,
                 num_children: curr_node.num_children,
                 last_child: None,
-                content: std::mem::take(&mut curr_node.content),
             });
 
             if let Some(last_child) = curr_node.last_child.take() {
