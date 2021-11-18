@@ -9,32 +9,32 @@ pub struct State {
 }
 
 pub fn main_view(state: &State) -> Node<State> {
-    ui!("root" [ 
+    ui!("root" [
         {.event(On::MouseDown, |state: &mut State, _: &mut EventCtx| {
             state.display.set_text("Yo"); Stage::Draw })
         }
             "first" [
                 (state.display.view())
             ]
-            
+
     ])
 }
 
 //for _ in 0..10 {
-                    /*"second" [
-                        .on_draw(true, move |_: &State, ctx: &mut DrawCtx| {
-                            if !ctx.must_draw { return }
+/*"second" [
+    .on_draw(true, move |_: &State, ctx: &mut DrawCtx| {
+        if !ctx.must_draw { return }
 
-                            let fill_paint = Paint::color(Color::hex("00ff00"));
-                            let mut path = Path::new();
-                            path.move_to(0.0, 0.0);
-                            path.line_to(100.0, 100.0);
+        let fill_paint = Paint::color(Color::hex("00ff00"));
+        let mut path = Path::new();
+        path.move_to(0.0, 0.0);
+        path.line_to(100.0, 100.0);
 
-                            ctx.canvas.fill_path(&mut path, fill_paint);
-                        })
-                    ]*/
-                    //(label("Hi"))
-                //}
+        ctx.canvas.fill_path(&mut path, fill_paint);
+    })
+]*/
+//(label("Hi"))
+//}
 
 fn main() {
     let state = State {

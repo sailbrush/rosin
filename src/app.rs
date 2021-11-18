@@ -323,7 +323,8 @@ impl<T: 'static> App<T> {
                             ..
                         } => {
                             if button == MouseButton::Left && elem_state == ElementState::Pressed {
-                                let new_stage = self.windows
+                                let new_stage = self
+                                    .windows
                                     .iter_mut()
                                     .find(|(id, _)| *id == window_id)
                                     .expect("[Rosin] Window not found")
