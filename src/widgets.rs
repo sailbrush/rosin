@@ -2,8 +2,6 @@
 
 use std::fmt::Debug;
 
-use femtovg::{renderer::OpenGl, Canvas, FontId};
-
 use crate::prelude::*;
 
 /*

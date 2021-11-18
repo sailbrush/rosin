@@ -4,7 +4,6 @@ use crate::libloader::LibLoader;
 #[cfg(all(debug_assertions, feature = "hot-reload"))]
 use crate::libloader::DYLIB_EXT;
 
-use crate::geometry::Size;
 use crate::prelude::*;
 use crate::style::*;
 use crate::window::*;
@@ -14,7 +13,6 @@ use std::{env, path::Path};
 
 use std::{error, fmt::Debug, mem, time::Duration, time::Instant};
 
-use femtovg::{renderer::OpenGl, Canvas};
 use glutin::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
