@@ -2,6 +2,8 @@
 
 use std::fmt::Debug;
 
+use femtovg::{renderer::OpenGl, Canvas, FontId};
+
 use crate::prelude::*;
 
 /*
@@ -75,6 +77,11 @@ impl<T> Slider<T> {
                 app.emit_change();
                 Stage::Paint
             })
+            .on_draw(true,
+                move |t: &T, _ctx: &mut DrawCtx| {
+                    let _this = lens.get(t);
+                    _ctx.canvas.save();
+            })
         ])
     }
 }
@@ -118,7 +125,7 @@ impl<T> TextBox<T> {
 
         ui!("text-box" [
             .key(key)
-            .style_on_draw(move |_: &T, t: &mut Style| t.min_height = t.min_height.max(t.font_size))
+            .style_on_draw(move |_: &T, s: &mut Style| s.min_height = s.min_height.max(s.font_size))
             .event(On::MouseDown, move |t: &mut T, app: &mut App<T>| {
                 let this = lens.get_mut(t);
                 app.focus_on_ancestor(key);

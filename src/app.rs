@@ -50,8 +50,13 @@ pub enum StopTask {
     No,
 }
 
-// NOTE: This is a hack until trait aliases stabilize
-/// `Fn(&mut T, &mut App<T>) -> Stage`
+// This is a hack until trait aliases stabilize
+pub trait AnimCallback<T>: 'static + Fn(&mut T, Duration) -> (Stage, StopTask) {}
+impl<F, T> AnimCallback<T> for F where F: 'static + Fn(&mut T, Duration) -> (Stage, StopTask) {}
+
+pub trait DrawCallback<T>: 'static + Fn(&T, &mut DrawCtx) {}
+impl<F, T> DrawCallback<T> for F where F: 'static + Fn(&T, &mut DrawCtx) {}
+
 pub trait EventCallback<T>: 'static + Fn(&mut T, &mut App<T>) -> Stage {}
 impl<F, T> EventCallback<T> for F where F: 'static + Fn(&mut T, &mut App<T>) -> Stage {}
 
@@ -63,14 +68,6 @@ impl<F, T> StyleCallback<T> for F where F: 'static + Fn(&T, &mut Style) {}
 pub trait TaskCallback<T>: 'static + Fn(&mut T, &mut App<T>) -> (Stage, StopTask) {}
 impl<F, T> TaskCallback<T> for F where F: 'static + Fn(&mut T, &mut App<T>) -> (Stage, StopTask) {}
 
-/// `Fn(&mut T, Duration) -> (Stage, StopTask)`
-pub trait AnimCallback<T>: 'static + Fn(&mut T, Duration) -> (Stage, StopTask) {}
-impl<F, T> AnimCallback<T> for F where F: 'static + Fn(&mut T, Duration) -> (Stage, StopTask) {}
-
-/// `fn(&T, Size, &mut Canvas<OpenGl>)`
-pub type DrawCallback<T> = fn(&T, Size, &mut Canvas<OpenGl>);
-
-/// `fn(&T) -> Node<T>`
 pub type ViewCallback<T> = fn(&T) -> Node<T>;
 
 struct Task<T: 'static> {

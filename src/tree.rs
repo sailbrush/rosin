@@ -89,7 +89,8 @@ pub(crate) struct ArrayNode<T: 'static> {
     pub _callbacks: BumpVec<'static, (On, &'static mut dyn EventCallback<T>)>, // TODO
     pub style: Style,
     pub style_on_draw: Option<&'static mut dyn StyleCallback<T>>,
-    pub on_draw: Option<DrawCallback<T>>,
+    pub on_draw: Option<&'static mut dyn DrawCallback<T>>,
+    pub _draw_cache_enable: bool, // TODO
     pub parent: usize,
     pub num_children: usize,
     pub last_child: Option<NonZeroUsize>,
@@ -124,7 +125,8 @@ pub struct Node<T: 'static> {
     callbacks: Option<BumpVec<'static, (On, &'static mut dyn EventCallback<T>)>>,
     style_default: Option<fn() -> Style>,
     style_on_draw: Option<&'static mut dyn StyleCallback<T>>,
-    on_draw: Option<DrawCallback<T>>,
+    on_draw: Option<&'static mut dyn DrawCallback<T>>,
+    draw_cache_enable: bool,
     size: usize,
     num_children: usize,
     prev_sibling: Option<&'static mut Node<T>>,
@@ -142,6 +144,7 @@ impl<T> Default for Node<T> {
             style_default: None,
             style_on_draw: None,
             on_draw: None,
+            draw_cache_enable: false,
             size: 1,
             num_children: 0,
             prev_sibling: None,
@@ -187,9 +190,10 @@ impl<T> Node<T> {
         self
     }
 
-    /// Register a function to draw the contents of a node.
-    pub fn draw(mut self, func: DrawCallback<T>) -> Self {
-        self.on_draw = Some(func);
+    /// Register a function to draw the contents of this node
+    pub fn on_draw(mut self, enable_cache: bool, func: impl DrawCallback<T>) -> Self {
+        self.on_draw = Some(A.with(|a| a.alloc(func)));
+        self.draw_cache_enable = enable_cache;
         self
     }
 
@@ -225,6 +229,7 @@ impl<T> Node<T> {
                 style: curr_node.style_default.unwrap_or(Style::default)(),
                 style_on_draw: curr_node.style_on_draw.take(),
                 on_draw: std::mem::take(&mut curr_node.on_draw),
+                _draw_cache_enable: curr_node.draw_cache_enable,
                 parent,
                 num_children: curr_node.num_children,
                 last_child: None,

@@ -21,9 +21,16 @@ pub fn main_view(_state: &State) -> Node<State> {
             "first" [
                 for _ in 0..10 {
                     "second" [
-                        for _ in 0..10 {
-                            "third" []
-                        }
+                        .on_draw(true, move |_: &State, ctx: &mut DrawCtx| {
+                            if !ctx.must_draw { return }
+
+                            let fill_paint = Paint::color(Color::hex("00ff00"));
+                            let mut path = Path::new();
+                            path.move_to(0.0, 0.0);
+                            path.line_to(100.0, 100.0);
+
+                            ctx.canvas.fill_path(&mut path, fill_paint);
+                        })
                     ]
                 }
             ]

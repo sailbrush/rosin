@@ -16,7 +16,7 @@
     padding: 50px;
 }
 
-.row {
+.first {
     display:flex;
     flex-grow:1.0;
     border: 1px solid red;
