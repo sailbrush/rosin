@@ -4,6 +4,7 @@ use crate::libloader::LibLoader;
 #[cfg(all(debug_assertions, feature = "hot-reload"))]
 use crate::libloader::DYLIB_EXT;
 
+use crate::layout::hit_test;
 use crate::prelude::*;
 use crate::style::*;
 use crate::window::*;
@@ -13,6 +14,7 @@ use std::{env, path::Path};
 
 use std::{error, fmt::Debug, mem, time::Duration, time::Instant};
 
+use glutin::dpi::PhysicalPosition;
 use glutin::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
@@ -36,7 +38,7 @@ pub enum On {
 #[derive(Debug, Copy, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum Stage {
     Idle = 0,
-    Paint = 1,
+    Draw = 1,
     Layout = 2,
     Build = 3,
 }
@@ -48,23 +50,28 @@ pub enum StopTask {
     No,
 }
 
-// This is a hack until trait aliases stabilize
+pub struct EventCtx {}
+
+// NOTE: This is a hack until trait aliases stabilize
+/// `Fn(&mut T, Duration) -> (Stage, StopTask)`
 pub trait AnimCallback<T>: 'static + Fn(&mut T, Duration) -> (Stage, StopTask) {}
 impl<F, T> AnimCallback<T> for F where F: 'static + Fn(&mut T, Duration) -> (Stage, StopTask) {}
 
+/// `Fn(&T, &mut DrawCtx)`
 pub trait DrawCallback<T>: 'static + Fn(&T, &mut DrawCtx) {}
 impl<F, T> DrawCallback<T> for F where F: 'static + Fn(&T, &mut DrawCtx) {}
 
-pub trait EventCallback<T>: 'static + Fn(&mut T, &mut App<T>) -> Stage {}
-impl<F, T> EventCallback<T> for F where F: 'static + Fn(&mut T, &mut App<T>) -> Stage {}
+/// `Fn(&mut T, &mut App<T>) -> Stage`
+pub trait EventCallback<T>: 'static + Fn(&mut T, &mut EventCtx) -> Stage {}
+impl<F, T> EventCallback<T> for F where F: 'static + Fn(&mut T, &mut EventCtx) -> Stage {}
 
 /// `Fn(&T, &mut Style)`
 pub trait StyleCallback<T>: 'static + Fn(&T, &mut Style) {}
 impl<F, T> StyleCallback<T> for F where F: 'static + Fn(&T, &mut Style) {}
 
 /// `Fn(&mut T, &mut App<T>) -> (Stage, StopTask)`
-pub trait TaskCallback<T>: 'static + Fn(&mut T, &mut App<T>) -> (Stage, StopTask) {}
-impl<F, T> TaskCallback<T> for F where F: 'static + Fn(&mut T, &mut App<T>) -> (Stage, StopTask) {}
+pub trait TaskCallback<T>: 'static + Fn(&mut T, &mut EventCtx) -> (Stage, StopTask) {}
+impl<F, T> TaskCallback<T> for F where F: 'static + Fn(&mut T, &mut EventCtx) -> (Stage, StopTask) {}
 
 pub type ViewCallback<T> = fn(&T) -> Node<T>;
 
@@ -123,6 +130,7 @@ pub struct App<T: 'static> {
     stylesheet: Stylesheet,
     tasks: Vec<Task<T>>,
     fonts: Vec<(u32, Vec<u8>)>,
+    mouse_pos: PhysicalPosition<f64>,
 }
 
 // TODO add event_filters and event_handlers?
@@ -155,6 +163,7 @@ impl<T: 'static> App<T> {
             stylesheet: Stylesheet::default(),
             tasks: Vec::new(),
             fonts: Vec::new(),
+            mouse_pos: PhysicalPosition::new(0.0, 0.0),
         }
     }
 
@@ -216,7 +225,8 @@ impl<T: 'static> App<T> {
             return Err("[Rosin] No windows".into());
         }
 
-        #[cfg(debug_assertions)]
+        // TODO - get this working again
+        /*#[cfg(debug_assertions)]
         #[allow(unused_mut)]
         self.add_task(None, Duration::from_millis(100), |_: &mut T, app: &mut App<T>| {
             let mut stage = match app.stylesheet.poll() {
@@ -238,7 +248,7 @@ impl<T: 'static> App<T> {
             }
 
             (stage, StopTask::No)
-        });
+        });*/
 
         let mut active_tasks = Vec::new();
         let mut stopped_task_ids = Vec::new();
@@ -246,6 +256,9 @@ impl<T: 'static> App<T> {
         //TODO what to do about unwraps in the event loop? Can't return error...
         let event_loop = self.event_loop.take().unwrap();
         event_loop.run(move |event, event_loop, control_flow| {
+            // TODO - make this do something
+            let mut event_ctx = EventCtx {};
+
             // Run tasks
             // TODO - find a better place to run them. In response to which sytem events?
             if self.tasks.is_empty() {
@@ -260,7 +273,7 @@ impl<T: 'static> App<T> {
                 for (i, task) in active_tasks.iter_mut().enumerate() {
                     if Instant::now().duration_since(task.last_run) >= task.frequency {
                         task.last_run = Instant::now();
-                        let (stage, stoptask) = (task.callback)(&mut state, &mut self);
+                        let (stage, stoptask) = (task.callback)(&mut state, &mut event_ctx);
                         if let Some(window_id) = task.window_id {
                             self.windows
                                 .iter_mut()
@@ -298,6 +311,30 @@ impl<T: 'static> App<T> {
             match event {
                 Event::WindowEvent { event, window_id } => {
                     match event {
+                        WindowEvent::CursorMoved {
+                            device_id: _, position, ..
+                        } => {
+                            self.mouse_pos = position;
+                        }
+                        WindowEvent::MouseInput {
+                            device_id: _,
+                            state: elem_state,
+                            button,
+                            ..
+                        } => {
+                            if button == MouseButton::Left && elem_state == ElementState::Pressed {
+                                let new_stage = self.windows
+                                    .iter_mut()
+                                    .find(|(id, _)| *id == window_id)
+                                    .expect("[Rosin] Window not found")
+                                    .1
+                                    .click(&mut state, &mut event_ctx, self.mouse_pos);
+
+                                for (_, window) in self.windows.iter_mut() {
+                                    window.update_stage(new_stage);
+                                }
+                            }
+                        }
                         WindowEvent::Resized(physical_size) => {
                             self.windows
                                 .iter_mut()

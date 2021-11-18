@@ -107,6 +107,10 @@ impl Default for Layout {
     }
 }
 
+pub(crate) fn hit_test(layout: &mut [Layout], position: (f32, f32)) -> usize {
+    0
+}
+
 pub(crate) fn build_layout<T>(temp: &Bump, tree: &[ArrayNode<T>], root_size: Size, output: &mut [Layout]) {
     layout(temp, tree, 0, root_size, output);
     output[0] = Layout {

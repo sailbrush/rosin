@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use std::fmt::Debug;
+use std::{cell::Cell, fmt::Debug};
 
 use crate::prelude::*;
 
@@ -36,6 +36,112 @@ impl<T> Example<T> {
 }
 */
 
+// ---------- Static Label ----------
+// TODO - need to make one that can be used from inside widgets, because key wont work
+#[track_caller]
+pub fn label<T>(text: &'static str) -> Node<T> {
+    let key = new_key!();
+
+    ui!([
+        .key(key)
+        .on_draw(true,
+            move |_: &T, ctx: &mut DrawCtx| {
+                if !ctx.must_draw { return }
+
+                let font_family = ctx.style.font_family;
+                let (_, font_id) = ctx.font_table
+                    .iter()
+                    .find(|(name, _)| *name == font_family)
+                    .expect("[Rosin] Font not found");
+
+                let font_color = ctx.style.color;
+                let mut paint = Paint::color(femtovg::Color::rgba(
+                    font_color.red,
+                    font_color.green,
+                    font_color.blue,
+                    font_color.alpha,
+                ));
+                paint.set_font_size(ctx.style.font_size);
+                paint.set_font(&[*font_id]);
+                paint.set_text_align(femtovg::Align::Left);
+                paint.set_text_baseline(femtovg::Baseline::Top);
+                let _ = ctx.canvas.fill_text(
+                    0.0,
+                    0.0,
+                    text,
+                    paint,
+                );
+            })
+    ])
+}
+
+// ---------- Dynamic Label ----------
+#[derive(Debug)]
+pub struct DynLabel<T: 'static> {
+    lens: &'static dyn Lens<In = T, Out = Self>,
+    key: Key,
+    text: String,
+    has_changed: Cell<bool>,
+}
+
+impl<T> DynLabel<T> {
+    #[track_caller]
+    pub fn new(lens: impl Lens<In = T, Out = Self>, text: &str) -> Self {
+        Self {
+            lens: lens.leak(),
+            key: new_key!(),
+            text: text.to_owned(),
+            has_changed: Cell::new(false),
+        }
+    }
+
+    pub fn set_text(&mut self, new_text: &str) -> Stage {
+        self.text.clear();
+        self.text.push_str(new_text);
+        self.has_changed.replace(true);
+        Stage::Draw
+    }
+
+    pub fn view(&self) -> Node<T> {
+        let lens = self.lens;
+        let key = self.key;
+
+        ui!("example" [
+            .key(key)
+            .on_draw(false,
+                move |t: &T, ctx: &mut DrawCtx| {
+                    let this = lens.get(t);
+                    //if !this.has_changed.get() || !ctx.must_draw { return }
+                    this.has_changed.replace(false);
+
+                    let font_family = ctx.style.font_family;
+                    let (_, font_id) = ctx.font_table
+                        .iter()
+                        .find(|(name, _)| *name == font_family)
+                        .expect("[Rosin] Font not found");
+
+                    let font_color = ctx.style.color;
+                    let mut paint = Paint::color(femtovg::Color::rgba(
+                        font_color.red,
+                        font_color.green,
+                        font_color.blue,
+                        font_color.alpha,
+                    ));
+                    paint.set_font_size(ctx.style.font_size);
+                    paint.set_font(&[*font_id]);
+                    paint.set_text_align(femtovg::Align::Left);
+                    paint.set_text_baseline(femtovg::Baseline::Top);
+                    let _ = ctx.canvas.fill_text(
+                        0.0,
+                        0.0,
+                        &this.text,
+                        paint,
+                    );
+                })
+        ])
+    }
+}
+
 // ---------- Slider ----------
 #[derive(Debug)]
 pub struct Slider<T: 'static> {
@@ -60,7 +166,7 @@ impl<T> Slider<T> {
 
     pub fn set_value(&mut self, new_value: f32) -> Stage {
         self.value = new_value;
-        Stage::Paint
+        Stage::Draw
     }
 
     pub fn view(&self) -> Node<T> {
@@ -69,12 +175,6 @@ impl<T> Slider<T> {
 
         ui!("slider" [
             .key(key)
-            .event(On::MouseDown, move |t: &mut T, app: &mut App<T>| {
-                let _this = lens.get_mut(t);
-                app.focus_on_ancestor(key);
-                app.emit_change();
-                Stage::Paint
-            })
             .on_draw(true,
                 move |t: &T, _ctx: &mut DrawCtx| {
                     let _this = lens.get(t);
@@ -124,11 +224,6 @@ impl<T> TextBox<T> {
         ui!("text-box" [
             .key(key)
             .style_on_draw(move |_: &T, s: &mut Style| s.min_height = s.min_height.max(s.font_size))
-            .event(On::MouseDown, move |t: &mut T, app: &mut App<T>| {
-                let this = lens.get_mut(t);
-                app.focus_on_ancestor(key);
-                this.clicked(app)
-            })
         ])
     }
 }

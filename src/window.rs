@@ -1,3 +1,4 @@
+use crate::layout::hit_test;
 use crate::libloader::LibLoader;
 use crate::prelude::*;
 use crate::{alloc::Scope, geometry::Size, layout::*, render, tree::*};
@@ -6,6 +7,7 @@ use std::error::Error;
 
 use bumpalo::{collections::Vec as BumpVec, Bump};
 use femtovg::{renderer::OpenGl, Canvas};
+use glutin::dpi::PhysicalPosition;
 use glutin::{
     dpi::{LogicalSize, PhysicalSize},
     event_loop::EventLoopWindowTarget,
@@ -115,6 +117,15 @@ impl<T> RosinWindow<T> {
             self.update_stage(Stage::Layout);
 
             self.windowed_context.resize(new_size);
+        }
+    }
+
+    pub fn click(&mut self, state: &mut T, ctx: &mut EventCtx, position: PhysicalPosition<f64>) -> Stage {
+        if let (Some(tree), Some(layout)) = (&mut self.tree_cache, &mut self.layout_cache) {
+            let id = hit_test(layout.borrow_mut(), (position.x as f32, position.y as f32));
+            tree.borrow_mut()[id].trigger(On::MouseDown, state, ctx)
+        } else {
+            Stage::Idle
         }
     }
 

@@ -5,22 +5,23 @@ use rosin::widgets::*;
 
 #[derive(Debug)]
 pub struct State {
-    text_box: TextBox<Self>,
-    other: String,
+    display: DynLabel<State>,
 }
 
-impl State {
-    pub fn display(&self) -> &str {
-        self.other.as_str()
-    }
-}
-
-pub fn main_view(_state: &State) -> Node<State> {
-    ui!("root" [
-        for _ in 0..10 {
+pub fn main_view(state: &State) -> Node<State> {
+    ui!("root" [ 
+        {.event(On::MouseDown, |state: &mut State, _: &mut EventCtx| {
+            state.display.set_text("Yo"); Stage::Draw })
+        }
             "first" [
-                for _ in 0..10 {
-                    "second" [
+                (state.display.view())
+            ]
+            
+    ])
+}
+
+//for _ in 0..10 {
+                    /*"second" [
                         .on_draw(true, move |_: &State, ctx: &mut DrawCtx| {
                             if !ctx.must_draw { return }
 
@@ -31,17 +32,13 @@ pub fn main_view(_state: &State) -> Node<State> {
 
                             ctx.canvas.fill_path(&mut path, fill_paint);
                         })
-                    ]
-                }
-            ]
-        }
-    ])
-}
+                    ]*/
+                    //(label("Hi"))
+                //}
 
 fn main() {
     let state = State {
-        text_box: TextBox::new(lens!(State => text_box)),
-        other: String::new(),
+        display: DynLabel::new(lens!(State => display), "Hello"),
     };
 
     let view = new_view!(main_view);

@@ -27,9 +27,6 @@ macro_rules! ui {
     ($tree:expr; $($classes:literal)? ( $($child:tt)* ) $($tail:tt)*) => {
         ui!($tree.add_child($($child)* $(.add_classes($classes))* ); $($tail)* )
     };
-    ($tree:expr; $($classes:literal)? { $($builder:tt)* } $($tail:tt)*) => {
-        ui!($tree.add_child(Node::default() $(.add_classes($classes))* $($builder)* ); $($tail)* )
-    };
     ($tree:expr; { $($body:tt)* } $($tail:tt)*) => {
         ui!($tree $($body)*; $($tail)* )
     };
@@ -86,7 +83,7 @@ macro_rules! ui {
 pub(crate) struct ArrayNode<T: 'static> {
     pub _key: Option<Key>, // TODO
     pub classes: BumpVec<'static, &'static str>,
-    pub _callbacks: BumpVec<'static, (On, &'static mut dyn EventCallback<T>)>, // TODO
+    pub callbacks: BumpVec<'static, (On, &'static mut dyn EventCallback<T>)>,
     pub style: Style,
     pub style_on_draw: Option<&'static mut dyn StyleCallback<T>>,
     pub on_draw: Option<&'static mut dyn DrawCallback<T>>,
@@ -107,11 +104,11 @@ impl<T> ArrayNode<T> {
     }
 
     // TODO
-    pub(crate) fn _trigger(&mut self, event_type: On, state: &'static mut T, app: &mut App<T>) -> Stage {
+    pub(crate) fn trigger(&mut self, event_type: On, state: &mut T, ctx: &mut EventCtx) -> Stage {
         let mut stage = Stage::Idle;
-        for (et, callback) in &mut self._callbacks {
+        for (et, callback) in &mut self.callbacks {
             if *et == event_type {
-                stage = stage.max((callback)(state, app));
+                stage = stage.max((callback)(state, ctx));
             }
         }
         stage
@@ -225,7 +222,7 @@ impl<T> Node<T> {
             tree.push(ArrayNode {
                 _key: curr_node.key,
                 classes: curr_node.classes.take()?,
-                _callbacks: curr_node.callbacks.take()?,
+                callbacks: curr_node.callbacks.take()?,
                 style: curr_node.style_default.unwrap_or(Style::default)(),
                 style_on_draw: curr_node.style_on_draw.take(),
                 on_draw: std::mem::take(&mut curr_node.on_draw),
