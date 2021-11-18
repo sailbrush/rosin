@@ -16,7 +16,7 @@ pub struct DrawCtx<'a> {
 }
 
 pub(crate) fn render<T>(state: &T, tree: &[ArrayNode<T>], layout: &[Layout], canvas: &mut Canvas<OpenGl>, font_table: &[(u32, FontId)]) {
-    render_node(state, tree, layout, 0, 0.0, 0.0, canvas, font_table);
+    render_node(state, tree, layout, 0, (0.0, 0.0), canvas, font_table);
 }
 
 fn render_node<T>(
@@ -24,8 +24,7 @@ fn render_node<T>(
     tree: &[ArrayNode<T>],
     layout: &[Layout],
     id: usize,
-    offset_x: f32,
-    offset_y: f32,
+    offset: (f32, f32),
     canvas: &mut Canvas<OpenGl>,
     font_table: &[(u32, FontId)],
 ) {
@@ -46,8 +45,8 @@ fn render_node<T>(
 
         let mut path = Path::new();
         path.rounded_rect_varying(
-            layout[id].position.x + offset_x,
-            layout[id].position.y + offset_y,
+            layout[id].position.x + offset.0,
+            layout[id].position.y + offset.1,
             layout[id].size.width,
             layout[id].size.height,
             tree[id].style.border_top_left_radius,
@@ -60,7 +59,7 @@ fn render_node<T>(
 
         // Call on_draw()
         if let Some(on_draw) = &tree[id].on_draw {
-            canvas.translate(layout[id].position.x + offset_x, layout[id].position.y + offset_y);
+            canvas.translate(layout[id].position.x + offset.0, layout[id].position.y + offset.1);
             canvas.scissor(0.0, 0.0, layout[id].size.width, layout[id].size.height);
 
             let mut ctx = DrawCtx {
@@ -84,8 +83,7 @@ fn render_node<T>(
             tree,
             layout,
             i,
-            layout[id].position.x + offset_x,
-            layout[id].position.y + offset_y,
+            (layout[id].position.x + offset.0, layout[id].position.y + offset.1),
             canvas,
             font_table,
         );
