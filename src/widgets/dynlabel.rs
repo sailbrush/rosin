@@ -34,7 +34,7 @@ impl<T> DynLabel<T> {
     pub fn view(&self) -> Node<T> {
         let lens = self.lens;
 
-        ui!("example" [
+        ui!([
             .key(self.key)
             .on_draw(false,
                 move |t: &T, ctx: &mut DrawCtx| {
