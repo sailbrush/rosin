@@ -1,7 +1,7 @@
 .root {
     font-family: roboto-regular;
     font-size: 60px;
-    color:beige;
+    color:rgb(255, 255, 255);
     flex-direction: column;
     background-color: rgb(71, 71, 71);
 }
@@ -18,15 +18,11 @@
 
 .btn {
     flex-direction: row;
-    background-color: rgb(95, 95, 95);
-    border: 1px solid black;
+    background-color: rgb(105, 105, 105);
+    border: 1px solid rgb(35, 35, 35);
     border-radius: 20px;
     margin: 4px;
     padding: 50px;
-}
-
-.orange {
-    background-color: orange;
 }
 
 .double {
@@ -35,8 +31,6 @@
     min-width: 110px;
 }
 
-.triple {
-    flex-grow: 3.0;
-    width: 220px;
-    min-width: 220px;
+.orange {
+    background-color: rgb(255, 150, 0);
 }

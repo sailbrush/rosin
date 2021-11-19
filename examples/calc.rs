@@ -13,7 +13,7 @@ pub struct State {
 
 enum Mode {
     Entry,
-    DecimalEntry(f64),
+    DecimalEntry(u32),
     Result,
 }
 
@@ -28,6 +28,7 @@ enum Btn {
     Digit(u8),
     Op(Op),
     Clear,
+    Sign,
     Decimal,
     Equals,
 }
@@ -36,21 +37,23 @@ impl State {
     fn press(&mut self, button: Btn) -> Stage {
         match button {
             Btn::Digit(val) => {
+                let mut precision = 0;
                 match self.mode {
                     Mode::Entry => {
                         self.register *= 10.0;
                         self.register += val as f64;
                     }
-                    Mode::DecimalEntry(place) => {
-                        self.register += val as f64 / (10f64.powf(place));
-                        self.mode = Mode::DecimalEntry(place + 1.0);
+                    Mode::DecimalEntry(exponent) => {
+                        self.register += val as f64 / (10f64.powf(exponent as f64));
+                        self.mode = Mode::DecimalEntry(exponent + 1);
+                        precision = exponent;
                     }
                     Mode::Result => {
                         self.register = val as f64;
                         self.mode = Mode::Entry;
                     }
                 }
-                self.display.set_text(&self.register.to_string());
+                self.display.set_text(&format!("{:.*}", precision as usize, self.register));
             }
             Btn::Op(op) => {
                 if let Some(prev_op) = &self.operation {
@@ -74,8 +77,30 @@ impl State {
                 self.register = 0.0;
                 self.display.set_text("0");
             }
+            Btn::Sign => {
+                match self.mode {
+                    Mode::Entry => {
+                        self.register *= -1.0;
+                        self.display.set_text(&self.register.to_string());
+                    }
+                    Mode::DecimalEntry(precision) => {
+                        self.register *= -1.0;
+                        self.display.set_text(&format!("{:.*}", precision as usize, self.register));
+                    }
+                    Mode::Result => {
+                        self.accumulator *= -1.0;
+                        self.display.set_text(&self.accumulator.to_string());
+                    }
+                }
+            }
             Btn::Decimal => {
-                self.mode = Mode::DecimalEntry(1.0);
+                if self.operation.is_some() {
+                    self.register = 0.0;
+                }
+                if let Mode::Result = self.mode {
+                    self.accumulator = 0.0;
+                }
+                self.mode = Mode::DecimalEntry(1);
             }
             Btn::Equals => {
                 if let Some(prev_op) = &self.operation {
@@ -92,7 +117,6 @@ impl State {
                 self.display.set_text(&self.accumulator.to_string());
             }
         }
-
         Stage::Draw
     }
 }
@@ -101,8 +125,9 @@ pub fn main_view(state: &State) -> Node<State> {
     ui!("root" [
         "display" (state.display.view())
         "row" [
-            "btn triple" (button("Clear", |state: &mut State, _| { state.press(Btn::Clear) }))
-            "btn orange" (button("/", |state: &mut State, _| { state.press(Btn::Op(Op::Div)) }))
+            "btn double" (button("Clear", |state: &mut State, _| { state.press(Btn::Clear) }))
+            "btn"        (button("±", |state: &mut State, _| { state.press(Btn::Sign) }))
+            "btn orange" (button("÷", |state: &mut State, _| { state.press(Btn::Op(Op::Div)) }))
         ]
         "row" [
             "btn"        (button("7", |state: &mut State, _| { state.press(Btn::Digit(7)) }))
@@ -114,7 +139,7 @@ pub fn main_view(state: &State) -> Node<State> {
             "btn"        (button("4", |state: &mut State, _| { state.press(Btn::Digit(4)) }))
             "btn"        (button("5", |state: &mut State, _| { state.press(Btn::Digit(5)) }))
             "btn"        (button("6", |state: &mut State, _| { state.press(Btn::Digit(6)) }))
-            "btn orange" (button("-", |state: &mut State, _| { state.press(Btn::Op(Op::Sub)) }))
+            "btn orange" (button("–", |state: &mut State, _| { state.press(Btn::Op(Op::Sub)) }))
         ]
         "row" [
             "btn"        (button("1", |state: &mut State, _| { state.press(Btn::Digit(1)) }))
@@ -141,7 +166,7 @@ fn main() {
 
     let view = new_view!(main_view);
     let stylesheet = new_style!("examples/calc.css");
-    let window = WindowDesc::new(view).with_title("Rosin Calculator").with_size(650.0, 650.0);
+    let window = WindowDesc::new(view).with_title("Rosin Calculator").with_size(400.0, 600.0);
 
     AppLauncher::default()
         .use_style(stylesheet)
