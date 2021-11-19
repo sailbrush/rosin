@@ -166,7 +166,7 @@ fn main() {
 
     let view = new_view!(main_view);
     let stylesheet = new_style!("examples/calc.css");
-    let window = WindowDesc::new(view).with_title("Rosin Calculator").with_size(400.0, 600.0);
+    let window = WindowDesc::new(view).with_title("Rosin Calculator").with_size(400.0, 550.0);
 
     AppLauncher::default()
         .use_style(stylesheet)
