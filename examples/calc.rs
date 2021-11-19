@@ -42,7 +42,7 @@ impl State {
                         self.register += val as f64;
                     }
                     Mode::DecimalEntry(place) => {
-                        self.register += val as f64 / (10.0 * place);
+                        self.register += val as f64 / (10f64.powf(place));
                         self.mode = Mode::DecimalEntry(place + 1.0);
                     }
                     Mode::Result => {
