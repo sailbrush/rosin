@@ -131,13 +131,13 @@ pub fn main_view(state: &State) -> Node<State> {
             "btn"        (button("7", |state: &mut State, _| { state.press(Btn::Digit(7)) }))
             "btn"        (button("8", |state: &mut State, _| { state.press(Btn::Digit(8)) }))
             "btn"        (button("9", |state: &mut State, _| { state.press(Btn::Digit(9)) }))
-            "btn orange" (button("x", |state: &mut State, _| { state.press(Btn::Op(Op::Mul)) }))
+            "btn orange" (button("×", |state: &mut State, _| { state.press(Btn::Op(Op::Mul)) }))
         ]
         "row" [
             "btn"        (button("4", |state: &mut State, _| { state.press(Btn::Digit(4)) }))
             "btn"        (button("5", |state: &mut State, _| { state.press(Btn::Digit(5)) }))
             "btn"        (button("6", |state: &mut State, _| { state.press(Btn::Digit(6)) }))
-            "btn orange" (button("–", |state: &mut State, _| { state.press(Btn::Op(Op::Sub)) }))
+            "btn orange" (button("−", |state: &mut State, _| { state.press(Btn::Op(Op::Sub)) }))
         ]
         "row" [
             "btn"        (button("1", |state: &mut State, _| { state.press(Btn::Digit(1)) }))
