@@ -1,0 +1,42 @@
+.root {
+    font-family: roboto-regular;
+    font-size: 60px;
+    color:beige;
+    flex-direction: column;
+    background-color: rgb(71, 71, 71);
+}
+
+.display {
+    padding: 50px;
+    min-height: 100px;
+    max-height: 100px;
+}
+
+.row {
+    min-height: 150px;
+}
+
+.btn {
+    flex-direction: row;
+    background-color: rgb(95, 95, 95);
+    border: 1px solid black;
+    border-radius: 20px;
+    margin: 4px;
+    padding: 50px;
+}
+
+.orange {
+    background-color: orange;
+}
+
+.double {
+    flex-grow: 2.0;
+    width: 110px;
+    min-width: 110px;
+}
+
+.triple {
+    flex-grow: 3.0;
+    width: 220px;
+    min-width: 220px;
+}

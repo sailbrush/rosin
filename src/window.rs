@@ -122,7 +122,7 @@ impl<T> RosinWindow<T> {
 
     pub fn click(&mut self, state: &mut T, ctx: &mut EventCtx, position: PhysicalPosition<f64>) -> Stage {
         if let (Some(tree), Some(layout)) = (&mut self.tree_cache, &mut self.layout_cache) {
-            let id = hit_test(layout.borrow_mut(), (position.x as f32, position.y as f32));
+            let id = hit_test(tree.borrow(), layout.borrow_mut(), (position.x as f32, position.y as f32));
             tree.borrow_mut()[id].trigger(On::MouseDown, state, ctx)
         } else {
             Stage::Idle
@@ -217,7 +217,7 @@ impl<T> RosinWindow<T> {
                 width: window_size.width as f32,
                 height: window_size.height as f32,
             };
-            build_layout(&self.temp, tree, layout_size, &mut layout);
+            calc_layout(&self.temp, tree, layout_size, &mut layout);
         }
 
         let layout: &BumpVec<Layout> = self.layout_cache.as_ref().unwrap().borrow();

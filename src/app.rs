@@ -4,7 +4,6 @@ use crate::libloader::LibLoader;
 #[cfg(all(debug_assertions, feature = "hot-reload"))]
 use crate::libloader::DYLIB_EXT;
 
-use crate::layout::hit_test;
 use crate::prelude::*;
 use crate::style::*;
 use crate::window::*;
@@ -52,7 +51,6 @@ pub enum StopTask {
 
 pub struct EventCtx {}
 
-// NOTE: This is a hack until trait aliases stabilize
 /// `Fn(&mut T, Duration) -> (Stage, StopTask)`
 pub trait AnimCallback<T>: 'static + Fn(&mut T, Duration) -> (Stage, StopTask) {}
 impl<F, T> AnimCallback<T> for F where F: 'static + Fn(&mut T, Duration) -> (Stage, StopTask) {}
@@ -110,7 +108,12 @@ impl<T: 'static> AppLauncher<T> {
     // TODO add_anim_task
 
     // Similar to setInterval in JS
-    pub fn add_task(mut self, window_id: Option<WindowId>, frequency: Duration, callback: impl TaskCallback<T>) -> Self {
+    pub fn add_task(
+        mut self,
+        window_id: Option<WindowId>,
+        frequency: Duration,
+        callback: impl Fn(&mut T, &mut EventCtx) -> (Stage, StopTask) + 'static,
+    ) -> Self {
         self.0.add_task(window_id, frequency, callback);
         self
     }
@@ -120,7 +123,6 @@ impl<T: 'static> AppLauncher<T> {
     }
 }
 
-/// The main interface to app-wide functionality.
 pub struct App<T: 'static> {
     event_loop: Option<EventLoop<()>>,
     loader: LibLoader,
@@ -225,7 +227,7 @@ impl<T: 'static> App<T> {
             return Err("[Rosin] No windows".into());
         }
 
-        // TODO - get this working again
+        // TODO - use EventCtx instead of App<T>
         /*#[cfg(debug_assertions)]
         #[allow(unused_mut)]
         self.add_task(None, Duration::from_millis(100), |_: &mut T, app: &mut App<T>| {

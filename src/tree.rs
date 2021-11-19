@@ -168,7 +168,7 @@ impl<T> Node<T> {
     }
 
     /// Register an event callback.
-    pub fn event(mut self, event_type: On, callback: impl EventCallback<T>) -> Self {
+    pub fn event(mut self, event_type: On, callback: impl Fn(&mut T, &mut EventCtx) -> Stage + 'static) -> Self {
         if let Some(callbacks) = &mut self.callbacks {
             callbacks.push((event_type, A.with(|a| a.alloc(callback))));
         }
@@ -182,13 +182,13 @@ impl<T> Node<T> {
     }
 
     /// Register a function to modify this node's style right before redrawing.
-    pub fn style_on_draw(mut self, func: impl StyleCallback<T>) -> Self {
+    pub fn style_on_draw(mut self, func: impl Fn(&T, &mut Style) + 'static) -> Self {
         self.style_on_draw = Some(A.with(|a| a.alloc(func)));
         self
     }
 
     /// Register a function to draw the contents of this node
-    pub fn on_draw(mut self, enable_cache: bool, func: impl DrawCallback<T>) -> Self {
+    pub fn on_draw(mut self, enable_cache: bool, func: impl Fn(&T, &mut DrawCtx) + 'static) -> Self {
         self.on_draw = Some(A.with(|a| a.alloc(func)));
         self.draw_cache_enable = enable_cache;
         self

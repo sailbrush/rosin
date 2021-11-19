@@ -6,51 +6,6 @@ use crate::tree::ArrayNode;
 
 use bumpalo::{collections::Vec as BumpVec, Bump};
 
-impl Style {
-    fn size(&self) -> Size {
-        Size::new(self.width.unwrap_or(0.0), self.height.unwrap_or(0.0))
-    }
-
-    fn min_size(&self) -> Size {
-        Size::new(self.min_width, self.min_height)
-    }
-
-    fn max_size(&self) -> Size {
-        Size::new(self.max_width, self.max_height)
-    }
-
-    fn position(&self) -> Rect {
-        Rect::new(
-            self.top.unwrap_or(0.0),
-            self.right.unwrap_or(0.0),
-            self.bottom.unwrap_or(0.0),
-            self.left.unwrap_or(0.0),
-        )
-    }
-
-    fn margin(&self) -> Rect {
-        Rect::new(
-            self.margin_top.unwrap_or(0.0),
-            self.margin_right.unwrap_or(0.0),
-            self.margin_bottom.unwrap_or(0.0),
-            self.margin_left.unwrap_or(0.0),
-        )
-    }
-
-    fn border(&self) -> Rect {
-        Rect::new(
-            self.border_top_width,
-            self.border_right_width,
-            self.border_bottom_width,
-            self.border_left_width,
-        )
-    }
-
-    fn padding(&self) -> Rect {
-        Rect::new(self.padding_top, self.padding_right, self.padding_bottom, self.padding_left)
-    }
-}
-
 #[derive(Debug)]
 struct FlexItem {
     id: usize,
@@ -107,12 +62,32 @@ impl Default for Layout {
     }
 }
 
-pub(crate) fn hit_test(layout: &mut [Layout], position: (f32, f32)) -> usize {
-    0
+// TODO - doesn't handle absolute positioning
+pub(crate) fn hit_test<T>(tree: &[ArrayNode<T>], layout: &mut [Layout], point: (f32, f32)) -> usize {
+    do_hit_test(tree, layout, point.into(), 0, Point::zero()).unwrap_or(0)
 }
 
-pub(crate) fn build_layout<T>(temp: &Bump, tree: &[ArrayNode<T>], root_size: Size, output: &mut [Layout]) {
-    layout(temp, tree, 0, root_size, output);
+fn do_hit_test<T>(tree: &[ArrayNode<T>], layout: &mut [Layout], point: Point, id: usize, offset: Point) -> Option<usize> {
+    let box_pos = layout[id].position + offset;
+
+    if box_pos.x < point.x
+        && box_pos.x + layout[id].size.width > point.x
+        && box_pos.y < point.y
+        && box_pos.y + layout[id].size.height > point.y
+    {
+        for child_id in tree[id].child_ids() {
+            let found = do_hit_test(tree, layout, point, child_id, box_pos);
+            if found.is_some() {
+                return found;
+            }
+        }
+        return Some(id);
+    }
+    None
+}
+
+pub(crate) fn calc_layout<T>(temp: &Bump, tree: &[ArrayNode<T>], root_size: Size, output: &mut [Layout]) {
+    do_layout(temp, tree, 0, root_size, output);
     output[0] = Layout {
         size: root_size,
         position: Point::zero(),
@@ -135,7 +110,7 @@ fn round_layout<T>(tree: &[ArrayNode<T>], layout: &mut [Layout], id: usize, abs_
     }
 }
 
-fn layout<T>(temp: &Bump, tree: &[ArrayNode<T>], id: usize, size: Size, output: &mut [Layout]) {
+fn do_layout<T>(temp: &Bump, tree: &[ArrayNode<T>], id: usize, size: Size, output: &mut [Layout]) {
     // leaf nodes don't need to do anything
     if tree[id].num_children == 0 {
         return;
@@ -580,7 +555,7 @@ fn layout<T>(temp: &Bump, tree: &[ArrayNode<T>], id: usize, size: Size, output: 
         // TODO - support CSS position
         let layout_item = |item: &mut FlexItem| {
             // Now that we know the final size of an item, layout its children
-            layout(temp, tree, item.id, item.target_size, output);
+            do_layout(temp, tree, item.id, item.target_size, output);
 
             let offset_main = total_offset_main + item.offset_main + item.margin.main_start(dir);
             let offset_cross = total_offset_cross + item.offset_cross + line_offset_cross + item.margin.cross_start(dir);

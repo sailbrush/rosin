@@ -4,46 +4,18 @@ use std::{cell::Cell, fmt::Debug};
 
 use crate::prelude::*;
 
-/*
-// ---------- Example ----------
-#[derive(Debug)]
-pub struct Example<T: 'static> {
-    lens: &'static dyn Lens<In = T, Out = Self>,
-    key: Key,
+// ---------- Button ----------
+#[track_caller]
+pub fn button<T>(text: &'static str, callback: impl Fn(&mut T, &mut EventCtx) -> Stage + 'static) -> Node<T> {
+    label(text).event(On::MouseDown, callback)
 }
-
-impl<T> Example<T> {
-    #[track_caller]
-    pub fn new(lens: impl Lens<In = T, Out = Self>) -> Self {
-        Self {
-            lens: lens.leak(),
-            key: new_key!(),
-        }
-    }
-
-    pub fn view(&self) -> Node<T> {
-        let lens = self.lens;
-        let key = self.key;
-
-        ui!("example" [
-            .key(key)
-            .event(On::MouseDown, move |t: &mut T, _app: &mut App<T>| {
-                let this = lens.get_mut(t);
-                Stage::Paint
-            })
-        ])
-    }
-}
-*/
 
 // ---------- Static Label ----------
-// TODO - need to make one that can be used from inside widgets, because key wont work
+// TODO - need to make one that can be used from inside widgets, because new_key!() might not work
 #[track_caller]
 pub fn label<T>(text: &'static str) -> Node<T> {
-    let key = new_key!();
-
     ui!([
-        .key(key)
+        .key(new_key!())
         .on_draw(true,
             move |_: &T, ctx: &mut DrawCtx| {
                 if !ctx.must_draw { return }
@@ -66,8 +38,8 @@ pub fn label<T>(text: &'static str) -> Node<T> {
                 paint.set_text_align(femtovg::Align::Left);
                 paint.set_text_baseline(femtovg::Baseline::Top);
                 let _ = ctx.canvas.fill_text(
-                    0.0,
-                    0.0,
+                    ctx.style.padding_left,
+                    ctx.style.padding_top,
                     text,
                     paint,
                 );
@@ -104,14 +76,13 @@ impl<T> DynLabel<T> {
 
     pub fn view(&self) -> Node<T> {
         let lens = self.lens;
-        let key = self.key;
 
         ui!("example" [
-            .key(key)
+            .key(self.key)
             .on_draw(false,
                 move |t: &T, ctx: &mut DrawCtx| {
                     let this = lens.get(t);
-                    //if !this.has_changed.get() || !ctx.must_draw { return }
+                    if !this.has_changed.get() && !ctx.must_draw { return }
                     this.has_changed.replace(false);
 
                     let font_family = ctx.style.font_family;
@@ -132,8 +103,8 @@ impl<T> DynLabel<T> {
                     paint.set_text_align(femtovg::Align::Left);
                     paint.set_text_baseline(femtovg::Baseline::Top);
                     let _ = ctx.canvas.fill_text(
-                        0.0,
-                        0.0,
+                        ctx.style.padding_left,
+                        ctx.style.padding_top,
                         &this.text,
                         paint,
                     );
@@ -171,10 +142,9 @@ impl<T> Slider<T> {
 
     pub fn view(&self) -> Node<T> {
         let lens = self.lens;
-        let key = self.key;
 
         ui!("slider" [
-            .key(key)
+            .key(self.key)
             .on_draw(true,
                 move |t: &T, _ctx: &mut DrawCtx| {
                     let _this = lens.get(t);
@@ -218,11 +188,8 @@ impl<T> TextBox<T> {
     }
 
     pub fn view(&self) -> Node<T> {
-        let lens = self.lens;
-        let key = self.key;
-
         ui!("text-box" [
-            .key(key)
+            .key(self.key)
             .style_on_draw(move |_: &T, s: &mut Style| s.min_height = s.min_height.max(s.font_size))
         ])
     }

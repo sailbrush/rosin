@@ -1,45 +1,7 @@
 .root {
-    display:flex;
-    height: 100%;
-    width: 100%;
-    flex-grow: 1.0;
     font-family: roboto-regular;
     font-size: 60px;
     color:beige;
-
-    flex-direction: column;
     background-color: rgb(71, 71, 71);
-}
-
-.display {
-    flex-grow: 1.0;
-    padding: 50px;
-}
-
-.first {
-    display:flex;
-    flex-grow:1.0;
-    border: 1px solid red;
-}
-
-.btn {
-    display:flex;
-    flex-grow:1.0;
-
-    flex-direction: row;
-    justify-content: center;
-    background-color: rgb(95, 95, 95);
-    border: 1px solid black;
-    border-radius: 20px;
-    margin: 4px;
-    padding: 50px;
-}
-
-.center {
-    border: 1px solid blue;
-    min-height: 20px;
-    min-width: 20px;
-    max-width: 20px;
-    margin:auto;
-    align-self:center;
+    padding: 60px;
 }

@@ -3,47 +3,24 @@
 use rosin::prelude::*;
 use rosin::widgets::*;
 
-#[derive(Debug)]
 pub struct State {
     display: DynLabel<State>,
 }
 
 pub fn main_view(state: &State) -> Node<State> {
     ui!("root" [
-        {.event(On::MouseDown, |state: &mut State, _: &mut EventCtx| {
-            state.display.set_text("Yo"); Stage::Draw })
-        }
-            "first" [
-                (state.display.view())
-            ]
-
+        (state.display.view())
     ])
 }
 
-//for _ in 0..10 {
-/*"second" [
-    .on_draw(true, move |_: &State, ctx: &mut DrawCtx| {
-        if !ctx.must_draw { return }
-
-        let fill_paint = Paint::color(Color::hex("00ff00"));
-        let mut path = Path::new();
-        path.move_to(0.0, 0.0);
-        path.line_to(100.0, 100.0);
-
-        ctx.canvas.fill_path(&mut path, fill_paint);
-    })
-]*/
-//(label("Hi"))
-//}
-
 fn main() {
     let state = State {
-        display: DynLabel::new(lens!(State => display), "Hello"),
+        display: DynLabel::new(lens!(State => display), "Hello World!"),
     };
 
     let view = new_view!(main_view);
     let stylesheet = new_style!("examples/min.css");
-    let window = WindowDesc::new(view).with_title("Rosin Window").with_size(650.0, 650.0);
+    let window = WindowDesc::new(view).with_title("Rosin Window").with_size(500.0, 500.0);
 
     AppLauncher::default()
         .use_style(stylesheet)

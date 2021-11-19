@@ -89,6 +89,15 @@ pub struct Size {
     pub height: f32,
 }
 
+impl From<(f32, f32)> for Size {
+    fn from(other: (f32, f32)) -> Self {
+        Self {
+            width: other.0,
+            height: other.1,
+        }
+    }
+}
+
 impl Add for Size {
     type Output = Self;
 
@@ -189,6 +198,12 @@ impl Size {
 pub struct Point {
     pub x: f32,
     pub y: f32,
+}
+
+impl From<(f32, f32)> for Point {
+    fn from(other: (f32, f32)) -> Self {
+        Self { x: other.0, y: other.1 }
+    }
 }
 
 impl Add for Point {

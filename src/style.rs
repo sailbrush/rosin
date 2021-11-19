@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 #![allow(clippy::cognitive_complexity)]
 
+use crate::geometry::*;
 use crate::parser::*;
 use crate::tree::*;
 
@@ -500,6 +501,51 @@ impl Default for Style {
             width: None,
             z_index: 0,
         }
+    }
+}
+
+impl Style {
+    pub fn size(&self) -> Size {
+        Size::new(self.width.unwrap_or(0.0), self.height.unwrap_or(0.0))
+    }
+
+    pub fn min_size(&self) -> Size {
+        Size::new(self.min_width, self.min_height)
+    }
+
+    pub fn max_size(&self) -> Size {
+        Size::new(self.max_width, self.max_height)
+    }
+
+    pub fn position(&self) -> Rect {
+        Rect::new(
+            self.top.unwrap_or(0.0),
+            self.right.unwrap_or(0.0),
+            self.bottom.unwrap_or(0.0),
+            self.left.unwrap_or(0.0),
+        )
+    }
+
+    pub fn margin(&self) -> Rect {
+        Rect::new(
+            self.margin_top.unwrap_or(0.0),
+            self.margin_right.unwrap_or(0.0),
+            self.margin_bottom.unwrap_or(0.0),
+            self.margin_left.unwrap_or(0.0),
+        )
+    }
+
+    pub fn border(&self) -> Rect {
+        Rect::new(
+            self.border_top_width,
+            self.border_right_width,
+            self.border_bottom_width,
+            self.border_left_width,
+        )
+    }
+
+    pub fn padding(&self) -> Rect {
+        Rect::new(self.padding_top, self.padding_right, self.padding_bottom, self.padding_left)
     }
 }
 
