@@ -94,11 +94,9 @@ impl State {
                 }
             }
             Btn::Decimal => {
-                if self.operation.is_some() {
-                    self.register = 0.0;
-                }
                 if let Mode::Result = self.mode {
                     self.accumulator = 0.0;
+                    self.register = 0.0;
                 }
                 self.mode = Mode::DecimalEntry(1);
             }
