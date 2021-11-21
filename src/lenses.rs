@@ -29,13 +29,13 @@ pub trait Lens: Debug {
 // ---------- SingleLens ----------
 #[doc(hidden)]
 pub struct SingleLens<A, B> {
-    get: fn(&A) -> &B,
+    get_ref: fn(&A) -> &B,
     get_mut: fn(&mut A) -> &mut B,
 }
 
 impl<A, B> SingleLens<A, B> {
-    pub fn new(get: fn(&A) -> &B, get_mut: fn(&mut A) -> &mut B) -> Self {
-        Self { get, get_mut }
+    pub fn new(get_ref: fn(&A) -> &B, get_mut: fn(&mut A) -> &mut B) -> Self {
+        Self { get_ref, get_mut }
     }
 }
 
@@ -63,7 +63,7 @@ impl<A, B> Lens for SingleLens<A, B> {
     type Out = B;
 
     fn get_ref<'a>(&self, obj: &'a A) -> &'a B {
-        (self.get)(obj)
+        (self.get_ref)(obj)
     }
 
     fn get_mut<'a>(&self, obj: &'a mut A) -> &'a mut B {
@@ -101,7 +101,7 @@ where
     Y: Lens + Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "CompoundLens({} => {} => {})", self.lhs, self.rhs, any::type_name::<Y::Out>())
+        write!(f, "Lens({} => {} => {})", self.lhs, self.rhs, any::type_name::<Y::Out>())
     }
 }
 
