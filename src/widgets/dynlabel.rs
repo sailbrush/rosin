@@ -6,41 +6,38 @@ use crate::prelude::*;
 
 // ---------- Dynamic Label ----------
 #[derive(Debug)]
-pub struct DynLabel<T: 'static> {
-    lens: &'static dyn Lens<In = T, Out = Self>,
+pub struct DynLabel {
     key: Key,
     text: String,
-    has_changed: Cell<bool>,
+    changed: Cell<bool>,
 }
 
-impl<T> DynLabel<T> {
+impl DynLabel {
     #[track_caller]
-    pub fn new(lens: impl Lens<In = T, Out = Self>, text: &str) -> Self {
+    pub fn new(text: &str) -> Self {
         Self {
-            lens: lens.leak(),
             key: new_key!(),
             text: text.to_owned(),
-            has_changed: Cell::new(false),
+            changed: Cell::new(false),
         }
     }
 
     pub fn set_text(&mut self, new_text: &str) -> Stage {
         self.text.clear();
         self.text.push_str(new_text);
-        self.has_changed.replace(true);
+        self.changed.replace(true);
         Stage::Draw
     }
 
-    pub fn view(&self) -> Node<T> {
-        let lens = self.lens;
-
+    // We construct the lens each time we view the widget to avoid storing references in the tree.
+    pub fn view<T>(&self, lens: impl Lens<In = T, Out = Self> + 'static) -> Node<T> {
         ui!([
             .key(self.key)
             .on_draw(false,
                 move |t: &T, ctx: &mut DrawCtx| {
                     let this = lens.get(t);
-                    if !this.has_changed.get() && !ctx.must_draw { return }
-                    this.has_changed.replace(false);
+                    if !this.changed.get() && !ctx.must_draw { return }
+                    this.changed.replace(false);
 
                     let font_family = ctx.style.font_family;
                     let (_, font_id) = ctx.font_table

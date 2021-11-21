@@ -24,7 +24,6 @@ pub trait Lens: Debug {
 
     fn get<'a>(&self, obj: &'a Self::In) -> &'a Self::Out;
     fn get_mut<'a>(&self, obj: &'a mut Self::In) -> &'a mut Self::Out;
-    fn leak(self) -> &'static dyn Lens<In = Self::In, Out = Self::Out>;
 }
 
 // ---------- SingleLens ----------
@@ -69,10 +68,6 @@ impl<A, B> Lens for SingleLens<A, B> {
 
     fn get_mut<'a>(&self, obj: &'a mut A) -> &'a mut B {
         (self.get_mut)(obj)
-    }
-
-    fn leak(self) -> &'static dyn Lens<In = A, Out = B> {
-        Box::leak(Box::new(self))
     }
 }
 
@@ -135,9 +130,5 @@ where
 
     fn get_mut<'a>(&self, obj: &'a mut Self::In) -> &'a mut Self::Out {
         self.rhs.get_mut(self.lhs.get_mut(obj))
-    }
-
-    fn leak(self) -> &'static dyn Lens<In = A, Out = C> {
-        Box::leak(Box::new(self))
     }
 }

@@ -4,18 +4,18 @@ use rosin::prelude::*;
 use rosin::widgets::*;
 
 pub struct State {
-    display: DynLabel<State>,
+    display: DynLabel,
 }
 
 pub fn main_view(state: &State) -> Node<State> {
     ui!("root" [
-        (state.display.view())
+        (state.display.view(lens!(State => display)))
     ])
 }
 
 fn main() {
     let state = State {
-        display: DynLabel::new(lens!(State => display), "Hello World!"),
+        display: DynLabel::new("Hello World!"),
     };
 
     let view = new_view!(main_view);
