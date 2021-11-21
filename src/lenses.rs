@@ -12,7 +12,7 @@ macro_rules! lens {
         SingleLens::new(|obj: &$obj_type| { &obj.$($path)* }, |obj: &mut $obj_type| { &mut obj.$($path)* })
     };
     ($first_lens:expr, $obj_type:ty => $($path:tt)*) => {
-        CompoundLens::new($first_lens, SingleLens::new(|obj: &$obj_type| { &obj.$($path)* }, |obj: &mut $obj_type| { &mut obj.$($path)* }))
+        CompoundLens::new($first_lens, lens!($obj_type => $($path)*))
     };
 }
 
@@ -22,7 +22,7 @@ pub trait Lens: Debug {
     type In;
     type Out;
 
-    fn get<'a>(&self, obj: &'a Self::In) -> &'a Self::Out;
+    fn get_ref<'a>(&self, obj: &'a Self::In) -> &'a Self::Out;
     fn get_mut<'a>(&self, obj: &'a mut Self::In) -> &'a mut Self::Out;
 }
 
@@ -62,7 +62,7 @@ impl<A, B> Lens for SingleLens<A, B> {
     type In = A;
     type Out = B;
 
-    fn get<'a>(&self, obj: &'a A) -> &'a B {
+    fn get_ref<'a>(&self, obj: &'a A) -> &'a B {
         (self.get)(obj)
     }
 
@@ -124,8 +124,8 @@ where
     type In = X::In;
     type Out = Y::Out;
 
-    fn get<'a>(&self, obj: &'a Self::In) -> &'a Self::Out {
-        self.rhs.get(self.lhs.get(obj))
+    fn get_ref<'a>(&self, obj: &'a Self::In) -> &'a Self::Out {
+        self.rhs.get_ref(self.lhs.get_ref(obj))
     }
 
     fn get_mut<'a>(&self, obj: &'a mut Self::In) -> &'a mut Self::Out {

@@ -34,7 +34,7 @@ impl DynLabel {
         ui!([
             .key(self.key)
             .on_draw(false, move |t: &T, ctx: &mut DrawCtx| {
-                let this = lens.get(t);
+                let this = lens.get_ref(t);
                 if !this.changed.get() && !ctx.must_draw { return }
                 this.changed.replace(false);
 
