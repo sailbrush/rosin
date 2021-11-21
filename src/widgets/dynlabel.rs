@@ -30,39 +30,38 @@ impl DynLabel {
     }
 
     // We construct the lens each time we view the widget to avoid storing references in the tree.
-    pub fn view<T>(&self, lens: impl Lens<In = T, Out = Self> + 'static) -> Node<T> {
+    pub fn view<T>(&self, lens: impl Lens<In = T, Out = Self> + Copy + 'static) -> Node<T> {
         ui!([
             .key(self.key)
-            .on_draw(false,
-                move |t: &T, ctx: &mut DrawCtx| {
-                    let this = lens.get(t);
-                    if !this.changed.get() && !ctx.must_draw { return }
-                    this.changed.replace(false);
+            .on_draw(false, move |t: &T, ctx: &mut DrawCtx| {
+                let this = lens.get(t);
+                if !this.changed.get() && !ctx.must_draw { return }
+                this.changed.replace(false);
 
-                    let font_family = ctx.style.font_family;
-                    let (_, font_id) = ctx.font_table
-                        .iter()
-                        .find(|(name, _)| *name == font_family)
-                        .expect("[Rosin] Font not found");
+                let font_family = ctx.style.font_family;
+                let (_, font_id) = ctx.font_table
+                    .iter()
+                    .find(|(name, _)| *name == font_family)
+                    .expect("[Rosin] Font not found");
 
-                    let font_color = ctx.style.color;
-                    let mut paint = Paint::color(femtovg::Color::rgba(
-                        font_color.red,
-                        font_color.green,
-                        font_color.blue,
-                        font_color.alpha,
-                    ));
-                    paint.set_font_size(ctx.style.font_size);
-                    paint.set_font(&[*font_id]);
-                    paint.set_text_align(femtovg::Align::Left);
-                    paint.set_text_baseline(femtovg::Baseline::Top);
-                    let _ = ctx.canvas.fill_text(
-                        ctx.style.padding_left,
-                        ctx.style.padding_top,
-                        &this.text,
-                        paint,
-                    );
-                })
+                let font_color = ctx.style.color;
+                let mut paint = Paint::color(femtovg::Color::rgba(
+                    font_color.red,
+                    font_color.green,
+                    font_color.blue,
+                    font_color.alpha,
+                ));
+                paint.set_font_size(ctx.style.font_size);
+                paint.set_font(&[*font_id]);
+                paint.set_text_align(femtovg::Align::Left);
+                paint.set_text_baseline(femtovg::Baseline::Top);
+                let _ = ctx.canvas.fill_text(
+                    ctx.style.padding_left,
+                    ctx.style.padding_top,
+                    &this.text,
+                    paint,
+                );
+            })
         ])
     }
 }

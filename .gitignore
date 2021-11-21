@@ -3,3 +3,4 @@
 Cargo.lock
 /.vscode
 tarpaulin-report.html
+.DS_Store
