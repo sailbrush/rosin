@@ -77,22 +77,20 @@ impl State {
                 self.register = 0.0;
                 self.display.set_text("0");
             }
-            Btn::Sign => {
-                match self.mode {
-                    Mode::Entry => {
-                        self.register *= -1.0;
-                        self.display.set_text(&self.register.to_string());
-                    }
-                    Mode::DecimalEntry(precision) => {
-                        self.register *= -1.0;
-                        self.display.set_text(&format!("{:.*}", precision as usize, self.register));
-                    }
-                    Mode::Result => {
-                        self.accumulator *= -1.0;
-                        self.display.set_text(&self.accumulator.to_string());
-                    }
+            Btn::Sign => match self.mode {
+                Mode::Entry => {
+                    self.register *= -1.0;
+                    self.display.set_text(&self.register.to_string());
                 }
-            }
+                Mode::DecimalEntry(precision) => {
+                    self.register *= -1.0;
+                    self.display.set_text(&format!("{:.*}", precision as usize, self.register));
+                }
+                Mode::Result => {
+                    self.accumulator *= -1.0;
+                    self.display.set_text(&self.accumulator.to_string());
+                }
+            },
             Btn::Decimal => {
                 if let Mode::Result = self.mode {
                     self.accumulator = 0.0;
