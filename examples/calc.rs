@@ -34,7 +34,7 @@ enum Btn {
 }
 
 impl State {
-    fn press(&mut self, button: Btn) -> Stage {
+    fn press(&mut self, button: Btn) -> Phase {
         match button {
             Btn::Digit(val) => {
                 let mut precision = 0;
@@ -53,7 +53,7 @@ impl State {
                         self.mode = Mode::Entry;
                     }
                 }
-                self.display.set_text(&format!("{:.*}", precision as usize, self.register));
+                self.display.set_text(&format!("{:.*}", precision as usize, self.register))
             }
             Btn::Op(op) => {
                 if let Some(prev_op) = &self.operation {
@@ -69,26 +69,27 @@ impl State {
                 self.operation = Some(op);
                 self.register = 0.0;
                 self.mode = Mode::Entry;
+                Phase::Draw
             }
             Btn::Clear => {
                 self.mode = Mode::Entry;
                 self.operation = None;
                 self.accumulator = 0.0;
                 self.register = 0.0;
-                self.display.set_text("0");
+                self.display.set_text("0")
             }
             Btn::Sign => match self.mode {
                 Mode::Entry => {
                     self.register *= -1.0;
-                    self.display.set_text(&self.register.to_string());
+                    self.display.set_text(&self.register.to_string())
                 }
                 Mode::DecimalEntry(precision) => {
                     self.register *= -1.0;
-                    self.display.set_text(&format!("{:.*}", precision as usize, self.register));
+                    self.display.set_text(&format!("{:.*}", precision as usize, self.register))
                 }
                 Mode::Result => {
                     self.accumulator *= -1.0;
-                    self.display.set_text(&self.accumulator.to_string());
+                    self.display.set_text(&self.accumulator.to_string())
                 }
             },
             Btn::Decimal => {
@@ -97,6 +98,7 @@ impl State {
                     self.register = 0.0;
                 }
                 self.mode = Mode::DecimalEntry(1);
+                Phase::Draw
             }
             Btn::Equals => {
                 if let Some(prev_op) = &self.operation {
@@ -110,10 +112,9 @@ impl State {
                     self.accumulator = self.register
                 }
                 self.mode = Mode::Result;
-                self.display.set_text(&self.accumulator.to_string());
+                self.display.set_text(&self.accumulator.to_string())
             }
         }
-        Stage::Draw
     }
 }
 

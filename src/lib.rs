@@ -30,7 +30,7 @@ pub mod widgets;
 /// The public API
 pub mod prelude {
     pub use crate::app::{
-        AnimCallback, App, AppLauncher, DrawCallback, EventCallback, EventCtx, On, Stage, StopTask, StyleCallback, TaskCallback,
+        AnimCallback, App, AppLauncher, DrawCallback, EventCallback, EventCtx, On, Phase, StopTask, StyleCallback, TaskCallback,
         ViewCallback,
     };
     pub use crate::key::Key;

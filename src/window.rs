@@ -45,7 +45,7 @@ pub(crate) struct RosinWindow<T: 'static> {
     windowed_context: WindowedContext<PossiblyCurrent>,
     canvas: Canvas<OpenGl>,
     view: View<T>,
-    stage: Stage,
+    phase: Phase,
     tree_cache: Option<Scope<BumpVec<'static, ArrayNode<T>>>>,
     layout_cache: Option<Scope<BumpVec<'static, Layout>>>,
     temp: Bump,
@@ -75,7 +75,7 @@ impl<T> RosinWindow<T> {
             windowed_context,
             canvas,
             view: desc.view,
-            stage: Stage::Build,
+            phase: Phase::Build,
             tree_cache: None,
             layout_cache: None,
             temp: Bump::new(),
@@ -105,27 +105,27 @@ impl<T> RosinWindow<T> {
         Ok(())
     }
 
-    pub fn update_stage(&mut self, new_stage: Stage) {
-        self.stage = self.stage.max(new_stage);
-        if new_stage != Stage::Idle {
+    pub fn update_phase(&mut self, new_phase: Phase) {
+        self.phase = self.phase.max(new_phase);
+        if new_phase != Phase::Idle {
             self.windowed_context.window().request_redraw();
         }
     }
 
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
-            self.update_stage(Stage::Layout);
+            self.update_phase(Phase::Layout);
 
             self.windowed_context.resize(new_size);
         }
     }
 
-    pub fn click(&mut self, state: &mut T, ctx: &mut EventCtx, position: PhysicalPosition<f64>) -> Stage {
+    pub fn click(&mut self, state: &mut T, ctx: &mut EventCtx, position: PhysicalPosition<f64>) -> Phase {
         if let (Some(tree), Some(layout)) = (&mut self.tree_cache, &mut self.layout_cache) {
             let id = hit_test(tree.borrow(), layout.borrow_mut(), (position.x as f32, position.y as f32));
             tree.borrow_mut()[id].trigger(On::MouseDown, state, ctx)
         } else {
-            Stage::Idle
+            Phase::Idle
         }
     }
 
@@ -138,7 +138,7 @@ impl<T> RosinWindow<T> {
         let dpi_factor = self.windowed_context.window().scale_factor();
 
         // ---------- Rebuild window tree ----------
-        if self.stage == Stage::Build || self.tree_cache.is_none() {
+        if self.phase == Phase::Build || self.tree_cache.is_none() {
             self.reset_cache(loader);
 
             #[cfg(not(all(debug_assertions, feature = "hot-reload")))]
@@ -186,7 +186,7 @@ impl<T> RosinWindow<T> {
 
         // Stash default styles, and run style callbacks
         let mut default_styles: BumpVec<(usize, Style)> = BumpVec::new_in(&self.temp);
-        if self.stage != Stage::Idle {
+        if self.phase != Phase::Idle {
             for (id, node) in tree.iter_mut().enumerate() {
                 if let Some(modify_style) = &mut node.style_on_draw {
                     default_styles.push((id, node.style.clone()));
@@ -196,7 +196,7 @@ impl<T> RosinWindow<T> {
         }
 
         // ---------- Recalculate layout ----------
-        if self.stage >= Stage::Layout || self.layout_cache.is_none() {
+        if self.phase >= Phase::Layout || self.layout_cache.is_none() {
             if self.layout_cache.is_none() {
                 let new_layout = A.with(|a| unsafe {
                     // SAFETY: This is safe because we meet scope()'s requirements
@@ -223,7 +223,7 @@ impl<T> RosinWindow<T> {
         let layout: &BumpVec<Layout> = self.layout_cache.as_ref().unwrap().borrow();
 
         // ---------- Render ----------
-        // TODO - If stage == Idle, re-issue commands from last frame
+        // TODO - If phase == Idle, re-issue commands from last frame
         self.canvas
             .set_size(window_size.width as u32, window_size.height as u32, dpi_factor as f32);
         self.canvas
@@ -235,7 +235,7 @@ impl<T> RosinWindow<T> {
         self.windowed_context.swap_buffers().unwrap();
 
         // ---------- Cleanup ----------
-        self.stage = Stage::Idle;
+        self.phase = Phase::Idle;
 
         // Restore default styles
         for (id, style) in default_styles {

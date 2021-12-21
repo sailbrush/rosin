@@ -22,11 +22,11 @@ impl DynLabel {
         }
     }
 
-    pub fn set_text(&mut self, new_text: &str) -> Stage {
+    pub fn set_text(&mut self, new_text: &str) -> Phase {
         self.text.clear();
         self.text.push_str(new_text);
         self.changed.replace(true);
-        Stage::Draw
+        Phase::Draw
     }
 
     // We construct the lens each time we view the widget to avoid storing references in the tree.

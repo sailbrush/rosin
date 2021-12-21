@@ -34,8 +34,9 @@ pub enum On {
 }
 
 /// A return type for callbacks to signal which render stage to skip to.
+#[must_use]
 #[derive(Debug, Copy, PartialEq, Eq, PartialOrd, Ord, Clone)]
-pub enum Stage {
+pub enum Phase {
     Idle = 0,
     Draw = 1,
     Layout = 2,
@@ -52,24 +53,24 @@ pub enum StopTask {
 pub struct EventCtx {}
 
 /// `Fn(&mut T, Duration) -> (Stage, StopTask)`
-pub trait AnimCallback<T>: 'static + Fn(&mut T, Duration) -> (Stage, StopTask) {}
-impl<F, T> AnimCallback<T> for F where F: 'static + Fn(&mut T, Duration) -> (Stage, StopTask) {}
+pub trait AnimCallback<T>: 'static + Fn(&mut T, Duration) -> (Phase, StopTask) {}
+impl<F, T> AnimCallback<T> for F where F: 'static + Fn(&mut T, Duration) -> (Phase, StopTask) {}
 
 /// `Fn(&T, &mut DrawCtx)`
 pub trait DrawCallback<T>: 'static + Fn(&T, &mut DrawCtx) {}
 impl<F, T> DrawCallback<T> for F where F: 'static + Fn(&T, &mut DrawCtx) {}
 
 /// `Fn(&mut T, &mut App<T>) -> Stage`
-pub trait EventCallback<T>: 'static + Fn(&mut T, &mut EventCtx) -> Stage {}
-impl<F, T> EventCallback<T> for F where F: 'static + Fn(&mut T, &mut EventCtx) -> Stage {}
+pub trait EventCallback<T>: 'static + Fn(&mut T, &mut EventCtx) -> Phase {}
+impl<F, T> EventCallback<T> for F where F: 'static + Fn(&mut T, &mut EventCtx) -> Phase {}
 
 /// `Fn(&T, &mut Style)`
 pub trait StyleCallback<T>: 'static + Fn(&T, &mut Style) {}
 impl<F, T> StyleCallback<T> for F where F: 'static + Fn(&T, &mut Style) {}
 
 /// `Fn(&mut T, &mut App<T>) -> (Stage, StopTask)`
-pub trait TaskCallback<T>: 'static + Fn(&mut T, &mut EventCtx) -> (Stage, StopTask) {}
-impl<F, T> TaskCallback<T> for F where F: 'static + Fn(&mut T, &mut EventCtx) -> (Stage, StopTask) {}
+pub trait TaskCallback<T>: 'static + Fn(&mut T, &mut EventCtx) -> (Phase, StopTask) {}
+impl<F, T> TaskCallback<T> for F where F: 'static + Fn(&mut T, &mut EventCtx) -> (Phase, StopTask) {}
 
 pub type ViewCallback<T> = fn(&T) -> Node<T>;
 
@@ -112,7 +113,7 @@ impl<T: 'static> AppLauncher<T> {
         mut self,
         window_id: Option<WindowId>,
         frequency: Duration,
-        callback: impl Fn(&mut T, &mut EventCtx) -> (Stage, StopTask) + 'static,
+        callback: impl Fn(&mut T, &mut EventCtx) -> (Phase, StopTask) + 'static,
     ) -> Self {
         self.0.add_task(window_id, frequency, callback);
         self
@@ -269,22 +270,22 @@ impl<T: 'static> App<T> {
                 mem::swap(&mut self.tasks, &mut active_tasks);
 
                 let mut next_update = Instant::now() + Duration::from_secs(3600);
-                let mut new_stage = Stage::Idle;
+                let mut new_phase = Phase::Idle;
 
                 // TODO - save next_update, and only loop through tasks if one is due for update
                 for (i, task) in active_tasks.iter_mut().enumerate() {
                     if Instant::now().duration_since(task.last_run) >= task.frequency {
                         task.last_run = Instant::now();
-                        let (stage, stoptask) = (task.callback)(&mut state, &mut event_ctx);
+                        let (phase, stoptask) = (task.callback)(&mut state, &mut event_ctx);
                         if let Some(window_id) = task.window_id {
                             self.windows
                                 .iter_mut()
                                 .find(|(id, _)| *id == window_id)
                                 .expect("[Rosin] Window not found") // TODO - should log an error and continue - need to do an audit to remove panics
                                 .1
-                                .update_stage(stage);
+                                .update_phase(phase);
                         } else {
-                            new_stage = new_stage.max(stage);
+                            new_phase = new_phase.max(phase);
                         }
 
                         if stoptask == StopTask::Yes {
@@ -303,7 +304,7 @@ impl<T: 'static> App<T> {
                 self.tasks.append(&mut active_tasks);
 
                 for (_, window) in self.windows.iter_mut() {
-                    window.update_stage(new_stage);
+                    window.update_phase(new_phase);
                 }
 
                 *control_flow = ControlFlow::WaitUntil(next_update);
@@ -325,7 +326,7 @@ impl<T: 'static> App<T> {
                             ..
                         } => {
                             if button == MouseButton::Left && elem_state == ElementState::Pressed {
-                                let new_stage = self
+                                let new_phase = self
                                     .windows
                                     .iter_mut()
                                     .find(|(id, _)| *id == window_id)
@@ -334,7 +335,7 @@ impl<T: 'static> App<T> {
                                     .click(&mut state, &mut event_ctx, self.mouse_pos);
 
                                 for (_, window) in self.windows.iter_mut() {
-                                    window.update_stage(new_stage);
+                                    window.update_phase(new_phase);
                                 }
                             }
                         }

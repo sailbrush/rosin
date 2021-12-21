@@ -104,14 +104,14 @@ impl<T> ArrayNode<T> {
     }
 
     // TODO
-    pub(crate) fn trigger(&mut self, event_type: On, state: &mut T, ctx: &mut EventCtx) -> Stage {
-        let mut stage = Stage::Idle;
+    pub(crate) fn trigger(&mut self, event_type: On, state: &mut T, ctx: &mut EventCtx) -> Phase {
+        let mut phase = Phase::Idle;
         for (et, callback) in &mut self.callbacks {
             if *et == event_type {
-                stage = stage.max((callback)(state, ctx));
+                phase = phase.max((callback)(state, ctx));
             }
         }
-        stage
+        phase
     }
 }
 
@@ -168,7 +168,7 @@ impl<T> Node<T> {
     }
 
     /// Register an event callback.
-    pub fn event(mut self, event_type: On, callback: impl Fn(&mut T, &mut EventCtx) -> Stage + 'static) -> Self {
+    pub fn event(mut self, event_type: On, callback: impl Fn(&mut T, &mut EventCtx) -> Phase + 'static) -> Self {
         if let Some(callbacks) = &mut self.callbacks {
             callbacks.push((event_type, A.with(|a| a.alloc(callback))));
         }
