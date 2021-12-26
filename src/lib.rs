@@ -36,7 +36,7 @@ pub mod prelude {
     pub use crate::key::Key;
     pub use crate::lenses::{CompoundLens, Lens, SingleLens};
     pub use crate::render::DrawCtx;
-    pub use crate::style::{Style, Stylesheet};
+    pub use crate::style::{Style, Stylesheet, SheetId};
     pub use crate::tree::Node;
     pub use crate::view::View;
     pub use crate::window::WindowDesc;

@@ -188,7 +188,7 @@ impl<T> RosinWindow<T> {
         let mut default_styles: BumpVec<(usize, Style)> = BumpVec::new_in(&self.temp);
         if self.phase != Phase::Idle {
             for (id, node) in tree.iter_mut().enumerate() {
-                if let Some(modify_style) = &mut node.style_on_draw {
+                if let Some(modify_style) = &mut node.style_callback {
                     default_styles.push((id, node.style.clone()));
                     modify_style(state, &mut node.style);
                 }

@@ -84,9 +84,10 @@ pub(crate) struct ArrayNode<T: 'static> {
     pub _key: Option<Key>, // TODO
     pub classes: BumpVec<'static, &'static str>,
     pub callbacks: BumpVec<'static, (On, &'static mut dyn EventCallback<T>)>,
+    pub style_sheet_id: SheetId,
     pub style: Style,
-    pub style_on_draw: Option<&'static mut dyn StyleCallback<T>>,
-    pub on_draw: Option<&'static mut dyn DrawCallback<T>>,
+    pub style_callback: Option<&'static mut dyn StyleCallback<T>>,
+    pub draw_callback: Option<&'static mut dyn DrawCallback<T>>,
     pub _draw_cache_enable: bool, // TODO
     pub parent: usize,
     pub num_children: usize,
@@ -120,8 +121,9 @@ pub struct Node<T: 'static> {
     key: Option<Key>,
     classes: Option<BumpVec<'static, &'static str>>,
     callbacks: Option<BumpVec<'static, (On, &'static mut dyn EventCallback<T>)>>,
-    style_on_draw: Option<&'static mut dyn StyleCallback<T>>,
-    on_draw: Option<&'static mut dyn DrawCallback<T>>,
+    style_sheet_id: SheetId,
+    style_callback: Option<&'static mut dyn StyleCallback<T>>,
+    draw_callback: Option<&'static mut dyn DrawCallback<T>>,
     draw_cache_enable: bool,
     size: usize,
     num_children: usize,
@@ -137,8 +139,9 @@ impl<T> Default for Node<T> {
             key: None,
             classes: Some(A.with(|a| a.vec())),
             callbacks: Some(A.with(|a| a.vec())),
-            style_on_draw: None,
-            on_draw: None,
+            style_sheet_id: SheetId::None,
+            style_callback: None,
+            draw_callback: None,
             draw_cache_enable: false,
             size: 1,
             num_children: 0,
@@ -175,13 +178,13 @@ impl<T> Node<T> {
 
     /// Register a function to modify this node's style right before redrawing.
     pub fn style_on_draw(mut self, func: impl Fn(&T, &mut Style) + 'static) -> Self {
-        self.style_on_draw = Some(A.with(|a| a.alloc(func)));
+        self.style_callback = Some(A.with(|a| a.alloc(func)));
         self
     }
 
     /// Register a function to draw the contents of this node
     pub fn on_draw(mut self, enable_cache: bool, func: impl Fn(&T, &mut DrawCtx) + 'static) -> Self {
-        self.on_draw = Some(A.with(|a| a.alloc(func)));
+        self.draw_callback = Some(A.with(|a| a.alloc(func)));
         self.draw_cache_enable = enable_cache;
         self
     }
@@ -215,9 +218,10 @@ impl<T> Node<T> {
                 _key: curr_node.key,
                 classes: curr_node.classes.take()?,
                 callbacks: curr_node.callbacks.take()?,
+                style_sheet_id: curr_node.style_sheet_id,
                 style: Style::default(),
-                style_on_draw: curr_node.style_on_draw.take(),
-                on_draw: std::mem::take(&mut curr_node.on_draw),
+                style_callback: curr_node.style_callback.take(),
+                draw_callback: std::mem::take(&mut curr_node.draw_callback),
                 _draw_cache_enable: curr_node.draw_cache_enable,
                 parent,
                 num_children: curr_node.num_children,

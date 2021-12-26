@@ -5,9 +5,16 @@ use crate::geometry::*;
 use crate::parser::*;
 use crate::tree::*;
 
+use std::num::NonZeroU32;
 use std::{cmp::Ordering, error::Error, fs, time::SystemTime};
 
 use cssparser::{Parser, ParserInput, RuleListParser, RGBA};
+
+#[derive(Debug, Clone, Copy)]
+pub enum SheetId {
+    None,
+    Id(NonZeroU32),
+}
 
 /// Load a CSS file. In debug builds, the file will be reloaded when changed.
 #[macro_export]

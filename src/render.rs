@@ -60,7 +60,7 @@ fn render_node<T>(
         canvas.stroke_path(&mut path, border_paint);
 
         // Call on_draw()
-        if let Some(on_draw) = &tree[id].on_draw {
+        if let Some(on_draw) = &tree[id].draw_callback {
             canvas.translate(
                 layout[id].position.x + offset.0 + style.border_left_width,
                 layout[id].position.y + offset.1 + style.border_top_width,
