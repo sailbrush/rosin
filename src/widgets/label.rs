@@ -4,10 +4,8 @@ use crate::prelude::*;
 
 // ---------- Static Label ----------
 // TODO - need to make one that can be used from inside widgets, because new_key!() might not work
-#[track_caller]
 pub fn label<T>(text: &'static str) -> Node<T> {
     ui!([
-        .key(new_key!())
         .on_draw(true, move |_: &T, ctx: &mut DrawCtx| {
             if !ctx.must_draw { return }
 

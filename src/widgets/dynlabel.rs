@@ -13,10 +13,9 @@ pub struct DynLabel {
 }
 
 impl DynLabel {
-    #[track_caller]
     pub fn new(text: &str) -> Self {
         Self {
-            key: new_key!(),
+            key: Key::new(),
             text: text.to_owned(),
             changed: Cell::new(false),
         }

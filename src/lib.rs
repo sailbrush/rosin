@@ -40,7 +40,7 @@ pub mod prelude {
     pub use crate::tree::Node;
     pub use crate::view::View;
     pub use crate::window::WindowDesc;
-    pub use crate::{lens, new_key, new_style, new_view, ui};
+    pub use crate::{lens, new_style, new_view, ui};
 
     pub use femtovg::{Color, Paint, Path};
 }
