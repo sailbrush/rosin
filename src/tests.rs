@@ -18,9 +18,9 @@ mod style {
 
             let tree: crate::alloc::Scope<BumpVec<ArrayNode<()>>> = unsafe {
                 alloc.scope(|| {
-                    let mut tree = ui! {
+                    let mut tree = ui!(None,
                         "root" [] // 0
-                    }
+                    )
                     .finish()
                     .unwrap();
 
@@ -36,11 +36,11 @@ mod style {
         fn child() {
             let stylesheet = Stylesheet::new_static(".root .child { height: 100px; }");
 
-            let mut tree: BumpVec<ArrayNode<()>> = ui! {
+            let mut tree: BumpVec<ArrayNode<()>> = ui!(None,
                 "root" [ // 0
                     "child" [] // 1
                 ]
-            }
+            )
             .finish()
             .unwrap();
 
@@ -54,7 +54,7 @@ mod style {
         fn direct_child() {
             let stylesheet = Stylesheet::new_static(".parent > .child { height: 100px; } .child { height: 200px; }");
 
-            let mut tree: BumpVec<ArrayNode<()>> = ui! {
+            let mut tree: BumpVec<ArrayNode<()>> = ui!(None,
                 "root" [ // 0
                     "parent" [ // 2
                         "child" [] // 3
@@ -65,7 +65,7 @@ mod style {
                         ]
                     ]
                 ]
-            }
+            )
             .finish()
             .unwrap();
 
@@ -83,13 +83,13 @@ mod style {
         fn specificity() {
             let stylesheet = Stylesheet::new_static(".root .child { height: 100px; } .child { height: 90px; }");
 
-            let mut tree: BumpVec<ArrayNode<()>> = ui! {
+            let mut tree: BumpVec<ArrayNode<()>> = ui!(None,
                 "root" [ // 0
                     "wrap" [ // 1
                         "child" [] // 2
                     ]
                 ]
-            }
+            )
             .finish()
             .unwrap();
 
@@ -104,7 +104,7 @@ mod style {
         fn wildcard() {
             let stylesheet = Stylesheet::new_static("* { height: 100px; }");
 
-            let mut tree: BumpVec<ArrayNode<()>> = ui! {
+            let mut tree: BumpVec<ArrayNode<()>> = ui!(None,
                 "root" [ // 0
                     "parent" [ // 2
                         "child" [] // 3
@@ -115,7 +115,7 @@ mod style {
                         ]
                     ]
                 ]
-            }
+            )
             .finish()
             .unwrap();
 
@@ -133,7 +133,7 @@ mod style {
         fn wildcard_specificity() {
             let stylesheet = Stylesheet::new_static("* { height: 100px; } child { height: 1px; }");
 
-            let mut tree: BumpVec<ArrayNode<()>> = ui! {
+            let mut tree: BumpVec<ArrayNode<()>> = ui!(None,
                 "root" [ // 0
                     "parent" [ // 2
                         "child" [] // 3
@@ -144,7 +144,7 @@ mod style {
                         ]
                     ]
                 ]
-            }
+            )
             .finish()
             .unwrap();
 
@@ -162,14 +162,14 @@ mod style {
         fn wildcard_descendant() {
             let stylesheet = Stylesheet::new_static("* one { height: 100px; }");
 
-            let mut tree: BumpVec<ArrayNode<()>> = ui! {
+            let mut tree: BumpVec<ArrayNode<()>> = ui!(None,
                 "root" [ // 0
                     "parent" [ // 1
                         "one" [] // 3
                         "two" [] // 2
                     ]
                 ]
-            }
+            )
             .finish()
             .unwrap();
 
@@ -185,14 +185,14 @@ mod style {
         fn non_matching() {
             let stylesheet = Stylesheet::new_static("selector { height: 100px; } random name { height: 100px; }");
 
-            let mut tree: BumpVec<ArrayNode<()>> = ui! {
+            let mut tree: BumpVec<ArrayNode<()>> = ui!(None,
                 "root" [ // 0
                     "parent" [ // 1
                         "one" [] // 3
                         "two" [] // 2
                     ]
                 ]
-            }
+            )
             .finish()
             .unwrap();
 
@@ -208,11 +208,11 @@ mod style {
         fn semi_matching_chain() {
             let stylesheet = Stylesheet::new_static("one two three { height: 100px; }");
 
-            let mut tree: BumpVec<ArrayNode<()>> = ui! {
+            let mut tree: BumpVec<ArrayNode<()>> = ui!(None,
                 "two" [ // 0
                     "three" [] // 1
                 ]
-            }
+            )
             .finish()
             .unwrap();
 

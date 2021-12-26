@@ -18,7 +18,7 @@ thread_local!(pub(crate) static NODE_COUNT: Cell<usize> = Cell::new(0));
 /// { } - Call methods on parent node.
 #[macro_export]
 macro_rules! ui {
-    ($($classes:literal)? [ $($children:tt)* ]) => {
+    ($sheet:expr, $($classes:literal)? [ $($children:tt)* ]) => {
         ui!(Node::default() $(.add_classes($classes))*; $($children)* )
     };
     ($tree:expr; $($classes:literal)? [ $($children:tt)* ] $($tail:tt)*) => {
@@ -120,7 +120,6 @@ pub struct Node<T: 'static> {
     key: Option<Key>,
     classes: Option<BumpVec<'static, &'static str>>,
     callbacks: Option<BumpVec<'static, (On, &'static mut dyn EventCallback<T>)>>,
-    style_default: Option<fn() -> Style>,
     style_on_draw: Option<&'static mut dyn StyleCallback<T>>,
     on_draw: Option<&'static mut dyn DrawCallback<T>>,
     draw_cache_enable: bool,
@@ -138,7 +137,6 @@ impl<T> Default for Node<T> {
             key: None,
             classes: Some(A.with(|a| a.vec())),
             callbacks: Some(A.with(|a| a.vec())),
-            style_default: None,
             style_on_draw: None,
             on_draw: None,
             draw_cache_enable: false,
@@ -172,12 +170,6 @@ impl<T> Node<T> {
         if let Some(callbacks) = &mut self.callbacks {
             callbacks.push((event_type, A.with(|a| a.alloc(callback))));
         }
-        self
-    }
-
-    /// Register a function that will provide an alternate default Style for this node.
-    pub fn style_default(mut self, func: fn() -> Style) -> Self {
-        self.style_default = Some(func);
         self
     }
 
@@ -223,7 +215,7 @@ impl<T> Node<T> {
                 _key: curr_node.key,
                 classes: curr_node.classes.take()?,
                 callbacks: curr_node.callbacks.take()?,
-                style: curr_node.style_default.unwrap_or(Style::default)(),
+                style: Style::default(),
                 style_on_draw: curr_node.style_on_draw.take(),
                 on_draw: std::mem::take(&mut curr_node.on_draw),
                 _draw_cache_enable: curr_node.draw_cache_enable,

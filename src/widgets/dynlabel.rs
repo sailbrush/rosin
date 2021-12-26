@@ -30,7 +30,7 @@ impl DynLabel {
 
     // We construct the lens each time we view the widget to avoid storing references in the tree.
     pub fn view<T>(&self, lens: impl Lens<In = T, Out = Self> + Copy + 'static) -> Node<T> {
-        ui!([
+        ui!(None, "dynlabel" [
             .key(self.key)
             .on_draw(false, move |t: &T, ctx: &mut DrawCtx| {
                 let this = lens.get_ref(t);
