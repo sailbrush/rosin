@@ -178,11 +178,11 @@ impl<T> RosinWindow<T> {
             // Panic if the view function didn't return the number of nodes we expected
             assert!(node_count == tree.borrow().len(), "[Rosin] Nodes missing");
 
-            stylesheet.style(&mut tree.borrow_mut());
+            stylesheet.style(tree.borrow_mut());
             self.tree_cache = Some(tree);
         }
 
-        let tree: &mut BumpVec<ArrayNode<T>> = &mut self.tree_cache.as_mut().unwrap().borrow_mut();
+        let tree: &mut BumpVec<ArrayNode<T>> = self.tree_cache.as_mut().unwrap().borrow_mut();
 
         // Stash default styles, and run style callbacks
         let mut default_styles: BumpVec<(usize, Style)> = BumpVec::new_in(&self.temp);
@@ -206,7 +206,7 @@ impl<T> RosinWindow<T> {
                 self.layout_cache = Some(new_layout);
             }
 
-            let mut layout = self.layout_cache.as_mut().unwrap().borrow_mut();
+            let layout = self.layout_cache.as_mut().unwrap().borrow_mut();
 
             layout.clear();
             for _ in 0..tree.len() {
@@ -217,7 +217,7 @@ impl<T> RosinWindow<T> {
                 width: window_size.width as f32,
                 height: window_size.height as f32,
             };
-            calc_layout(&self.temp, tree, layout_size, &mut layout);
+            calc_layout(&self.temp, tree, layout_size, layout);
         }
 
         let layout: &BumpVec<Layout> = self.layout_cache.as_ref().unwrap().borrow();
