@@ -4,7 +4,7 @@ use crate::prelude::*;
 
 // ---------- Static Label ----------
 pub fn label<T>(text: &'static str) -> Node<T> {
-    ui!(None, "label" [
+    ui!(SheetId::None, "label" [
         .on_draw(true, move |_: &T, ctx: &mut DrawCtx| {
             if !ctx.must_draw { return }
 

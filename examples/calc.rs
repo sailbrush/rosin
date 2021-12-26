@@ -119,7 +119,7 @@ impl State {
 }
 
 pub fn main_view(state: &State) -> Node<State> {
-    ui!(None, "root" [
+    ui!(SheetId::None, "root" [
         "display" (state.display.view(lens!(State => display)))
         "row" [
             "btn double" (button("Clear", |state: &mut State, _| { state.press(Btn::Clear) }))

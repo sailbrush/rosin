@@ -19,7 +19,7 @@ thread_local!(pub(crate) static NODE_COUNT: Cell<usize> = Cell::new(0));
 #[macro_export]
 macro_rules! ui {
     ($sheet:expr, $($classes:literal)? [ $($children:tt)* ]) => {
-        ui!(Node::default() $(.add_classes($classes))*; $($children)* )
+        ui!(Node::default().apply_style_sheet($sheet) $(.add_classes($classes))*; $($children)* )
     };
     ($tree:expr; $($classes:literal)? [ $($children:tt)* ] $($tail:tt)*) => {
         ui!($tree.add_child(ui!(Node::default() $(.add_classes($classes))*; $($children)* )); $($tail)* )
@@ -173,6 +173,11 @@ impl<T> Node<T> {
         if let Some(callbacks) = &mut self.callbacks {
             callbacks.push((event_type, A.with(|a| a.alloc(callback))));
         }
+        self
+    }
+
+    pub fn apply_style_sheet(mut self, id: SheetId) -> Self {
+        self.style_sheet_id = id;
         self
     }
 
