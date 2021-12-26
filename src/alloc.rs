@@ -9,7 +9,7 @@ use bumpalo::{collections::Vec as BumpVec, Bump};
 
 #[derive(Clone)]
 pub(crate) struct Scope<T> {
-    token: Arc<()>,
+    _token: Arc<()>,
     value: T,
 }
 
@@ -77,7 +77,7 @@ impl Alloc {
     pub unsafe fn scope<T>(&self, func: impl FnOnce() -> T) -> Scope<T> {
         self.enabled.replace(true);
         let scope = Scope {
-            token: self.token.borrow().clone(),
+            _token: self.token.borrow().clone(),
             value: func(),
         };
         self.enabled.replace(false);
