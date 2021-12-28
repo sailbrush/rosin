@@ -4,7 +4,7 @@ use rosin::prelude::*;
 use rosin::widgets::*;
 
 pub struct State {
-    display: DynLabel,
+    display: DynLabel<State>,
     accumulator: f64,
     register: f64,
     mode: Mode,
@@ -120,7 +120,7 @@ impl State {
 
 pub fn main_view(state: &State) -> Node<State> {
     ui!(SheetId::None, "root" [
-        "display" (state.display.view(lens!(State => display)))
+        "display" (state.display.view())
         "row" [
             "btn double" (button("Clear", |state: &mut State, _| { state.press(Btn::Clear) }))
             "btn"        (button("±", |state: &mut State, _| { state.press(Btn::Sign) }))
@@ -154,7 +154,7 @@ pub fn main_view(state: &State) -> Node<State> {
 
 fn main() {
     let state = State {
-        display: DynLabel::new("0"),
+        display: DynLabel::new("0", lens!(State => display)),
         accumulator: 0.0,
         register: 0.0,
         mode: Mode::Entry,

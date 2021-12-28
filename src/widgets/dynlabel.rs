@@ -1,4 +1,4 @@
-#![forbid(unsafe_code)]
+//#![forbid(unsafe_code)]
 
 use std::{cell::Cell, fmt::Debug};
 
@@ -6,16 +6,18 @@ use crate::prelude::*;
 
 // ---------- Dynamic Label ----------
 #[derive(Debug)]
-pub struct DynLabel {
+pub struct DynLabel<T: 'static> {
     key: Key,
+    lens: &'static dyn Lens<In = T, Out = Self>,
     text: String,
     changed: Cell<bool>,
 }
 
-impl DynLabel {
-    pub fn new(text: &str) -> Self {
+impl<T> DynLabel<T> {
+    pub fn new(text: &str, lens: impl Lens<In = T, Out = Self> + Copy + 'static) -> Self {
         Self {
             key: Key::new(),
+            lens: Box::leak(Box::new(lens)),
             text: text.to_owned(),
             changed: Cell::new(false),
         }
@@ -27,10 +29,11 @@ impl DynLabel {
         self.changed.replace(true);
         Phase::Draw
     }
+    
+    pub fn view(&self) -> Node<T> {
+        let lens = self.lens;
 
-    // We construct the lens each time we view the widget to avoid storing references in the tree.
-    pub fn view<T>(&self, lens: impl Lens<In = T, Out = Self> + Copy + 'static) -> Node<T> {
-        ui!(SheetId::None, "dynlabel" [
+        ui!("dynlabel" [
             .key(self.key)
             .on_draw(false, move |t: &T, ctx: &mut DrawCtx| {
                 let this = lens.get_ref(t);
