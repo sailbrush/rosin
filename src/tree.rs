@@ -18,6 +18,9 @@ thread_local!(pub(crate) static NODE_COUNT: Cell<usize> = Cell::new(0));
 /// { } - Call methods on parent node.
 #[macro_export]
 macro_rules! ui {
+    ($($classes:literal)? [ $($children:tt)* ]) => {
+        ui!(Node::default() $(.add_classes($classes))*; $($children)* )
+    };
     ($sheet:expr, $($classes:literal)? [ $($children:tt)* ]) => {
         ui!(Node::default().apply_style_sheet($sheet) $(.add_classes($classes))*; $($children)* )
     };
