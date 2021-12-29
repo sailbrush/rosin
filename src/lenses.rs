@@ -68,15 +68,15 @@ impl<A, B> Lens<A, B> for SingleLens<A, B> {
 
 // ---------- CompoundLens ----------
 #[doc(hidden)]
-pub struct CompoundLens<'a, A, B, C, X, Y> {
+pub struct CompoundLens<A, B, C, X, Y> {
     pub lhs: X,
     pub rhs: Y,
-    _a: PhantomData<&'a A>,
-    _b: PhantomData<&'a B>,
-    _c: PhantomData<&'a C>,
+    _a: PhantomData<*const A>,
+    _b: PhantomData<*const B>,
+    _c: PhantomData<*const C>,
 }
 
-impl<'a, A, B, C, X, Y> CompoundLens<'a, A, B, C, X, Y>
+impl<A, B, C, X, Y> CompoundLens<A, B, C, X, Y>
 where
     X: Lens<A, B>,
     Y: Lens<B, C>,
@@ -92,14 +92,14 @@ where
     }
 }
 
-impl<'a, A, B, C, X: Copy, Y: Copy> Copy for CompoundLens<'a, A, B, C, X, Y> {}
-impl<'a, A, B, C, X: Copy, Y: Copy> Clone for CompoundLens<'a, A, B, C, X, Y> {
+impl<A, B, C, X: Copy, Y: Copy> Copy for CompoundLens<A, B, C, X, Y> {}
+impl<A, B, C, X: Copy, Y: Copy> Clone for CompoundLens<A, B, C, X, Y> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<'a, A, B, C, X, Y> Debug for CompoundLens<'a, A, B, C, X, Y>
+impl<A, B, C, X, Y> Debug for CompoundLens<A, B, C, X, Y>
 where
     X: Lens<A, B> + Display,
     Y: Lens<B, C> + Display,
@@ -109,7 +109,7 @@ where
     }
 }
 
-impl<'a, A, B, C, X, Y> Display for CompoundLens<'a, A, B, C, X, Y>
+impl<A, B, C, X, Y> Display for CompoundLens<A, B, C, X, Y>
 where
     X: Lens<A, B>,
     Y: Lens<B, C>,
@@ -119,7 +119,7 @@ where
     }
 }
 
-impl<'a, A, B, C, X, Y> Lens<A, C> for CompoundLens<'a, A, B, C, X, Y>
+impl<A, B, C, X, Y> Lens<A, C> for CompoundLens<A, B, C, X, Y>
 where
     X: Lens<A, B> + Debug + Display,
     Y: Lens<B, C> + Debug + Display,
