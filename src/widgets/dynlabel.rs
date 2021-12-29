@@ -1,11 +1,11 @@
 #![forbid(unsafe_code)]
 
-use std::{cell::Cell, fmt::Debug, rc::Rc};
+use std::{cell::Cell, fmt::Debug};
 
 use crate::prelude::*;
 
 // ---------- Dynamic Label ----------
-//#[derive(Debug)]
+#[derive(Debug)]
 pub struct DynLabel<T> {
     key: Key,
     lens: Strong<Box<dyn Lens<T, Self>>>,

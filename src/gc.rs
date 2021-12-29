@@ -40,7 +40,8 @@ impl Registry {
     }
 }
 
-pub struct Strong<T> {
+#[derive(Debug)]
+pub struct Strong<T: ?Sized> {
     index: usize,
     generation: usize,
     data: NonNull<T>,
@@ -57,7 +58,9 @@ impl<T> Strong<T> {
             phantom: PhantomData,
         }
     }
+}
 
+impl<T: ?Sized> Strong<T> {
     pub fn downgrade(this: &Self) -> Weak<T> {
         Weak {
             index: this.index,
@@ -67,7 +70,7 @@ impl<T> Strong<T> {
     }
 }
 
-impl<T> Clone for Strong<T> {
+impl<T: ?Sized> Clone for Strong<T> {
     fn clone(&self) -> Self {
         let mut reg = REGISTRY.lock().unwrap();
         reg.alive[self.index].strong_count += 1;
@@ -81,7 +84,7 @@ impl<T> Clone for Strong<T> {
     }
 }
 
-impl<T> Drop for Strong<T> {
+impl<T: ?Sized> Drop for Strong<T> {
     fn drop(&mut self) {
         let mut reg = REGISTRY.lock().unwrap();
         reg.alive[self.index].strong_count -= 1;
@@ -95,7 +98,7 @@ impl<T> Drop for Strong<T> {
     }
 }
 
-impl<T> Deref for Strong<T> {
+impl<T: ?Sized> Deref for Strong<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -103,14 +106,14 @@ impl<T> Deref for Strong<T> {
     }
 }
 
-#[derive(Copy, Clone)]
-pub struct Weak<T> {
+#[derive(Debug, Copy, Clone)]
+pub struct Weak<T: ?Sized> {
     index: usize,
     generation: usize,
     data: NonNull<T>,
 }
 
-impl<T> Weak<T> {
+impl<T: ?Sized> Weak<T> {
     pub fn upgrade(&self) -> Option<Strong<T>> {
         let mut reg = REGISTRY.lock().unwrap();
         if reg.alive[self.index].generation == self.generation {
