@@ -5,7 +5,6 @@ use std::{cell::Cell, fmt::Debug};
 use crate::prelude::*;
 
 // ---------- Dynamic Label ----------
-// TODO: Use default a generic to parameterize between leaking a box and using the grc
 #[derive(Debug)]
 pub struct DynLabel<T> {
     key: Key,
