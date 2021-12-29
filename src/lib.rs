@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate lazy_static;
+
 #[cfg(test)]
 mod tests;
 
@@ -13,6 +16,7 @@ mod libloader {
 
 mod alloc;
 mod app;
+mod gc;
 mod geometry;
 mod key;
 mod layout;
@@ -33,10 +37,11 @@ pub mod prelude {
         AnimCallback, App, AppLauncher, DrawCallback, EventCallback, EventCtx, On, Phase, StopTask, StyleCallback, TaskCallback,
         ViewCallback,
     };
+    pub use crate::gc::{Strong, Weak};
     pub use crate::key::Key;
     pub use crate::lenses::{CompoundLens, Lens, SingleLens};
     pub use crate::render::DrawCtx;
-    pub use crate::style::{Style, Stylesheet, SheetId};
+    pub use crate::style::{SheetId, Style, Stylesheet};
     pub use crate::tree::Node;
     pub use crate::view::View;
     pub use crate::window::WindowDesc;

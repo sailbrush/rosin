@@ -52,7 +52,7 @@ pub enum StopTask {
 
 pub struct EventCtx {}
 
-/// `Fn(&mut T, Duration) -> (Stage, StopTask)`
+/// `Fn(&mut T, Duration) -> (Phase, StopTask)`
 pub trait AnimCallback<T>: 'static + Fn(&mut T, Duration) -> (Phase, StopTask) {}
 impl<F, T> AnimCallback<T> for F where F: 'static + Fn(&mut T, Duration) -> (Phase, StopTask) {}
 
@@ -60,7 +60,7 @@ impl<F, T> AnimCallback<T> for F where F: 'static + Fn(&mut T, Duration) -> (Pha
 pub trait DrawCallback<T>: 'static + Fn(&T, &mut DrawCtx) {}
 impl<F, T> DrawCallback<T> for F where F: 'static + Fn(&T, &mut DrawCtx) {}
 
-/// `Fn(&mut T, &mut App<T>) -> Stage`
+/// `Fn(&mut T, &mut App<T>) -> Phase`
 pub trait EventCallback<T>: 'static + Fn(&mut T, &mut EventCtx) -> Phase {}
 impl<F, T> EventCallback<T> for F where F: 'static + Fn(&mut T, &mut EventCtx) -> Phase {}
 
@@ -68,7 +68,7 @@ impl<F, T> EventCallback<T> for F where F: 'static + Fn(&mut T, &mut EventCtx) -
 pub trait StyleCallback<T>: 'static + Fn(&T, &mut Style) {}
 impl<F, T> StyleCallback<T> for F where F: 'static + Fn(&T, &mut Style) {}
 
-/// `Fn(&mut T, &mut App<T>) -> (Stage, StopTask)`
+/// `Fn(&mut T, &mut App<T>) -> (Phase, StopTask)`
 pub trait TaskCallback<T>: 'static + Fn(&mut T, &mut EventCtx) -> (Phase, StopTask) {}
 impl<F, T> TaskCallback<T> for F where F: 'static + Fn(&mut T, &mut EventCtx) -> (Phase, StopTask) {}
 

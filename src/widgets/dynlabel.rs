@@ -1,23 +1,23 @@
-//#![forbid(unsafe_code)]
+#![forbid(unsafe_code)]
 
-use std::{cell::Cell, fmt::Debug};
+use std::{cell::Cell, fmt::Debug, rc::Rc};
 
 use crate::prelude::*;
 
 // ---------- Dynamic Label ----------
-#[derive(Debug)]
-pub struct DynLabel<T: 'static> {
+//#[derive(Debug)]
+pub struct DynLabel<T> {
     key: Key,
-    lens: &'static dyn Lens<In = T, Out = Self>,
+    lens: Strong<Box<dyn Lens<T, Self>>>,
     text: String,
     changed: Cell<bool>,
 }
 
 impl<T> DynLabel<T> {
-    pub fn new(text: &str, lens: impl Lens<In = T, Out = Self> + Copy + 'static) -> Self {
+    pub fn new(text: &str, lens: impl Lens<T, Self> + 'static) -> Self {
         Self {
             key: Key::new(),
-            lens: Box::leak(Box::new(lens)),
+            lens: Strong::new(Box::new(lens)),
             text: text.to_owned(),
             changed: Cell::new(false),
         }
@@ -29,14 +29,14 @@ impl<T> DynLabel<T> {
         self.changed.replace(true);
         Phase::Draw
     }
-    
+
     pub fn view(&self) -> Node<T> {
-        let lens = self.lens;
+        let lens = Strong::downgrade(&self.lens);
 
         ui!("dynlabel" [
             .key(self.key)
             .on_draw(false, move |t: &T, ctx: &mut DrawCtx| {
-                let this = lens.get_ref(t);
+                let this = lens.upgrade().unwrap().get_ref(t);
                 if !this.changed.get() && !ctx.must_draw { return }
                 this.changed.replace(false);
 
