@@ -8,7 +8,7 @@ use crate::prelude::*;
 #[derive(Debug)]
 pub struct DynLabel<T> {
     key: Key,
-    lens: Strong<dyn Lens<T, Self>>,
+    lens: Grc<dyn Lens<T, Self>>,
     text: String,
     changed: Cell<bool>,
 }
@@ -17,7 +17,7 @@ impl<T> DynLabel<T> {
     pub fn new(text: &str, lens: impl Lens<T, Self> + 'static) -> Self {
         Self {
             key: Key::new(),
-            lens: Strong::new(Box::new(lens)),
+            lens: Grc::new(Box::new(lens)),
             text: text.to_owned(),
             changed: Cell::new(false),
         }
@@ -31,7 +31,7 @@ impl<T> DynLabel<T> {
     }
 
     pub fn view(&self) -> Node<T> {
-        let lens = Strong::downgrade(&self.lens);
+        let lens = Grc::downgrade(&self.lens);
 
         ui!("dynlabel" [
             .key(self.key)

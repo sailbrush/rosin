@@ -45,7 +45,7 @@ impl Registry {
 }
 
 #[derive(Debug)]
-pub struct Strong<T: ?Sized> {
+pub struct Grc<T: ?Sized> {
     index: usize,
     generation: usize,
     data: NonNull<T>,
@@ -54,7 +54,7 @@ pub struct Strong<T: ?Sized> {
 
 // Let Box do the work of coercing unsized types until CoerceUnsized stabilizes
 // https://doc.rust-lang.org/std/ops/trait.CoerceUnsized.html
-impl<T: ?Sized> Strong<T> {
+impl<T: ?Sized> Grc<T> {
     pub fn new(init: Box<T>) -> Self {
         let (index, generation) = REGISTRY.lock().unwrap().register();
         Self {
@@ -74,7 +74,7 @@ impl<T: ?Sized> Strong<T> {
     }
 }
 
-impl<T: ?Sized> Clone for Strong<T> {
+impl<T: ?Sized> Clone for Grc<T> {
     fn clone(&self) -> Self {
         let mut reg = REGISTRY.lock().unwrap();
         reg.alive[self.index].strong_count += 1;
@@ -88,7 +88,7 @@ impl<T: ?Sized> Clone for Strong<T> {
     }
 }
 
-impl<T: ?Sized> Drop for Strong<T> {
+impl<T: ?Sized> Drop for Grc<T> {
     fn drop(&mut self) {
         let mut reg = REGISTRY.lock().unwrap();
         reg.alive[self.index].strong_count -= 1;
@@ -102,7 +102,7 @@ impl<T: ?Sized> Drop for Strong<T> {
     }
 }
 
-impl<T: ?Sized> Deref for Strong<T> {
+impl<T: ?Sized> Deref for Grc<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -118,11 +118,11 @@ pub struct Weak<T: ?Sized> {
 }
 
 impl<T: ?Sized> Weak<T> {
-    pub fn upgrade(&self) -> Option<Strong<T>> {
+    pub fn upgrade(&self) -> Option<Grc<T>> {
         let mut reg = REGISTRY.lock().unwrap();
         if reg.alive[self.index].generation == self.generation {
             reg.alive[self.index].strong_count += 1;
-            Some(Strong {
+            Some(Grc {
                 index: self.index,
                 generation: self.generation,
                 data: self.data,

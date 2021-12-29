@@ -16,7 +16,7 @@ mod libloader {
 
 mod alloc;
 mod app;
-mod gc;
+mod grc;
 mod geometry;
 mod key;
 mod layout;
@@ -37,7 +37,7 @@ pub mod prelude {
         AnimCallback, App, AppLauncher, DrawCallback, EventCallback, EventCtx, On, Phase, StopTask, StyleCallback, TaskCallback,
         ViewCallback,
     };
-    pub use crate::gc::{Strong, Weak};
+    pub use crate::grc::{Grc, Weak};
     pub use crate::key::Key;
     pub use crate::lenses::{CompoundLens, Lens, SingleLens};
     pub use crate::render::DrawCtx;
