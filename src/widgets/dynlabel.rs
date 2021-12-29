@@ -8,7 +8,7 @@ use crate::prelude::*;
 #[derive(Debug)]
 pub struct DynLabel<T> {
     key: Key,
-    lens: Strong<Box<dyn Lens<T, Self>>>,
+    lens: Strong<dyn Lens<T, Self>>,
     text: String,
     changed: Cell<bool>,
 }

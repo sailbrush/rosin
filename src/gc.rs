@@ -48,19 +48,19 @@ pub struct Strong<T: ?Sized> {
     phantom: PhantomData<T>,
 }
 
-impl<T> Strong<T> {
-    pub fn new(init: T) -> Self {
+// Let Box do the work of coercing unsized types until CoerceUnsized stabilizes
+// https://doc.rust-lang.org/std/ops/trait.CoerceUnsized.html
+impl<T: ?Sized> Strong<T> {
+    pub fn new(init: Box<T>) -> Self {
         let (index, generation) = REGISTRY.lock().unwrap().register();
         Self {
             index,
             generation,
-            data: NonNull::new(Box::into_raw(Box::new(init))).unwrap(),
+            data: NonNull::new(Box::into_raw(init)).unwrap(),
             phantom: PhantomData,
         }
     }
-}
 
-impl<T: ?Sized> Strong<T> {
     pub fn downgrade(this: &Self) -> Weak<T> {
         Weak {
             index: this.index,
