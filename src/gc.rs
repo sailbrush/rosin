@@ -16,6 +16,10 @@ struct Registry {
     pub dead: Vec<usize>,
 }
 
+// TODO: Benchmark an alternate implementation based on Tinyset, or a Hashset with FxHashMap
+//       Will probably need to store strong_count inside the allocation
+//       I don't think it will need a generation counter since each item in the set will be a sequential integer
+//       Also, put this behind an unstable feature flag and use the CoerceUnsized trait to keep the user from needing to box items
 impl Registry {
     pub const fn new() -> Self {
         Self {
