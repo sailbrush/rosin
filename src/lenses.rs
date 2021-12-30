@@ -125,11 +125,11 @@ where
     Y: Lens<B, C> + Debug + Display,
     B: 'static,
 {
-    fn get_ref<'b>(&self, obj: &'b A) -> &'b C {
+    fn get_ref<'a>(&self, obj: &'a A) -> &'a C {
         self.rhs.get_ref(self.lhs.get_ref(obj))
     }
 
-    fn get_mut<'b>(&self, obj: &'b mut A) -> &'b mut C {
+    fn get_mut<'a>(&self, obj: &'a mut A) -> &'a mut C {
         self.rhs.get_mut(self.lhs.get_mut(obj))
     }
 }
