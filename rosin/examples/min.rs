@@ -8,9 +8,7 @@ pub struct State {
 }
 
 pub fn main_view(state: &State) -> Node<State> {
-    ui!(SheetId::None, "root" [
-        (state.display.view())
-    ])
+    ui!(SheetId::None, "root"[(state.display.view())])
 }
 
 fn main() {

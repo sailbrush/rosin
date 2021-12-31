@@ -1,0 +1,20 @@
+[package]
+name = "rosin"
+version = "0.2.0"
+authors = ["TimTom <timtom.business@gmail.com>"]
+edition = "2018"
+description = "Rosin is a GUI framework for Rust that aims to be extremely easy to use."
+documentation = "https://github.com/sailbrush/rosin"
+homepage = "https://github.com/sailbrush/rosin"
+repository = "https://github.com/sailbrush/rosin"
+readme = "README.md"
+keywords = ["GUI"]
+categories = ["gui"]
+license = "MIT"
+
+[dependencies]
+rosin-core = { version = "0.2.0", path = "../rosin-core" }
+druid-shell = "0.7.0"
+
+[features]
+hot-reload = []

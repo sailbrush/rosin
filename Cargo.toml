@@ -1,25 +1,10 @@
-[package]
-name = "rosin"
-version = "0.2.0"
-authors = ["TimTom <timtom.business@gmail.com>"]
-edition = "2018"
-description = "Rosin is a GUI framework for Rust that aims to be extremely easy to use."
-documentation = "https://github.com/sailbrush/rosin"
-homepage = "https://github.com/sailbrush/rosin"
-repository = "https://github.com/sailbrush/rosin"
-readme = "README.md"
-keywords = ["GUI"]
-categories = ["gui"]
-license = "MIT"
+[workspace]
+members = [
+    "rosin",
+    "rosin-core",
+]
 
-[dependencies]
-bumpalo = { version = "3.6", features = ["collections"] }
-cssparser = "0.28"
-femtovg = "0.2.2"
-font-kit = "0.10"
-glutin = "0.27"
-libloading = "0.7"
-lazy_static = "1.4.0"
-
-[features]
-hot-reload = []
+default-members = [
+    "rosin",
+    "rosin-core"
+]

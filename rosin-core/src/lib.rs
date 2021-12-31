@@ -15,18 +15,19 @@ mod libloader {
 }
 
 mod alloc;
-mod app;
-mod grc;
 mod geometry;
-mod key;
 mod layout;
-mod lenses;
 mod parser;
-mod render;
-mod style;
-mod tree;
-mod view;
-mod window;
+
+pub mod app;
+pub mod grc;
+pub mod key;
+pub mod lenses;
+pub mod render;
+pub mod style;
+pub mod tree;
+pub mod view;
+pub mod window;
 
 /// Basic set of widgets
 pub mod widgets;
