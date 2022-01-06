@@ -1,7 +1,7 @@
 use crate::alloc::Alloc;
 use crate::layout::hit_test;
 use crate::prelude::*;
-use crate::{alloc::Scope, geometry::Size, layout::*, render, tree::*};
+use crate::{alloc::Scope, layout::*, render, tree::*};
 
 use std::error::Error;
 use std::rc::Rc;
@@ -9,7 +9,6 @@ use std::sync::Arc;
 
 use bumpalo::{collections::Vec as BumpVec, Bump};
 use druid_shell::piet::Piet;
-use druid_shell::Scale;
 
 pub struct RosinWindow<T: 'static, H> {
     sheet_loader: Arc<SheetLoader>,
