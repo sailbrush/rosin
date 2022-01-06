@@ -18,7 +18,7 @@ macro_rules! lens {
 }
 
 // ---------- Trait ----------
-/// A datatype that returns a reference to an internal component of another type. Intended to be used by widgets.
+/// A datatype that returns a reference to an internal component of another type.
 pub trait Lens<A, B>: Debug {
     fn get_ref<'a>(&self, obj: &'a A) -> &'a B;
     fn get_mut<'a>(&self, obj: &'a mut A) -> &'a mut B;

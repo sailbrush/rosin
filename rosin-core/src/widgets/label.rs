@@ -1,36 +1,36 @@
 #![forbid(unsafe_code)]
 
+use druid_shell::piet::{Color, FontFamily, RenderContext, Text, TextLayoutBuilder};
+
 use crate::prelude::*;
 
 // ---------- Static Label ----------
 pub fn label<T>(text: &'static str) -> Node<T> {
     ui!("label" [
         .on_draw(true, move |_: &T, ctx: &mut DrawCtx| {
-            if !ctx.must_draw { return }
-
-            let font_family = ctx.style.font_family;
-            let (_, font_id) = ctx.font_table
-                .iter()
-                .find(|(name, _)| *name == font_family)
-                .expect("[Rosin] Font not found");
-
-            let font_color = ctx.style.color;
-            let mut paint = Paint::color(femtovg::Color::rgba(
-                font_color.red,
-                font_color.green,
-                font_color.blue,
-                font_color.alpha,
-            ));
-            paint.set_font_size(ctx.style.font_size);
-            paint.set_font(&[*font_id]);
-            paint.set_text_align(femtovg::Align::Left);
-            paint.set_text_baseline(femtovg::Baseline::Top);
-            let _ = ctx.canvas.fill_text(
-                ctx.style.padding_left,
-                ctx.style.padding_top,
-                text,
-                paint,
+            let font_color = Color::rgba8(
+                ctx.style.color.red,
+                ctx.style.color.green,
+                ctx.style.color.blue,
+                ctx.style.color.alpha
             );
+
+            let font_family = if let Some(family_name) = &ctx.style.font_family {
+                ctx.piet.text().font_family(family_name.as_ref())
+            } else {
+                None
+            };
+            let font_family = font_family.unwrap_or(FontFamily::SYSTEM_UI);
+
+            let layout = ctx.piet
+                .text()
+                .new_text_layout(text)
+                .font(font_family, ctx.style.font_size as f64)
+                .text_color(font_color)
+                .build()
+                .unwrap();
+
+            ctx.piet.draw_text(&layout, (ctx.style.padding_left as f64, ctx.style.padding_top as f64));
         })
     ])
 }

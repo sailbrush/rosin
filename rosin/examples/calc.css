@@ -1,6 +1,6 @@
 .root {
-    font-family: roboto-regular;
-    font-size: 60px;
+    font-family: Helvetica;
+    font-size: 30px;
     color:rgb(255, 255, 255);
     flex-direction: column;
     background-color: rgb(71, 71, 71);
@@ -8,27 +8,27 @@
 
 .display {
     padding: 50px;
-    min-height: 100px;
-    max-height: 100px;
+    min-height: 50px;
+    max-height: 50px;
 }
 
 .row {
-    min-height: 150px;
+    min-height: 75px;
 }
 
 .btn {
     flex-direction: row;
     background-color: rgb(105, 105, 105);
     border: 1px solid rgb(35, 35, 35);
-    border-radius: 20px;
-    margin: 4px;
-    padding: 50px;
+    border-radius: 10px;
+    margin: 2px;
+    padding: 25px;
 }
 
 .double {
     flex-grow: 2.0;
-    width: 110px;
-    min-width: 110px;
+    width: 55px;
+    min-width: 55px;
 }
 
 .orange {

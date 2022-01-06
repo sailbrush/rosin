@@ -4,26 +4,30 @@ use rosin::prelude::*;
 use rosin::widgets::*;
 
 pub struct State {
-    display: DynLabel<State>,
+    display: Grc<DynLabel>,
 }
 
 pub fn main_view(state: &State) -> Node<State> {
-    ui!(SheetId::None, "root"[(state.display.view())])
+    ui!("root"[(state.display.view())])
 }
 
+#[rustfmt::skip]
 fn main() {
+    let view = new_view!(main_view);
+
+    let window = WindowDesc::new(view)
+        .with_title("Rosin Window")
+        .with_size(500.0, 500.0);
+
+    let mut sl = SheetLoader::new();
+
+    load_sheet!(sl, "examples/min.css");
+
     let state = State {
-        display: DynLabel::new("Hello World!", lens!(State => display)),
+        display: DynLabel::new("Hello World!"),
     };
 
-    let view = new_view!(main_view);
-    let stylesheet = new_style!("examples/min.css");
-    let window = WindowDesc::new(view).with_title("Rosin Window").with_size(500.0, 500.0);
-
-    AppLauncher::default()
-        .use_style(stylesheet)
-        .add_window(window)
-        .add_font_bytes(0, include_bytes!("fonts/Roboto-Regular.ttf"))
+    AppLauncher::new(sl, window)
         .run(state)
         .expect("Failed to launch");
 }

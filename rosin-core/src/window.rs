@@ -1,184 +1,120 @@
+use crate::alloc::Alloc;
 use crate::layout::hit_test;
-use crate::libloader::LibLoader;
 use crate::prelude::*;
 use crate::{alloc::Scope, geometry::Size, layout::*, render, tree::*};
 
 use std::error::Error;
+use std::rc::Rc;
+use std::sync::Arc;
 
 use bumpalo::{collections::Vec as BumpVec, Bump};
-use femtovg::{renderer::OpenGl, Canvas};
-use glutin::dpi::PhysicalPosition;
-use glutin::{
-    dpi::{LogicalSize, PhysicalSize},
-    event_loop::EventLoopWindowTarget,
-    window::{WindowBuilder, WindowId},
-    PossiblyCurrent, WindowedContext,
-};
+use druid_shell::piet::Piet;
+use druid_shell::Scale;
 
-// TODO - Just re-export winit types for window creation / events
-/// A description of a window.
-pub struct WindowDesc<T: 'static> {
-    pub(crate) builder: WindowBuilder,
-    pub(crate) view: View<T>,
-}
-
-impl<T> WindowDesc<T> {
-    pub fn new(view: View<T>) -> Self {
-        Self {
-            builder: WindowBuilder::new(),
-            view,
-        }
-    }
-
-    pub fn with_title<S: Into<String>>(mut self, title: S) -> Self {
-        self.builder = self.builder.with_title(title);
-        self
-    }
-
-    pub fn with_size(mut self, width: f64, height: f64) -> Self {
-        self.builder = self.builder.with_inner_size(LogicalSize::new(width, height));
-        self
-    }
-}
-
-pub(crate) struct RosinWindow<T: 'static> {
-    windowed_context: WindowedContext<PossiblyCurrent>,
-    canvas: Canvas<OpenGl>,
-    view: View<T>,
+pub struct RosinWindow<T: 'static, H> {
+    sheet_loader: Arc<SheetLoader>,
+    view: ViewCallback<T>,
+    size: (f32, f32),
+    handle: Option<H>,
     phase: Phase,
     tree_cache: Option<Scope<BumpVec<'static, ArrayNode<T>>>>,
     layout_cache: Option<Scope<BumpVec<'static, Layout>>>,
+    alloc: Rc<Alloc>,
     temp: Bump,
-    font_table: Vec<(u32, femtovg::FontId)>,
 }
 
-impl<T> RosinWindow<T> {
-    pub fn new(desc: WindowDesc<T>, event_loop: &EventLoopWindowTarget<()>) -> Result<Self, Box<dyn Error>> {
-        // TODO - handle errors better
-        let windowed_context = unsafe {
-            glutin::ContextBuilder::new()
-                .build_windowed(desc.builder, event_loop)?
-                .make_current()
-                .unwrap()
-        };
-        let window_size = windowed_context.window().inner_size();
-
-        let renderer = OpenGl::new(|s| windowed_context.get_proc_address(s) as *const _).expect("[Rosin] Cannot create renderer");
-        let mut canvas = Canvas::new(renderer).expect("[Rosin] Cannot create canvas");
-        canvas.set_size(
-            window_size.width as u32,
-            window_size.height as u32,
-            windowed_context.window().scale_factor() as f32,
-        );
-
-        Ok(Self {
-            windowed_context,
-            canvas,
-            view: desc.view,
+impl<T, H> RosinWindow<T, H> {
+    pub fn new(sheet_loader: Arc<SheetLoader>, view: ViewCallback<T>, size: (f32, f32)) -> Self {
+        Self {
+            sheet_loader,
+            view,
+            size,
+            handle: None,
             phase: Phase::Build,
             tree_cache: None,
             layout_cache: None,
+            alloc: Rc::new(Alloc::default()),
             temp: Bump::new(),
-            font_table: Vec::new(),
-        })
-    }
-
-    fn reset_cache(&mut self, _loader: &LibLoader) {
-        self.layout_cache = None;
-        self.tree_cache = None;
-        A.with(|a| a.reset().expect("[Rosin] Failed to reset cache"));
-
-        #[cfg(all(debug_assertions, feature = "hot-reload"))]
-        {
-            let reset: fn() -> Result<(), ()> = *_loader.get(b"_rosin_reset_alloc").unwrap();
-            reset().expect("[Rosin] Hot-reload: Failed to reset cache");
         }
     }
 
-    pub fn id(&self) -> WindowId {
-        self.windowed_context.window().id()
+    pub fn set_handle(&mut self, handle: H) {
+        self.handle = Some(handle)
     }
 
-    pub fn add_font_bytes(&mut self, id: u32, data: &[u8]) -> Result<(), Box<dyn Error>> {
-        let font_id = self.canvas.add_font_mem(data)?;
-        self.font_table.push((id, font_id));
-        Ok(())
+    pub fn get_handle_ref(&self) -> Option<&H> {
+        self.handle.as_ref()
+    }
+
+    pub fn get_handle_mut(&mut self) -> Option<&mut H> {
+        self.handle.as_mut()
+    }
+
+    pub fn reset_cache(&mut self) {
+        self.layout_cache = None;
+        self.tree_cache = None;
+        self.alloc.reset().expect("[Rosin] Failed to reset cache");
     }
 
     pub fn update_phase(&mut self, new_phase: Phase) {
         self.phase = self.phase.max(new_phase);
-        if new_phase != Phase::Idle {
-            self.windowed_context.window().request_redraw();
-        }
     }
 
-    pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
-        if new_size.width > 0 && new_size.height > 0 {
-            self.update_phase(Phase::Layout);
-
-            self.windowed_context.resize(new_size);
-        }
+    pub fn size(&mut self, new_size: (f32, f32)) {
+        self.size.0 = new_size.0;
+        self.size.1 = new_size.1;
+        self.update_phase(Phase::Layout);
     }
 
-    pub fn click(&mut self, state: &mut T, ctx: &mut EventCtx, position: PhysicalPosition<f64>) -> Phase {
+    pub fn set_view(&mut self, new_view: ViewCallback<T>) {
+        self.view = new_view;
+        self.phase = Phase::Build;
+    }
+
+    pub fn do_anim_frame(&mut self, state: &mut T) {
+        todo!();
+    }
+
+    pub fn is_idle(&self) -> bool {
+        self.phase == Phase::Idle
+    }
+
+    pub fn get_alloc(&self) -> Rc<Alloc> {
+        self.alloc.clone()
+    }
+
+    pub fn click(&mut self, state: &mut T, ctx: &mut EventCtx, position: (f32, f32)) {
         if let (Some(tree), Some(layout)) = (&mut self.tree_cache, &mut self.layout_cache) {
-            let id = hit_test(tree.borrow(), layout.borrow_mut(), (position.x as f32, position.y as f32));
-            tree.borrow_mut()[id].trigger(On::MouseDown, state, ctx)
-        } else {
-            Phase::Idle
+            let id = hit_test(tree.borrow(), layout.borrow_mut(), (position.0 as f32, position.1 as f32));
+            let test = tree.borrow_mut()[id].trigger(On::MouseDown, state, ctx);
+            self.update_phase(test);
         }
     }
 
-    pub fn redraw(&mut self, state: &T, stylesheet: &Stylesheet, loader: &LibLoader) -> Result<(), Box<dyn Error>> {
+    pub fn draw(&mut self, state: &T, piet: &mut Piet<'_>) -> Result<(), Box<dyn Error>> {
+        Alloc::set_thread_local_alloc(Some(self.alloc.clone()));
+        let alloc = self.alloc.clone();
+
         // Reset scratch allocator
         self.temp.reset();
 
-        // Get window size and dpi
-        let window_size = self.windowed_context.window().inner_size();
-        let dpi_factor = self.windowed_context.window().scale_factor();
-
-        // ---------- Rebuild window tree ----------
+        // ---------- Build Phase ----------
         if self.phase == Phase::Build || self.tree_cache.is_none() {
-            self.reset_cache(loader);
+            self.reset_cache();
 
-            #[cfg(not(all(debug_assertions, feature = "hot-reload")))]
-            let (mut tree, node_count) = {
-                // Reset NODE_COUNT so we can track how many nodes are allocated
-                NODE_COUNT.with(|c| c.set(0));
+            // Reset counter so we can track how many nodes are allocated
+            alloc.reset_counter();
 
-                // SAFETY: This is safe because we panic if client code breaks scope()'s contract
-                let tree = A.with(|a| unsafe {
-                    // Load and run the view function
-                    a.scope(|| self.view.get(loader)(state).finish().unwrap())
-                });
-
-                (tree, NODE_COUNT.with(|c| c.get()))
-            };
-
-            #[cfg(all(debug_assertions, feature = "hot-reload"))]
-            let (mut tree, node_count) = {
-                // Reset NODE_COUNT so we can track how many nodes are allocated
-                loader.get::<fn()>(b"_rosin_reset_node_count").unwrap()();
-
-                // Manually begin a scope on dylib's allocator
-                loader.get::<fn()>(b"_rosin_begin_alloc").unwrap()();
-
-                // SAFETY: This is safe because we panic if client code breaks scope()'s contract
-                let tree = A.with(|a| unsafe {
-                    // Load and run the view function
-                    a.scope(|| self.view.get(loader)(state).finish().unwrap())
-                });
-
-                // Manually end the dylib's scope
-                loader.get::<fn()>(b"_rosin_end_alloc").unwrap()();
-
-                (tree, loader.get::<fn() -> usize>(b"_rosin_get_node_count").unwrap()())
+            // SAFETY: This is safe because we panic if client code breaks scope()'s contract
+            let mut tree = unsafe {
+                // Run the view function
+                alloc.scope(|| (self.view)(state).finish().unwrap())
             };
 
             // Panic if the view function didn't return the number of nodes we expected
-            assert!(node_count == tree.borrow().len(), "[Rosin] Nodes missing");
+            assert!(alloc.get_counter() == tree.borrow().len(), "[Rosin] Nodes missing");
 
-            stylesheet.style(tree.borrow_mut());
+            self.sheet_loader.apply_style(tree.borrow_mut());
             self.tree_cache = Some(tree);
         }
 
@@ -195,13 +131,13 @@ impl<T> RosinWindow<T> {
             }
         }
 
-        // ---------- Recalculate layout ----------
+        // ---------- Layout Phase ----------
         if self.phase >= Phase::Layout || self.layout_cache.is_none() {
             if self.layout_cache.is_none() {
-                let new_layout = A.with(|a| unsafe {
+                let new_layout = unsafe {
                     // SAFETY: This is safe because we meet scope()'s requirements
-                    a.scope(|| A.with(|a| a.vec_capacity(tree.len())))
-                });
+                    alloc.scope(|| alloc.vec_capacity(tree.len()))
+                };
 
                 self.layout_cache = Some(new_layout);
             }
@@ -213,28 +149,17 @@ impl<T> RosinWindow<T> {
                 layout.push(Layout::default());
             }
 
-            let layout_size = Size {
-                width: window_size.width as f32,
-                height: window_size.height as f32,
-            };
-            calc_layout(&self.temp, tree, layout_size, layout);
+            calc_layout(&self.temp, tree, self.size.into(), layout);
         }
 
         let layout: &BumpVec<Layout> = self.layout_cache.as_ref().unwrap().borrow();
 
-        // ---------- Render ----------
+        // ---------- Draw Phase ----------
         // TODO - If phase == Idle, re-issue commands from last frame
-        self.canvas
-            .set_size(window_size.width as u32, window_size.height as u32, dpi_factor as f32);
-        self.canvas
-            .clear_rect(0, 0, window_size.width as u32, window_size.height as u32, femtovg::Color::black());
-
-        render::render(state, tree, layout, &mut self.canvas, &self.font_table);
-
-        self.canvas.flush();
-        self.windowed_context.swap_buffers().unwrap();
+        render::render(state, tree, layout, piet);
 
         // ---------- Cleanup ----------
+        Alloc::set_thread_local_alloc(None);
         self.phase = Phase::Idle;
 
         // Restore default styles

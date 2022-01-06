@@ -4,87 +4,79 @@ use crate::layout::Layout;
 use crate::style::Style;
 use crate::tree::ArrayNode;
 
-use femtovg::{renderer::OpenGl, Canvas, FontId, Paint, Path};
+use druid_shell::{
+    kurbo::{Affine, RoundedRect},
+    piet::{Color, Piet, RenderContext},
+};
 
-pub struct DrawCtx<'a> {
-    pub canvas: &'a mut Canvas<OpenGl>,
-    pub font_table: &'a [(u32, FontId)], // TODO - make a struct for this
+pub struct DrawCtx<'a, 'b> {
+    pub piet: &'a mut Piet<'b>,
     pub style: &'a Style,
     pub width: f32,
     pub height: f32,
     pub must_draw: bool,
 }
 
-pub(crate) fn render<T>(state: &T, tree: &[ArrayNode<T>], layout: &[Layout], canvas: &mut Canvas<OpenGl>, font_table: &[(u32, FontId)]) {
-    render_node(state, tree, layout, 0, (0.0, 0.0), canvas, font_table);
+pub(crate) fn render<T>(state: &T, tree: &[ArrayNode<T>], layout: &[Layout], piet: &mut Piet<'_>) {
+    render_node(state, tree, layout, 0, (0.0, 0.0), piet);
 }
 
-fn render_node<T>(
-    state: &T,
-    tree: &[ArrayNode<T>],
-    layout: &[Layout],
-    id: usize,
-    offset: (f32, f32),
-    canvas: &mut Canvas<OpenGl>,
-    font_table: &[(u32, FontId)],
-) {
+fn render_node<T>(state: &T, tree: &[ArrayNode<T>], layout: &[Layout], id: usize, offset: (f32, f32), piet: &mut Piet<'_>) {
     if layout[id].size.width != 0.0 && layout[id].size.height != 0.0 {
         let style = &tree[id].style;
 
-        // Draw the box
-        let bg_color = style.background_color;
-        let fill_paint = Paint::color(femtovg::Color::rgba(bg_color.red, bg_color.green, bg_color.blue, bg_color.alpha));
+        // ---------- Draw the box ----------
+        let bg_color = Color::rgba8(
+            style.background_color.red,
+            style.background_color.green,
+            style.background_color.blue,
+            style.background_color.alpha,
+        );
 
         // TODO - use all border colors
         let border_color = style.border_top_color;
-        let mut border_paint = Paint::color(femtovg::Color::rgba(
-            border_color.red,
-            border_color.green,
-            border_color.blue,
-            border_color.alpha,
-        ));
-        border_paint.set_line_width(style.border_top_width);
+        let border_color = Color::rgba8(border_color.red, border_color.green, border_color.blue, border_color.alpha);
 
-        let mut path = Path::new();
-        path.rounded_rect_varying(
-            layout[id].position.x + offset.0,
-            layout[id].position.y + offset.1,
-            layout[id].size.width,
-            layout[id].size.height,
-            style.border_top_left_radius,
-            style.border_top_right_radius,
-            style.border_bottom_right_radius,
-            style.border_bottom_left_radius,
+        let path = RoundedRect::new(
+            layout[id].position.x as f64 + offset.0 as f64,
+            layout[id].position.y as f64 + offset.1 as f64,
+            layout[id].position.x as f64 + layout[id].size.width as f64 + offset.0 as f64,
+            layout[id].position.y as f64 + layout[id].size.height as f64 + offset.1 as f64,
+            (
+                style.border_top_left_radius.into(),
+                style.border_top_right_radius.into(),
+                style.border_bottom_right_radius.into(),
+                style.border_bottom_left_radius.into(),
+            ),
         );
-        canvas.fill_path(&mut path, fill_paint);
-        canvas.stroke_path(&mut path, border_paint);
+
+        piet.fill(path, &bg_color);
+        piet.stroke(path, &border_color, style.border_top_width.into());
 
         // Call on_draw()
         if let Some(on_draw) = &tree[id].draw_callback {
-            canvas.translate(
-                layout[id].position.x + offset.0 + style.border_left_width,
-                layout[id].position.y + offset.1 + style.border_top_width,
-            );
-            canvas.scissor(
-                0.0,
-                0.0,
-                layout[id].size.width - style.border_left_width - style.border_right_width,
-                layout[id].size.height - style.border_top_width - style.border_bottom_width,
-            );
+            piet.save();
+            piet.clip(path);
+
+            piet.transform(Affine::translate((
+                layout[id].position.x as f64 + offset.0 as f64 + style.border_left_width as f64,
+                layout[id].position.y as f64 + offset.1 as f64 + style.border_top_width as f64,
+            )));
 
             let mut ctx = DrawCtx {
-                canvas,
-                font_table,
+                piet,
                 style,
                 width: layout[id].size.width,
                 height: layout[id].size.height,
                 must_draw: true, // TODO - caching system
             };
+
             (*on_draw)(state, &mut ctx);
 
-            canvas.reset_scissor();
-            canvas.reset_transform();
+            piet.restore();
         }
+
+        piet.stroke(path, &border_color, style.border_top_width.into());
     }
 
     for i in tree[id].child_ids() {
@@ -94,8 +86,7 @@ fn render_node<T>(
             layout,
             i,
             (layout[id].position.x + offset.0, layout[id].position.y + offset.1),
-            canvas,
-            font_table,
+            piet,
         );
     }
 }

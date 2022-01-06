@@ -3,13 +3,9 @@
 use crate::alloc::Alloc;
 use crate::prelude::*;
 
-use std::cell::Cell;
 use std::num::NonZeroUsize;
 
 use bumpalo::collections::Vec as BumpVec;
-
-thread_local!(pub(crate) static A: Alloc = Alloc::default());
-thread_local!(pub(crate) static NODE_COUNT: Cell<usize> = Cell::new(0));
 
 /// Macro for describing the structure and style of a UI.
 ///
@@ -19,13 +15,13 @@ thread_local!(pub(crate) static NODE_COUNT: Cell<usize> = Cell::new(0));
 #[macro_export]
 macro_rules! ui {
     ($($classes:literal)? [ $($children:tt)* ]) => {
-        ui!(Node::default() $(.add_classes($classes))*; $($children)* )
+        ui!(Node::new() $(.add_classes($classes))*; $($children)* )
     };
     ($sheet:expr, $($classes:literal)? [ $($children:tt)* ]) => {
-        ui!(Node::default().apply_style_sheet($sheet) $(.add_classes($classes))*; $($children)* )
+        ui!(Node::new().apply_style_sheet($sheet) $(.add_classes($classes))*; $($children)* )
     };
     ($tree:expr; $($classes:literal)? [ $($children:tt)* ] $($tail:tt)*) => {
-        ui!($tree.add_child(ui!(Node::default() $(.add_classes($classes))*; $($children)* )); $($tail)* )
+        ui!($tree.add_child(ui!(Node::new() $(.add_classes($classes))*; $($children)* )); $($tail)* )
     };
     ($tree:expr; $($classes:literal)? ( $($child:tt)* ) $($tail:tt)*) => {
         ui!($tree.add_child($($child)* $(.add_classes($classes))* ); $($tail)* )
@@ -87,7 +83,7 @@ pub(crate) struct ArrayNode<T: 'static> {
     pub _key: Option<Key>, // TODO
     pub classes: BumpVec<'static, &'static str>,
     pub callbacks: BumpVec<'static, (On, &'static mut dyn EventCallback<T>)>,
-    pub style_sheet_id: SheetId,
+    pub style_sheet: Option<SheetId>,
     pub style: Style,
     pub style_callback: Option<&'static mut dyn StyleCallback<T>>,
     pub draw_callback: Option<&'static mut dyn DrawCallback<T>>,
@@ -124,7 +120,7 @@ pub struct Node<T: 'static> {
     key: Option<Key>,
     classes: Option<BumpVec<'static, &'static str>>,
     callbacks: Option<BumpVec<'static, (On, &'static mut dyn EventCallback<T>)>>,
-    style_sheet_id: SheetId,
+    style_sheet: Option<SheetId>,
     style_callback: Option<&'static mut dyn StyleCallback<T>>,
     draw_callback: Option<&'static mut dyn DrawCallback<T>>,
     draw_cache_enable: bool,
@@ -134,15 +130,16 @@ pub struct Node<T: 'static> {
     last_child: Option<&'static mut Node<T>>,
 }
 
-impl<T> Default for Node<T> {
-    fn default() -> Self {
-        NODE_COUNT.with(|c| c.set(c.get() + 1));
+impl<T> Node<T> {
+    pub fn new() -> Self {
+        let alloc = Alloc::get_thread_local_alloc().unwrap();
+        alloc.increment_counter();
 
         Self {
             key: None,
-            classes: Some(A.with(|a| a.vec())),
-            callbacks: Some(A.with(|a| a.vec())),
-            style_sheet_id: SheetId::None,
+            classes: Some(alloc.vec()),
+            callbacks: Some(alloc.vec()),
+            style_sheet: None,
             style_callback: None,
             draw_callback: None,
             draw_cache_enable: false,
@@ -152,9 +149,7 @@ impl<T> Default for Node<T> {
             last_child: None,
         }
     }
-}
 
-impl<T> Node<T> {
     /// Set a key on a node, providing a stable identity between rebuilds.
     pub fn key(mut self, key: Key) -> Self {
         self.key = Some(key);
@@ -174,31 +169,36 @@ impl<T> Node<T> {
     /// Register an event callback.
     pub fn event(mut self, event_type: On, callback: impl Fn(&mut T, &mut EventCtx) -> Phase + 'static) -> Self {
         if let Some(callbacks) = &mut self.callbacks {
-            callbacks.push((event_type, A.with(|a| a.alloc(callback))));
+            let alloc = Alloc::get_thread_local_alloc().unwrap();
+            callbacks.push((event_type, alloc.alloc(callback)));
         }
         self
     }
 
     pub fn apply_style_sheet(mut self, id: SheetId) -> Self {
-        self.style_sheet_id = id;
+        self.style_sheet = Some(id);
         self
     }
 
     /// Register a function to modify this node's style right before redrawing.
     pub fn style_on_draw(mut self, func: impl Fn(&T, &mut Style) + 'static) -> Self {
-        self.style_callback = Some(A.with(|a| a.alloc(func)));
+        let alloc = Alloc::get_thread_local_alloc().unwrap();
+        self.style_callback = Some(alloc.alloc(func));
         self
     }
 
     /// Register a function to draw the contents of this node
     pub fn on_draw(mut self, enable_cache: bool, func: impl Fn(&T, &mut DrawCtx) + 'static) -> Self {
-        self.draw_callback = Some(A.with(|a| a.alloc(func)));
+        let alloc = Alloc::get_thread_local_alloc().unwrap();
+        self.draw_callback = Some(alloc.alloc(func));
         self.draw_cache_enable = enable_cache;
         self
     }
 
     /// Add a child node.
     pub fn add_child(mut self, mut new_child: Self) -> Self {
+        let alloc = Alloc::get_thread_local_alloc().unwrap();
+
         self.size += new_child.size;
         self.num_children += 1;
 
@@ -207,13 +207,15 @@ impl<T> Node<T> {
             new_child.prev_sibling = Some(last_child);
         }
 
-        self.last_child = Some(A.with(|a| a.alloc(new_child)));
+        self.last_child = Some(alloc.alloc(new_child));
         self
     }
 
     pub(crate) fn finish(mut self) -> Option<BumpVec<'static, ArrayNode<T>>> {
-        let mut tree: BumpVec<ArrayNode<T>> = A.with(|a| a.vec_capacity(self.size));
-        let mut stack: BumpVec<(bool, usize, &mut Node<T>)> = A.with(|a| a.vec());
+        let alloc = Alloc::get_thread_local_alloc().unwrap();
+
+        let mut tree: BumpVec<ArrayNode<T>> = alloc.vec_capacity(self.size);
+        let mut stack: BumpVec<(bool, usize, &mut Node<T>)> = alloc.vec();
 
         stack.push((false, 0, &mut self));
         while let Some((is_last_child, parent, curr_node)) = stack.pop() {
@@ -226,7 +228,7 @@ impl<T> Node<T> {
                 _key: curr_node.key,
                 classes: curr_node.classes.take()?,
                 callbacks: curr_node.callbacks.take()?,
-                style_sheet_id: curr_node.style_sheet_id,
+                style_sheet: curr_node.style_sheet.take(),
                 style: Style::default(),
                 style_callback: curr_node.style_callback.take(),
                 draw_callback: std::mem::take(&mut curr_node.draw_callback),

@@ -92,7 +92,7 @@ pub(crate) fn calc_layout<T>(temp: &Bump, tree: &[ArrayNode<T>], root_size: Size
         size: root_size,
         position: Point::zero(),
     };
-    round_layout(tree, output, 0, 0.0, 0.0);
+    //round_layout(tree, output, 0, 0.0, 0.0);
 }
 
 fn round_layout<T>(tree: &[ArrayNode<T>], layout: &mut [Layout], id: usize, abs_x: f32, abs_y: f32) {

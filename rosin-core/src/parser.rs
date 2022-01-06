@@ -1,5 +1,7 @@
 #![allow(clippy::cognitive_complexity)]
 
+use std::sync::Arc;
+
 use crate::style::*;
 
 use cssparser::*;
@@ -223,7 +225,7 @@ pub enum Property {
     FlexGrow(PropertyValue<f32>),
     FlexShrink(PropertyValue<f32>),
     FlexWrap(PropertyValue<FlexWrap>),
-    FontFamily(PropertyValue<u32>),
+    FontFamily(PropertyValue<Arc<str>>),
     FontSize(PropertyValue<Length>),
     FontWeight(PropertyValue<u32>),
     Height(PropertyValue<Length>),
@@ -721,7 +723,13 @@ impl<'i> DeclarationParser<'i> for PropertiesParser {
             "flex-shrink" => parse!(@f32, parser, Property::FlexShrink),
             "flex-wrap" => parse!(@enum, parser, Property::FlexWrap, FlexWrap),
             "font" => todo!(),
-            "font-family" => parse!(@u32, parser, Property::FontFamily),
+            "font-family" => {
+                let token = parser.next()?;
+                match token {
+                    Token::Ident(s) => Ok(vec![Property::FontFamily(PropertyValue::Exact(Arc::from(&**s)))]),
+                    _ => Err(parser.new_error_for_next_token()),
+                }
+            },
             "font-size" => parse!(@length, parser, Property::FontSize),
             "font-weight" => parse!(@u32, parser, Property::FontWeight),
             "height" => parse!(@length, parser, Property::Height),

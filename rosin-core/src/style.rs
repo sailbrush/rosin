@@ -5,28 +5,10 @@ use crate::geometry::*;
 use crate::parser::*;
 use crate::tree::*;
 
-use std::num::NonZeroU32;
+use std::sync::Arc;
 use std::{cmp::Ordering, error::Error, fs, time::SystemTime};
 
 use cssparser::{Parser, ParserInput, RuleListParser, RGBA};
-
-#[derive(Debug, Clone, Copy)]
-pub enum SheetId {
-    None,
-    Id(NonZeroU32),
-}
-
-/// Load a CSS file. In debug builds, the file will be reloaded when changed.
-#[macro_export]
-macro_rules! new_style {
-    ($path:expr) => {
-        if cfg!(debug_assertions) {
-            Stylesheet::new_dynamic(concat!(env!("CARGO_MANIFEST_DIR"), "/", $path))
-        } else {
-            Stylesheet::new_static(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", $path)))
-        }
-    };
-}
 
 macro_rules! apply {
     (@color, $value:expr, $style:expr, $par_style:ident, $attr:ident) => {
@@ -164,6 +146,19 @@ macro_rules! apply {
                     $style.$attr = *value;
                 }
             },
+        };
+    };
+    (@str, $value:expr, $style:expr, $par_style:ident, $attr:ident) => {
+        match $value {
+            PropertyValue::Inherit => {
+                if let Some(parent) = &$par_style {
+                    $style.$attr = parent.$attr.clone();
+                }
+            }
+            PropertyValue::Exact(value) => {
+                $style.$attr = Some(value.clone());
+            }
+            _ => debug_assert!(false),
         };
     };
 }
@@ -422,7 +417,7 @@ pub struct Style {
     pub flex_grow: f32,
     pub flex_shrink: f32,
     pub flex_wrap: FlexWrap,
-    pub font_family: u32,
+    pub font_family: Option<Arc<str>>,
     pub font_size: f32,
     pub font_weight: u32,
     pub height: Option<f32>,
@@ -482,7 +477,7 @@ impl Default for Style {
             flex_grow: 1.0,
             flex_shrink: 1.0,
             flex_wrap: FlexWrap::NoWrap,
-            font_family: 0,
+            font_family: None,
             font_size: 0.0,
             font_weight: 400,
             height: None,
@@ -612,12 +607,11 @@ impl PartialOrd for Rule {
     }
 }
 
-/// A CSS file. Create a Stylesheet with the `new_style!()` macro.
 #[derive(Debug, Default, Clone)]
-pub struct Stylesheet {
-    pub(crate) path: Option<&'static str>,
-    pub(crate) last_modified: Option<SystemTime>,
-    pub(crate) rules: Vec<Rule>,
+pub(crate) struct Stylesheet {
+    pub path: Option<&'static str>,
+    pub last_modified: Option<SystemTime>,
+    pub rules: Vec<Rule>,
 }
 
 #[doc(hidden)]
@@ -677,7 +671,7 @@ impl Stylesheet {
     }
 
     // Perform selector matching and apply styles to a tree
-    pub(crate) fn style<T>(&self, tree: &mut [ArrayNode<T>]) {
+    pub(crate) fn apply_style<T>(&self, tree: &mut [ArrayNode<T>]) {
         for id in 0..tree.len() {
             // TODO benchmark hash map
             let mut relevant_rules = self
@@ -741,19 +735,20 @@ impl Stylesheet {
             relevant_rules.sort();
 
             // First find the font size and color (Used for relative lengths and currentColor)
-            let mut font_set = false;
+            let mut font_size_set = false;
+            let mut font_family_set = false;
             let mut color_set = false;
             relevant_rules.iter().for_each(|rule| {
-                if font_set && color_set {
+                if font_size_set && font_family_set && color_set {
                     return;
                 }
                 for property in rule.properties.iter().rev() {
-                    if font_set && color_set {
+                    if font_size_set && font_family_set && color_set {
                         break;
                     }
                     match property {
                         Property::FontSize(value) => {
-                            if font_set {
+                            if font_size_set {
                                 continue;
                             }
                             match value {
@@ -776,7 +771,24 @@ impl Stylesheet {
                                 },
                                 _ => {}
                             };
-                            font_set = true;
+                            font_size_set = true;
+                        }
+                        Property::FontFamily(value) => {
+                            if font_family_set {
+                                continue;
+                            }
+                            match value {
+                                PropertyValue::Exact(family) => {
+                                    tree[id].style.font_family = Some(family.clone());
+                                }
+                                _ => {
+                                    // Inherited by default
+                                    if let Some(parent) = &par_style {
+                                        tree[id].style.font_family = parent.font_family.clone();
+                                    }
+                                }
+                            }
+                            font_family_set = true;
                         }
                         Property::Color(value) => {
                             if color_set {
@@ -802,9 +814,14 @@ impl Stylesheet {
                     }
                 }
             });
-            if !font_set {
+            if !font_size_set {
                 if let Some(parent) = &par_style {
                     tree[id].style.font_size = parent.font_size;
+                }
+            }
+            if !font_family_set {
+                if let Some(parent) = &par_style {
+                    tree[id].style.font_family = parent.font_family.clone();
                 }
             }
             if !color_set {
@@ -818,6 +835,7 @@ impl Stylesheet {
                     match property {
                         Property::FontSize(_) => { /* already handled */ }
                         Property::Color(_) => { /* already handled */ }
+                        Property::FontFamily(_) => { /* already handled */ }
 
                         Property::AlignContent(value) => {
                             apply!(@generic, value, tree[id].style, par_style, align_content);
@@ -831,6 +849,7 @@ impl Stylesheet {
                         Property::BackgroundColor(value) => {
                             apply!(@color, value, tree[id].style, par_style, background_color);
                         }
+                        // TODO - for gradients
                         /*Property::BackgroundImage(_) => {
                             todo!();
                             //apply!(@generic_opt, value, arena[id].style, par_style, background_image);
@@ -906,9 +925,6 @@ impl Stylesheet {
                         }
                         Property::FlexWrap(value) => {
                             apply!(@generic, value, tree[id].style, par_style, flex_wrap);
-                        }
-                        Property::FontFamily(value) => {
-                            apply!(@generic, value, tree[id].style, par_style, font_family);
                         }
                         Property::FontWeight(value) => {
                             apply!(@generic, value, tree[id].style, par_style, font_weight);

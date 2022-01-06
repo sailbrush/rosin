@@ -16,10 +16,10 @@ struct Registry {
     pub dead: Vec<usize>,
 }
 
-// TODO: Benchmark an alternate implementation based on Tinyset, or a Hashset with FxHashMap
+// TODO: Benchmark an alternate implementation based on Tinyset, a Hashset with FxHashMap, or a BTreeSet
+//       Also lazy_static vs thread_local in high and low contention situations
 //       Will probably need to store strong_count inside the allocation
 //       I don't think it will need a generation counter since each item in the set will be a sequential integer
-//       Also, put this behind an unstable feature flag and use the CoerceUnsized trait to keep the user from needing to box items
 impl Registry {
     pub const fn new() -> Self {
         Self {
@@ -45,22 +45,23 @@ impl Registry {
 }
 
 #[derive(Debug)]
-pub struct Grc<T: ?Sized> {
+pub struct Grc<T> {
     index: usize,
     generation: usize,
     data: NonNull<T>,
     phantom: PhantomData<T>,
 }
 
-// Let Box do the work of coercing unsized types until CoerceUnsized stabilizes
+// Waiting until CoerceUnsized stabilizes
 // https://doc.rust-lang.org/std/ops/trait.CoerceUnsized.html
-impl<T: ?Sized> Grc<T> {
-    pub fn new(init: Box<T>) -> Self {
+impl<T> Grc<T> {
+    pub fn new(init: T) -> Self {
         let (index, generation) = REGISTRY.lock().unwrap().register();
+
         Self {
             index,
             generation,
-            data: NonNull::new(Box::into_raw(init)).unwrap(),
+            data: NonNull::new(Box::into_raw(Box::new(init))).unwrap(),
             phantom: PhantomData,
         }
     }
@@ -74,10 +75,11 @@ impl<T: ?Sized> Grc<T> {
     }
 }
 
-impl<T: ?Sized> Clone for Grc<T> {
+impl<T> Clone for Grc<T> {
     fn clone(&self) -> Self {
         let mut reg = REGISTRY.lock().unwrap();
         reg.alive[self.index].strong_count += 1;
+        drop(reg);
 
         Self {
             index: self.index,
@@ -88,7 +90,7 @@ impl<T: ?Sized> Clone for Grc<T> {
     }
 }
 
-impl<T: ?Sized> Drop for Grc<T> {
+impl<T> Drop for Grc<T> {
     fn drop(&mut self) {
         let mut reg = REGISTRY.lock().unwrap();
         reg.alive[self.index].strong_count -= 1;
@@ -102,7 +104,7 @@ impl<T: ?Sized> Drop for Grc<T> {
     }
 }
 
-impl<T: ?Sized> Deref for Grc<T> {
+impl<T> Deref for Grc<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -111,13 +113,13 @@ impl<T: ?Sized> Deref for Grc<T> {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct Weak<T: ?Sized> {
+pub struct Weak<T> {
     index: usize,
     generation: usize,
     data: NonNull<T>,
 }
 
-impl<T: ?Sized> Weak<T> {
+impl<T> Weak<T> {
     pub fn upgrade(&self) -> Option<Grc<T>> {
         let mut reg = REGISTRY.lock().unwrap();
         if reg.alive[self.index].generation == self.generation {

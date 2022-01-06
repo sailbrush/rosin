@@ -1,5 +1,3 @@
-use crate::tree::A;
-
 use std::{error::Error, fs, path::PathBuf, sync::Arc, time::SystemTime};
 
 use libloading::{Library, Symbol};
@@ -54,11 +52,6 @@ impl LibLoader {
                 unsafe {
                     self.lib = Some(Library::new(next_temp_path)?);
                 }
-
-                // SAFETY: Needed to make hot-reload work
-                A.with(|a| unsafe {
-                    self.get::<fn(Arc<()>)>(b"_rosin_entangle_alloc").unwrap()(a.get_token());
-                });
 
                 self.last_modified = last_modified;
                 fs::remove_file(self.lib_path.with_extension(self.temp_ext.to_string()))?;
