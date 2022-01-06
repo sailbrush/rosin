@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use std::{any::Any, cell::RefCell, rc::Rc, sync::{Arc, Mutex}};
 
 use druid_shell::{

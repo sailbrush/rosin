@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use crate::prelude::*;
 
 use std::time::Duration;

@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use std::{error::Error, num::NonZeroUsize};
 
 use crate::{style::Stylesheet, tree::ArrayNode};
