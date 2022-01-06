@@ -1,8 +1,8 @@
 #![forbid(unsafe_code)]
 
-use std::{cell::RefCell, rc::Rc, sync::Arc};
+use std::{cell::RefCell, rc::Rc, sync::{Arc, Mutex}};
 
-use crate::{libloader::LibLoader, prelude::*, window::Window};
+use crate::{libloader::*, prelude::*, window::Window};
 
 use druid_shell::{Application, WindowBuilder};
 use rosin_core::prelude::*;
@@ -30,21 +30,23 @@ impl<T> AppLauncher<T> {
 
         // Set up libloader
         #[cfg(all(debug_assertions, feature = "hot-reload"))]
-        let lib_loader = {
+        let libloader = {
             // TODO - can probably set an env variable in a build script or something
             // Use the name of the current binary to find the library
-            let cmd = env::args().next().unwrap();
-            let cmd_path = Path::new(&cmd);
+            let cmd = std::env::args().next().unwrap();
+            let cmd_path = std::path::Path::new(&cmd);
             let lib_name = cmd_path.with_file_name(format!(
                 "_{}",
                 cmd_path.with_extension(DYLIB_EXT).file_name().unwrap().to_str().unwrap()
             ));
-            let lib_path = env::current_dir().unwrap().join(&lib_name);
+            let lib_path = std::env::current_dir().unwrap().join(&lib_name);
             LibLoader::new(lib_path).expect("[Rosin] Hot-reload: Failed to init")
         };
 
         #[cfg(not(all(debug_assertions, feature = "hot-reload")))]
-        let lib_loader = LibLoader {};
+        let libloader = LibLoader {};
+
+        let libloader = Arc::new(Mutex::new(libloader));
 
         // Create Druid Applicaiton
         let druid_app = Application::new().unwrap();
@@ -52,7 +54,7 @@ impl<T> AppLauncher<T> {
         for desc in self.windows {
             let mut builder = WindowBuilder::new(druid_app.clone());
 
-            let handler = Window::new(self.sheet_loader.clone(), desc.view.get(&lib_loader), desc.size, state.clone());
+            let handler = Window::new(self.sheet_loader.clone(), libloader.clone(), desc.view, desc.size, state.clone());
             builder.set_handler(Box::new(handler));
 
             if let Some(title) = desc.title {

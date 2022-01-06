@@ -1,11 +1,11 @@
-use std::{any::Any, cell::RefCell, rc::Rc, sync::Arc};
+use std::{any::Any, cell::RefCell, rc::Rc, sync::{Arc, Mutex}};
 
 use druid_shell::{
     kurbo, piet::Piet, Application, FileDialogToken, FileInfo, IdleToken, KeyEvent, MouseEvent, Region, Scale, TimerToken, WinHandler,
     WindowHandle,
 };
 
-use crate::prelude::*;
+use crate::{prelude::*, libloader::LibLoader};
 
 #[derive(Clone, Copy)]
 pub struct WindowId(u32);
@@ -43,16 +43,22 @@ impl<T> WindowDesc<T> {
     }
 }
 
+#[allow(dead_code)]
 pub(crate) struct Window<T: 'static> {
     rosin: RosinWindow<T, WindowHandle>,
+    view: View<T>,
     state: Rc<RefCell<T>>,
+    libloader: Arc<Mutex<LibLoader>>,
 }
 
 impl<T> Window<T> {
-    pub fn new(sheet_loader: Arc<SheetLoader>, view: ViewCallback<T>, size: (f32, f32), state: Rc<RefCell<T>>) -> Self {
+    pub fn new(sheet_loader: Arc<SheetLoader>, libloader: Arc<Mutex<LibLoader>>, view: View<T>, size: (f32, f32), state: Rc<RefCell<T>>) -> Self {
+        let view_callback = view.get(&libloader.lock().unwrap());
         Self {
-            rosin: RosinWindow::new(sheet_loader, view, size),
+            rosin: RosinWindow::new(sheet_loader, view_callback, size),
+            view,
             state,
+            libloader,
         }
     }
 }
@@ -65,6 +71,15 @@ impl<T> WinHandler for Window<T> {
     fn prepare_paint(&mut self) {}
 
     fn paint(&mut self, piet: &mut Piet, _invalid: &Region) {
+        #[cfg(all(debug_assertions, feature = "hot-reload"))]
+        {
+            let mut libloader = self.libloader.lock().unwrap();
+            if libloader.poll().unwrap() {
+                let view_callback = self.view.get(&libloader);
+                self.rosin.set_view(view_callback);
+            }
+        }
+
         self.rosin.draw(&self.state.borrow(), piet).unwrap();
     }
 
