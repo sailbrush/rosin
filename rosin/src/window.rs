@@ -1,13 +1,18 @@
 #![forbid(unsafe_code)]
 
-use std::{any::Any, cell::RefCell, rc::Rc, sync::{Arc, Mutex}};
+use std::{
+    any::Any,
+    cell::RefCell,
+    rc::Rc,
+    sync::{Arc, Mutex},
+};
 
 use druid_shell::{
     kurbo, piet::Piet, Application, FileDialogToken, FileInfo, IdleToken, KeyEvent, MouseEvent, Region, Scale, TimerToken, WinHandler,
     WindowHandle,
 };
 
-use crate::{prelude::*, libloader::LibLoader};
+use crate::{libloader::LibLoader, prelude::*};
 
 #[derive(Clone, Copy)]
 pub struct WindowId(u32);
@@ -54,7 +59,13 @@ pub(crate) struct Window<T: 'static> {
 }
 
 impl<T> Window<T> {
-    pub fn new(sheet_loader: Arc<SheetLoader>, libloader: Arc<Mutex<LibLoader>>, view: View<T>, size: (f32, f32), state: Rc<RefCell<T>>) -> Self {
+    pub fn new(
+        sheet_loader: Arc<SheetLoader>,
+        libloader: Arc<Mutex<LibLoader>>,
+        view: View<T>,
+        size: (f32, f32),
+        state: Rc<RefCell<T>>,
+    ) -> Self {
         let view_callback = view.get(&libloader.lock().unwrap());
         Self {
             rosin: RosinWindow::new(sheet_loader, view_callback, size),

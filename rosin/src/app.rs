@@ -1,6 +1,10 @@
 #![forbid(unsafe_code)]
 
-use std::{cell::RefCell, rc::Rc, sync::{Arc, Mutex}};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    sync::{Arc, Mutex},
+};
 
 use crate::{libloader::*, prelude::*, window::Window};
 
