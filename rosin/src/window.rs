@@ -7,11 +7,11 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use rosin_core::alloc::Alloc;
 use druid_shell::{
     kurbo, piet::Piet, Application, FileDialogToken, FileInfo, IdleToken, KeyEvent, MouseEvent, Region, Scale, TimerToken, WinHandler,
     WindowHandle,
 };
+use rosin_core::alloc::Alloc;
 
 use crate::{libloader::LibLoader, prelude::*};
 
@@ -62,7 +62,7 @@ pub(crate) struct Window<T: 'static> {
 
 impl<T> Window<T> {
     pub fn new(
-        sheet_loader: Arc<SheetLoader>,
+        sheet_loader: Arc<Mutex<SheetLoader>>,
         view: View<T>,
         size: (f32, f32),
         state: Rc<RefCell<T>>,
@@ -160,8 +160,9 @@ impl<T> WinHandler for Window<T> {
     }
 
     fn idle(&mut self, _token: IdleToken) {
-        #[cfg(all(debug_assertions, feature = "hot-reload"))]
+        #[cfg(debug_assertions)]
         {
+            #[cfg(feature = "hot-reload")]
             if let Ok(libloader) = self.libloader.as_ref().unwrap().try_lock() {
                 if self.last_ext < libloader.get_ext() {
                     let view_callback = *libloader.get(self.view.name).unwrap();
@@ -173,6 +174,9 @@ impl<T> WinHandler for Window<T> {
                     self.rosin.get_handle_mut().unwrap().request_anim_frame();
                 }
             }
+
+            self.rosin.update_phase(Phase::Build);
+            self.rosin.get_handle_mut().unwrap().request_anim_frame();
 
             let mut idle_handle = self.rosin.get_handle_mut().unwrap().get_idle_handle().unwrap();
             idle_handle.schedule_idle(IdleToken::new(0));

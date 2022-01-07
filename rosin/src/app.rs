@@ -16,14 +16,14 @@ use rosin_core::grc::Registry;
 use rosin_core::prelude::*;
 
 pub struct AppLauncher<T: 'static> {
-    sheet_loader: Arc<SheetLoader>,
+    sheet_loader: Arc<Mutex<SheetLoader>>,
     windows: Vec<WindowDesc<T>>,
 }
 
 impl<T> AppLauncher<T> {
     pub fn new(sheet_loader: SheetLoader, window: WindowDesc<T>) -> Self {
         Self {
-            sheet_loader: Arc::new(sheet_loader),
+            sheet_loader: Arc::new(Mutex::new(sheet_loader)),
             windows: vec![window],
         }
     }
@@ -75,6 +75,15 @@ impl<T> AppLauncher<T> {
             Some(loader)
         };
 
+        let thread_sheet_loader = self.sheet_loader.clone();
+        #[cfg(debug_assertions)]
+        {
+            thread::spawn(move || loop {
+                thread_sheet_loader.lock().unwrap().poll().unwrap();
+                thread::sleep(Duration::from_millis(100));
+            });
+        }
+
         // Create Druid Applicaiton
         let druid_app = Application::new().unwrap();
 
@@ -92,7 +101,7 @@ impl<T> AppLauncher<T> {
 
             let window = builder.build().unwrap();
 
-            #[cfg(all(debug_assertions, feature = "hot-reload"))]
+            #[cfg(debug_assertions)]
             {
                 let mut idle_handle = window.get_idle_handle().unwrap();
                 idle_handle.schedule_idle(IdleToken::new(0));

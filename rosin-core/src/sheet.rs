@@ -43,7 +43,7 @@ impl SheetLoader {
         SheetId(NonZeroUsize::new(id + 1).unwrap())
     }
 
-    pub(crate) fn poll(&mut self) -> Result<bool, Box<dyn Error>> {
+    pub fn poll(&mut self) -> Result<bool, Box<dyn Error>> {
         let mut result = false;
         for sheet in &mut self.style_sheets {
             result &= sheet.poll()?;

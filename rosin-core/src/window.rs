@@ -5,13 +5,13 @@ use crate::{alloc::Scope, layout::*, render, tree::*};
 
 use std::error::Error;
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use bumpalo::{collections::Vec as BumpVec, Bump};
 use druid_shell::piet::Piet;
 
 pub struct RosinWindow<T: 'static, H> {
-    sheet_loader: Arc<SheetLoader>,
+    sheet_loader: Arc<Mutex<SheetLoader>>,
     view: ViewCallback<T>,
     size: (f32, f32),
     handle: Option<H>,
@@ -23,7 +23,7 @@ pub struct RosinWindow<T: 'static, H> {
 }
 
 impl<T, H> RosinWindow<T, H> {
-    pub fn new(sheet_loader: Arc<SheetLoader>, view: ViewCallback<T>, size: (f32, f32)) -> Self {
+    pub fn new(sheet_loader: Arc<Mutex<SheetLoader>>, view: ViewCallback<T>, size: (f32, f32)) -> Self {
         Self {
             sheet_loader,
             view,
@@ -113,7 +113,7 @@ impl<T, H> RosinWindow<T, H> {
             // Panic if the view function didn't return the number of nodes we expected
             assert!(alloc.get_counter() == tree.borrow().len(), "[Rosin] Nodes missing");
 
-            self.sheet_loader.apply_style(tree.borrow_mut());
+            self.sheet_loader.lock().unwrap().apply_style(tree.borrow_mut());
             self.tree_cache = Some(tree);
         }
 
