@@ -1,8 +1,13 @@
-use std::{marker::PhantomData, ops::Deref, ptr::NonNull, sync::Mutex};
+use std::{
+    marker::PhantomData,
+    ops::Deref,
+    ptr::NonNull,
+    sync::{Arc, Mutex},
+};
 
-lazy_static! {
-    static ref REGISTRY: Mutex<Registry> = Mutex::new(Registry::new());
-}
+use once_cell::sync::OnceCell;
+
+static REGISTRY: OnceCell<Arc<Mutex<Registry>>> = OnceCell::new();
 
 #[derive(Debug)]
 struct Count {
@@ -11,9 +16,9 @@ struct Count {
 }
 
 #[derive(Debug)]
-struct Registry {
-    pub alive: Vec<Count>,
-    pub dead: Vec<usize>,
+pub struct Registry {
+    alive: Vec<Count>,
+    dead: Vec<usize>,
 }
 
 // TODO: Benchmark an alternate implementation based on Tinyset, a Hashset with FxHashMap, or a BTreeSet
@@ -26,6 +31,15 @@ impl Registry {
             alive: Vec::new(),
             dead: Vec::new(),
         }
+    }
+
+    #[no_mangle]
+    fn set_grc_registry(registry: Arc<Mutex<Registry>>) -> Result<(), Arc<Mutex<Registry>>> {
+        REGISTRY.set(registry)
+    }
+
+    pub fn get_grc_registry() -> &'static Arc<Mutex<Registry>> {
+        REGISTRY.get_or_init(|| Arc::new(Mutex::new(Registry::new())))
     }
 
     pub(crate) fn register(&mut self) -> (usize, usize) {
@@ -56,7 +70,7 @@ pub struct Grc<T> {
 // https://doc.rust-lang.org/std/ops/trait.CoerceUnsized.html
 impl<T> Grc<T> {
     pub fn new(init: T) -> Self {
-        let (index, generation) = REGISTRY.lock().unwrap().register();
+        let (index, generation) = Registry::get_grc_registry().lock().unwrap().register();
 
         Self {
             index,
@@ -77,7 +91,7 @@ impl<T> Grc<T> {
 
 impl<T> Clone for Grc<T> {
     fn clone(&self) -> Self {
-        let mut reg = REGISTRY.lock().unwrap();
+        let mut reg = Registry::get_grc_registry().lock().unwrap();
         reg.alive[self.index].strong_count += 1;
         drop(reg);
 
@@ -92,7 +106,7 @@ impl<T> Clone for Grc<T> {
 
 impl<T> Drop for Grc<T> {
     fn drop(&mut self) {
-        let mut reg = REGISTRY.lock().unwrap();
+        let mut reg = Registry::get_grc_registry().lock().unwrap();
         reg.alive[self.index].strong_count -= 1;
         if reg.alive[self.index].strong_count == 0 {
             reg.alive[self.index].generation += 1;
@@ -121,8 +135,8 @@ pub struct Weak<T> {
 
 impl<T> Weak<T> {
     pub fn upgrade(&self) -> Option<Grc<T>> {
-        let mut reg = REGISTRY.lock().unwrap();
-        if reg.alive[self.index].generation == self.generation {
+        let mut reg = Registry::get_grc_registry().lock().unwrap();
+        if !reg.alive.is_empty() && reg.alive[self.index].generation == self.generation {
             reg.alive[self.index].strong_count += 1;
             Some(Grc {
                 index: self.index,

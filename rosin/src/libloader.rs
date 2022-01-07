@@ -1,4 +1,6 @@
-use std::{error::Error, fs, path::PathBuf, sync::Arc, time::SystemTime};
+#![allow(dead_code)]
+
+use std::{error::Error, fs, path::PathBuf, time::SystemTime};
 
 use libloading::{Library, Symbol};
 
@@ -33,6 +35,10 @@ impl LibLoader {
             last_modified,
             temp_ext: 0,
         })
+    }
+
+    pub fn get_ext(&self) -> u32 {
+        self.temp_ext
     }
 
     /// Reload library if it changed on disk

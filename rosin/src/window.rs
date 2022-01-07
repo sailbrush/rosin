@@ -7,6 +7,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use rosin_core::alloc::Alloc;
 use druid_shell::{
     kurbo, piet::Piet, Application, FileDialogToken, FileInfo, IdleToken, KeyEvent, MouseEvent, Region, Scale, TimerToken, WinHandler,
     WindowHandle,
@@ -55,23 +56,37 @@ pub(crate) struct Window<T: 'static> {
     rosin: RosinWindow<T, WindowHandle>,
     view: View<T>,
     state: Rc<RefCell<T>>,
-    libloader: Arc<Mutex<LibLoader>>,
+    libloader: Option<Arc<Mutex<LibLoader>>>,
+    last_ext: u32,
 }
 
 impl<T> Window<T> {
     pub fn new(
         sheet_loader: Arc<SheetLoader>,
-        libloader: Arc<Mutex<LibLoader>>,
         view: View<T>,
         size: (f32, f32),
         state: Rc<RefCell<T>>,
+        libloader: Option<Arc<Mutex<LibLoader>>>,
     ) -> Self {
-        let view_callback = view.get(&libloader.lock().unwrap());
+        let view_callback = if let Some(libloader) = libloader.clone() {
+            *libloader.lock().unwrap().get(view.name).unwrap()
+        } else {
+            view.func
+        };
+
+        let rosin = RosinWindow::new(sheet_loader, view_callback, size);
+
+        if let Some(libloader) = libloader.clone() {
+            let func: fn(Option<Rc<Alloc>>) = *libloader.lock().unwrap().get(b"set_thread_local_alloc").unwrap();
+            func(Some(rosin.get_alloc()));
+        }
+
         Self {
-            rosin: RosinWindow::new(sheet_loader, view_callback, size),
+            rosin,
             view,
             state,
             libloader,
+            last_ext: 0,
         }
     }
 }
@@ -84,15 +99,6 @@ impl<T> WinHandler for Window<T> {
     fn prepare_paint(&mut self) {}
 
     fn paint(&mut self, piet: &mut Piet, _invalid: &Region) {
-        #[cfg(all(debug_assertions, feature = "hot-reload"))]
-        {
-            let mut libloader = self.libloader.lock().unwrap();
-            if libloader.poll().unwrap() {
-                let view_callback = self.view.get(&libloader);
-                self.rosin.set_view(view_callback);
-            }
-        }
-
         self.rosin.draw(&self.state.borrow(), piet).unwrap();
     }
 
@@ -153,5 +159,23 @@ impl<T> WinHandler for Window<T> {
         Application::global().quit()
     }
 
-    fn idle(&mut self, token: IdleToken) {}
+    fn idle(&mut self, _token: IdleToken) {
+        #[cfg(all(debug_assertions, feature = "hot-reload"))]
+        {
+            if let Ok(libloader) = self.libloader.as_ref().unwrap().try_lock() {
+                if self.last_ext < libloader.get_ext() {
+                    let view_callback = *libloader.get(self.view.name).unwrap();
+                    self.rosin.set_view(view_callback);
+
+                    let func: fn(Option<Rc<Alloc>>) = *libloader.get(b"set_thread_local_alloc").unwrap();
+                    func(Some(self.rosin.get_alloc()));
+
+                    self.rosin.get_handle_mut().unwrap().request_anim_frame();
+                }
+            }
+
+            let mut idle_handle = self.rosin.get_handle_mut().unwrap().get_idle_handle().unwrap();
+            idle_handle.schedule_idle(IdleToken::new(0));
+        }
+    }
 }

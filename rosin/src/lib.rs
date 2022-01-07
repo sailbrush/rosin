@@ -1,12 +1,5 @@
-#[cfg(all(debug_assertions, feature = "hot-reload"))]
-mod libloader;
-
-#[cfg(not(all(debug_assertions, feature = "hot-reload")))]
-mod libloader {
-    pub(crate) struct LibLoader {}
-}
-
 mod app;
+mod libloader;
 mod view;
 mod window;
 
