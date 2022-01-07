@@ -160,6 +160,7 @@ impl<T> WinHandler for Window<T> {
     }
 
     fn idle(&mut self, _token: IdleToken) {
+        // TODO - don't rebuild when not needed
         #[cfg(debug_assertions)]
         {
             #[cfg(feature = "hot-reload")]
