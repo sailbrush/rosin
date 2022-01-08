@@ -20,20 +20,20 @@ pub struct AppLauncher<T: 'static> {
     windows: Vec<WindowDesc<T>>,
 }
 
-impl<T> AppLauncher<T> {
-    pub fn new(sheet_loader: SheetLoader, window: WindowDesc<T>) -> Self {
+impl<S> AppLauncher<S> {
+    pub fn new(sheet_loader: SheetLoader, window: WindowDesc<S>) -> Self {
         Self {
             sheet_loader: Arc::new(Mutex::new(sheet_loader)),
             windows: vec![window],
         }
     }
 
-    pub fn add_window(mut self, window: WindowDesc<T>) -> Self {
+    pub fn add_window(mut self, window: WindowDesc<S>) -> Self {
         self.windows.push(window);
         self
     }
 
-    pub fn run(self, state: T) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn run(self, state: S) -> Result<(), Box<dyn std::error::Error>> {
         let state = Rc::new(RefCell::new(state));
 
         // Set up libloader

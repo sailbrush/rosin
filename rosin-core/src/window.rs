@@ -10,20 +10,20 @@ use std::sync::{Arc, Mutex};
 use bumpalo::{collections::Vec as BumpVec, Bump};
 use druid_shell::piet::Piet;
 
-pub struct RosinWindow<T: 'static, H> {
+pub struct RosinWindow<S: 'static, H> {
     sheet_loader: Arc<Mutex<SheetLoader>>,
-    view: ViewCallback<T>,
+    view: ViewCallback<S>,
     size: (f32, f32),
     handle: Option<H>,
     phase: Phase,
-    tree_cache: Option<Scope<BumpVec<'static, ArrayNode<T>>>>,
+    tree_cache: Option<Scope<BumpVec<'static, ArrayNode<S>>>>,
     layout_cache: Option<Scope<BumpVec<'static, Layout>>>,
     alloc: Rc<Alloc>,
     temp: Bump,
 }
 
-impl<T, H> RosinWindow<T, H> {
-    pub fn new(sheet_loader: Arc<Mutex<SheetLoader>>, view: ViewCallback<T>, size: (f32, f32)) -> Self {
+impl<S, H> RosinWindow<S, H> {
+    pub fn new(sheet_loader: Arc<Mutex<SheetLoader>>, view: ViewCallback<S>, size: (f32, f32)) -> Self {
         Self {
             sheet_loader,
             view,
@@ -65,12 +65,12 @@ impl<T, H> RosinWindow<T, H> {
         self.update_phase(Phase::Layout);
     }
 
-    pub fn set_view(&mut self, new_view: ViewCallback<T>) {
+    pub fn set_view(&mut self, new_view: ViewCallback<S>) {
         self.view = new_view;
         self.phase = Phase::Build;
     }
 
-    pub fn do_anim_frame(&mut self, state: &mut T) {
+    pub fn do_anim_frame(&mut self, state: &mut S) {
         todo!();
     }
 
@@ -82,7 +82,7 @@ impl<T, H> RosinWindow<T, H> {
         self.alloc.clone()
     }
 
-    pub fn click(&mut self, state: &mut T, ctx: &mut EventCtx, position: (f32, f32)) {
+    pub fn click(&mut self, state: &mut S, ctx: &mut EventCtx, position: (f32, f32)) {
         if let (Some(tree), Some(layout)) = (&mut self.tree_cache, &mut self.layout_cache) {
             let id = hit_test(tree.borrow(), layout.borrow_mut(), (position.0 as f32, position.1 as f32));
             let test = tree.borrow_mut()[id].trigger(On::MouseDown, state, ctx);
@@ -90,7 +90,7 @@ impl<T, H> RosinWindow<T, H> {
         }
     }
 
-    pub fn draw(&mut self, state: &T, piet: &mut Piet<'_>) -> Result<(), Box<dyn Error>> {
+    pub fn draw(&mut self, state: &S, piet: &mut Piet<'_>) -> Result<(), Box<dyn Error>> {
         Alloc::set_thread_local_alloc(Some(self.alloc.clone()));
         let alloc = self.alloc.clone();
 
@@ -117,7 +117,7 @@ impl<T, H> RosinWindow<T, H> {
             self.tree_cache = Some(tree);
         }
 
-        let tree: &mut BumpVec<ArrayNode<T>> = self.tree_cache.as_mut().unwrap().borrow_mut();
+        let tree: &mut BumpVec<ArrayNode<S>> = self.tree_cache.as_mut().unwrap().borrow_mut();
 
         // Stash default styles, and run style callbacks
         let mut default_styles: BumpVec<(usize, Style)> = BumpVec::new_in(&self.temp);

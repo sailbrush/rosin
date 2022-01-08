@@ -69,7 +69,7 @@ impl LibLoader {
         Ok(reloaded)
     }
 
-    pub fn get<S>(&self, symbol: &[u8]) -> Result<Symbol<S>, Box<dyn Error>> {
+    pub fn get<T>(&self, symbol: &[u8]) -> Result<Symbol<T>, Box<dyn Error>> {
         // SAFETY: This is necessary to use a dynamic library
         unsafe {
             // Unwrap is ok because lib will always be Some() until dropped

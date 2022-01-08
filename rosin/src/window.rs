@@ -19,15 +19,15 @@ use crate::{libloader::LibLoader, prelude::*};
 pub struct WindowId(u32);
 
 /// A description of a window.
-pub struct WindowDesc<T: 'static> {
-    pub(crate) view: View<T>,
+pub struct WindowDesc<S: 'static> {
+    pub(crate) view: View<S>,
     pub(crate) id: WindowId,
     pub(crate) title: Option<String>,
     pub(crate) size: (f32, f32),
 }
 
-impl<T> WindowDesc<T> {
-    pub fn new(view: View<T>) -> Self {
+impl<S> WindowDesc<S> {
+    pub fn new(view: View<S>) -> Self {
         Self {
             view,
             id: WindowId(0),
@@ -36,7 +36,7 @@ impl<T> WindowDesc<T> {
         }
     }
 
-    pub fn with_title<S: Into<String>>(mut self, title: S) -> Self {
+    pub fn with_title<T: Into<String>>(mut self, title: T) -> Self {
         self.title = Some(title.into());
         self
     }
@@ -52,20 +52,20 @@ impl<T> WindowDesc<T> {
 }
 
 #[allow(dead_code)]
-pub(crate) struct Window<T: 'static> {
-    rosin: RosinWindow<T, WindowHandle>,
-    view: View<T>,
-    state: Rc<RefCell<T>>,
+pub(crate) struct Window<S: 'static> {
+    rosin: RosinWindow<S, WindowHandle>,
+    view: View<S>,
+    state: Rc<RefCell<S>>,
     libloader: Option<Arc<Mutex<LibLoader>>>,
     last_ext: u32,
 }
 
-impl<T> Window<T> {
+impl<S> Window<S> {
     pub fn new(
         sheet_loader: Arc<Mutex<SheetLoader>>,
-        view: View<T>,
+        view: View<S>,
         size: (f32, f32),
-        state: Rc<RefCell<T>>,
+        state: Rc<RefCell<S>>,
         libloader: Option<Arc<Mutex<LibLoader>>>,
     ) -> Self {
         let view_callback = if let Some(libloader) = libloader.clone() {

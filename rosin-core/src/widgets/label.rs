@@ -5,9 +5,9 @@ use druid_shell::piet::{Color, FontFamily, RenderContext, Text, TextLayoutBuilde
 use crate::prelude::*;
 
 // ---------- Static Label ----------
-pub fn label<T>(text: &'static str) -> Node<T> {
+pub fn label<S>(text: &'static str) -> Node<S> {
     ui!("label" [
-        .on_draw(true, move |_: &T, ctx: &mut DrawCtx| {
+        .on_draw(true, move |_: &S, ctx: &mut DrawCtx| {
             let font_color = Color::rgba8(
                 ctx.style.color.red,
                 ctx.style.color.green,

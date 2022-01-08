@@ -13,20 +13,20 @@ macro_rules! new_view {
 }
 
 /// A handle to a function that will be called to construct a view tree. Create a View with the `new_view!()` macro.
-pub struct View<T: 'static> {
+pub struct View<S: 'static> {
     pub(crate) name: &'static [u8],
-    pub(crate) func: ViewCallback<T>,
+    pub(crate) func: ViewCallback<S>,
 }
 
-impl<T> Debug for View<T> {
+impl<S> Debug for View<S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}()", self.name)
     }
 }
 
 #[doc(hidden)]
-impl<T> View<T> {
-    pub fn new(name: &'static [u8], func: ViewCallback<T>) -> Self {
+impl<S> View<S> {
+    pub fn new(name: &'static [u8], func: ViewCallback<S>) -> Self {
         Self { name, func }
     }
 }

@@ -37,7 +37,7 @@ impl DynLabel {
 }
 
 impl Grc<DynLabel> {
-    pub fn view<T>(&self) -> Node<T> {
+    pub fn view<S>(&self) -> Node<S> {
         let this = Grc::downgrade(self);
 
         ui!("test" [

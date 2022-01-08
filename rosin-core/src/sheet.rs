@@ -56,7 +56,7 @@ impl SheetLoader {
         &self.style_sheets[index]
     }
 
-    pub(crate) fn apply_style<T>(&self, tree: &mut [ArrayNode<T>]) {
+    pub(crate) fn apply_style<S>(&self, tree: &mut [ArrayNode<S>]) {
         self.style_sheets[0].apply_style(tree);
     }
 }

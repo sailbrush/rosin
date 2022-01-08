@@ -46,19 +46,19 @@ For providing a mechanism to cause other windows to redraw, use a global object
 */}
 
 /// `Fn(&mut T, Duration) -> (Phase, ShouldStop)`
-pub trait AnimCallback<T>: 'static + Fn(&mut T, Duration) -> (Phase, ShouldStop) {}
-impl<F, T> AnimCallback<T> for F where F: 'static + Fn(&mut T, Duration) -> (Phase, ShouldStop) {}
+pub trait AnimCallback<S>: 'static + Fn(&mut S, Duration) -> (Phase, ShouldStop) {}
+impl<F, S> AnimCallback<S> for F where F: 'static + Fn(&mut S, Duration) -> (Phase, ShouldStop) {}
 
 /// `Fn(&T, &mut DrawCtx)`
-pub trait DrawCallback<T>: 'static + Fn(&T, &mut DrawCtx) {}
-impl<F, T> DrawCallback<T> for F where F: 'static + Fn(&T, &mut DrawCtx) {}
+pub trait DrawCallback<S>: 'static + Fn(&S, &mut DrawCtx) {}
+impl<F, S> DrawCallback<S> for F where F: 'static + Fn(&S, &mut DrawCtx) {}
 
 /// `Fn(&mut T, &mut App<T>) -> Phase`
-pub trait EventCallback<T>: 'static + Fn(&mut T, &mut EventCtx) -> Phase {}
-impl<F, T> EventCallback<T> for F where F: 'static + Fn(&mut T, &mut EventCtx) -> Phase {}
+pub trait EventCallback<S>: 'static + Fn(&mut S, &mut EventCtx) -> Phase {}
+impl<F, S> EventCallback<S> for F where F: 'static + Fn(&mut S, &mut EventCtx) -> Phase {}
 
 /// `Fn(&T, &mut Style)`
-pub trait StyleCallback<T>: 'static + Fn(&T, &mut Style) {}
-impl<F, T> StyleCallback<T> for F where F: 'static + Fn(&T, &mut Style) {}
+pub trait StyleCallback<S>: 'static + Fn(&S, &mut Style) {}
+impl<F, S> StyleCallback<S> for F where F: 'static + Fn(&S, &mut Style) {}
 
-pub type ViewCallback<T> = fn(&T) -> Node<T>;
+pub type ViewCallback<S> = fn(&S) -> Node<S>;

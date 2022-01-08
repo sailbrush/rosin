@@ -17,11 +17,11 @@ pub struct DrawCtx<'a, 'b> {
     pub must_draw: bool,
 }
 
-pub(crate) fn render<T>(state: &T, tree: &[ArrayNode<T>], layout: &[Layout], piet: &mut Piet<'_>) {
+pub(crate) fn render<S>(state: &S, tree: &[ArrayNode<S>], layout: &[Layout], piet: &mut Piet<'_>) {
     render_node(state, tree, layout, 0, (0.0, 0.0), piet);
 }
 
-fn render_node<T>(state: &T, tree: &[ArrayNode<T>], layout: &[Layout], id: usize, offset: (f32, f32), piet: &mut Piet<'_>) {
+fn render_node<S>(state: &S, tree: &[ArrayNode<S>], layout: &[Layout], id: usize, offset: (f32, f32), piet: &mut Piet<'_>) {
     if layout[id].size.width != 0.0 && layout[id].size.height != 0.0 {
         let style = &tree[id].style;
 

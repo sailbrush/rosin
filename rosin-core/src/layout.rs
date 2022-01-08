@@ -63,11 +63,11 @@ impl Default for Layout {
 }
 
 // TODO - doesn't handle absolute positioning
-pub(crate) fn hit_test<T>(tree: &[ArrayNode<T>], layout: &mut [Layout], point: (f32, f32)) -> usize {
+pub(crate) fn hit_test<S>(tree: &[ArrayNode<S>], layout: &mut [Layout], point: (f32, f32)) -> usize {
     do_hit_test(tree, layout, point.into(), 0, Point::zero()).unwrap_or(0)
 }
 
-fn do_hit_test<T>(tree: &[ArrayNode<T>], layout: &mut [Layout], point: Point, id: usize, offset: Point) -> Option<usize> {
+fn do_hit_test<S>(tree: &[ArrayNode<S>], layout: &mut [Layout], point: Point, id: usize, offset: Point) -> Option<usize> {
     let box_pos = layout[id].position + offset;
 
     if box_pos.x < point.x
@@ -86,7 +86,7 @@ fn do_hit_test<T>(tree: &[ArrayNode<T>], layout: &mut [Layout], point: Point, id
     None
 }
 
-pub(crate) fn calc_layout<T>(temp: &Bump, tree: &[ArrayNode<T>], root_size: Size, output: &mut [Layout]) {
+pub(crate) fn calc_layout<S>(temp: &Bump, tree: &[ArrayNode<S>], root_size: Size, output: &mut [Layout]) {
     do_layout(temp, tree, 0, root_size, output);
     output[0] = Layout {
         size: root_size,
@@ -95,7 +95,7 @@ pub(crate) fn calc_layout<T>(temp: &Bump, tree: &[ArrayNode<T>], root_size: Size
     //round_layout(tree, output, 0, 0.0, 0.0);
 }
 
-fn round_layout<T>(tree: &[ArrayNode<T>], layout: &mut [Layout], id: usize, abs_x: f32, abs_y: f32) {
+fn round_layout<S>(tree: &[ArrayNode<S>], layout: &mut [Layout], id: usize, abs_x: f32, abs_y: f32) {
     let abs_x = abs_x + layout[id].position.x;
     let abs_y = abs_y + layout[id].position.y;
 
@@ -110,7 +110,7 @@ fn round_layout<T>(tree: &[ArrayNode<T>], layout: &mut [Layout], id: usize, abs_
     }
 }
 
-fn do_layout<T>(temp: &Bump, tree: &[ArrayNode<T>], id: usize, size: Size, output: &mut [Layout]) {
+fn do_layout<S>(temp: &Bump, tree: &[ArrayNode<S>], id: usize, size: Size, output: &mut [Layout]) {
     // leaf nodes don't need to do anything
     if tree[id].num_children == 0 {
         return;

@@ -79,21 +79,21 @@ macro_rules! ui {
     };
 }
 
-pub(crate) struct ArrayNode<T: 'static> {
+pub(crate) struct ArrayNode<S: 'static> {
     pub _key: Option<Key>, // TODO
     pub classes: BumpVec<'static, &'static str>,
-    pub callbacks: BumpVec<'static, (On, &'static mut dyn EventCallback<T>)>,
+    pub callbacks: BumpVec<'static, (On, &'static mut dyn EventCallback<S>)>,
     pub style_sheet: Option<SheetId>,
     pub style: Style,
-    pub style_callback: Option<&'static mut dyn StyleCallback<T>>,
-    pub draw_callback: Option<&'static mut dyn DrawCallback<T>>,
+    pub style_callback: Option<&'static mut dyn StyleCallback<S>>,
+    pub draw_callback: Option<&'static mut dyn DrawCallback<S>>,
     pub _draw_cache_enable: bool, // TODO
     pub parent: usize,
     pub num_children: usize,
     pub last_child: Option<NonZeroUsize>,
 }
 
-impl<T> ArrayNode<T> {
+impl<S> ArrayNode<S> {
     // Note: Children are reversed
     pub(crate) fn child_ids(&self) -> std::ops::Range<usize> {
         if let Some(last_child) = self.last_child {
@@ -104,7 +104,7 @@ impl<T> ArrayNode<T> {
     }
 
     // TODO
-    pub(crate) fn trigger(&mut self, event_type: On, state: &mut T, ctx: &mut EventCtx) -> Phase {
+    pub(crate) fn trigger(&mut self, event_type: On, state: &mut S, ctx: &mut EventCtx) -> Phase {
         let mut phase = Phase::Idle;
         for (et, callback) in &mut self.callbacks {
             if *et == event_type {
@@ -116,21 +116,21 @@ impl<T> ArrayNode<T> {
 }
 
 /// A node in the view tree. Panics if created outside of a `ViewCallback`.
-pub struct Node<T: 'static> {
+pub struct Node<S: 'static> {
     key: Option<Key>,
     classes: Option<BumpVec<'static, &'static str>>,
-    callbacks: Option<BumpVec<'static, (On, &'static mut dyn EventCallback<T>)>>,
+    callbacks: Option<BumpVec<'static, (On, &'static mut dyn EventCallback<S>)>>,
     style_sheet: Option<SheetId>,
-    style_callback: Option<&'static mut dyn StyleCallback<T>>,
-    draw_callback: Option<&'static mut dyn DrawCallback<T>>,
+    style_callback: Option<&'static mut dyn StyleCallback<S>>,
+    draw_callback: Option<&'static mut dyn DrawCallback<S>>,
     draw_cache_enable: bool,
     size: usize,
     num_children: usize,
-    prev_sibling: Option<&'static mut Node<T>>,
-    last_child: Option<&'static mut Node<T>>,
+    prev_sibling: Option<&'static mut Node<S>>,
+    last_child: Option<&'static mut Node<S>>,
 }
 
-impl<T> Node<T> {
+impl<S> Node<S> {
     pub fn new() -> Self {
         let alloc = Alloc::get_thread_local_alloc().unwrap();
         alloc.increment_counter();
@@ -167,7 +167,7 @@ impl<T> Node<T> {
     }
 
     /// Register an event callback.
-    pub fn event(mut self, event_type: On, callback: impl Fn(&mut T, &mut EventCtx) -> Phase + 'static) -> Self {
+    pub fn event(mut self, event_type: On, callback: impl Fn(&mut S, &mut EventCtx) -> Phase + 'static) -> Self {
         if let Some(callbacks) = &mut self.callbacks {
             let alloc = Alloc::get_thread_local_alloc().unwrap();
             callbacks.push((event_type, alloc.alloc(callback)));
@@ -181,14 +181,14 @@ impl<T> Node<T> {
     }
 
     /// Register a function to modify this node's style right before redrawing.
-    pub fn style_on_draw(mut self, func: impl Fn(&T, &mut Style) + 'static) -> Self {
+    pub fn style_on_draw(mut self, func: impl Fn(&S, &mut Style) + 'static) -> Self {
         let alloc = Alloc::get_thread_local_alloc().unwrap();
         self.style_callback = Some(alloc.alloc(func));
         self
     }
 
     /// Register a function to draw the contents of this node
-    pub fn on_draw(mut self, enable_cache: bool, func: impl Fn(&T, &mut DrawCtx) + 'static) -> Self {
+    pub fn on_draw(mut self, enable_cache: bool, func: impl Fn(&S, &mut DrawCtx) + 'static) -> Self {
         let alloc = Alloc::get_thread_local_alloc().unwrap();
         self.draw_callback = Some(alloc.alloc(func));
         self.draw_cache_enable = enable_cache;
@@ -211,11 +211,11 @@ impl<T> Node<T> {
         self
     }
 
-    pub(crate) fn finish(mut self) -> Option<BumpVec<'static, ArrayNode<T>>> {
+    pub(crate) fn finish(mut self) -> Option<BumpVec<'static, ArrayNode<S>>> {
         let alloc = Alloc::get_thread_local_alloc().unwrap();
 
-        let mut tree: BumpVec<ArrayNode<T>> = alloc.vec_capacity(self.size);
-        let mut stack: BumpVec<(bool, usize, &mut Node<T>)> = alloc.vec();
+        let mut tree: BumpVec<ArrayNode<S>> = alloc.vec_capacity(self.size);
+        let mut stack: BumpVec<(bool, usize, &mut Node<S>)> = alloc.vec();
 
         stack.push((false, 0, &mut self));
         while let Some((is_last_child, parent, curr_node)) = stack.pop() {
