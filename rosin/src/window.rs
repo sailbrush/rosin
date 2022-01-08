@@ -68,18 +68,15 @@ impl<S> Window<S> {
         state: Rc<RefCell<S>>,
         libloader: Option<Arc<Mutex<LibLoader>>>,
     ) -> Self {
-        let view_callback = if let Some(libloader) = libloader.clone() {
-            *libloader.lock().unwrap().get(view.name).unwrap()
-        } else {
-            view.func
-        };
-
-        let rosin = RosinWindow::new(sheet_loader, view_callback, size);
-
-        if let Some(libloader) = libloader.clone() {
+        let rosin = if let Some(libloader) = libloader.clone() {
+            let view_func = *libloader.lock().unwrap().get(view.name).unwrap();
+            let rosin = RosinWindow::new(sheet_loader, view_func, size);
             let func: fn(Option<Rc<Alloc>>) = *libloader.lock().unwrap().get(b"set_thread_local_alloc").unwrap();
             func(Some(rosin.get_alloc()));
-        }
+            rosin
+        } else {
+            RosinWindow::new(sheet_loader, view.func, size)
+        };
 
         Self {
             rosin,
