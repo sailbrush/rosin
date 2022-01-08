@@ -1,7 +1,7 @@
 use crate::alloc::Alloc;
 use crate::layout::hit_test;
 use crate::prelude::*;
-use crate::{alloc::Scope, layout::*, render, tree::*};
+use crate::{alloc::Scope, draw, layout::*, tree::*};
 
 use std::error::Error;
 use std::rc::Rc;
@@ -155,7 +155,7 @@ impl<S, H> RosinWindow<S, H> {
 
         // ---------- Draw Phase ----------
         // TODO - If phase == Idle, re-issue commands from last frame
-        render::render(state, tree, layout, piet);
+        draw::draw(state, tree, layout, piet);
 
         // ---------- Cleanup ----------
         Alloc::set_thread_local_alloc(None);

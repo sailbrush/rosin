@@ -1,5 +1,7 @@
 #![forbid(unsafe_code)]
 
+use druid_shell::piet::Piet;
+
 use crate::prelude::*;
 
 use std::time::Duration;
@@ -34,6 +36,14 @@ pub enum ShouldStop {
     No,
 }
 
+pub struct DrawCtx<'a, 'b> {
+    pub piet: &'a mut Piet<'b>,
+    pub style: &'a Style,
+    pub width: f32,
+    pub height: f32,
+    pub must_draw: bool,
+}
+
 pub struct EventCtx {
     /*
 Needs to provide:
@@ -42,7 +52,7 @@ Needs to provide:
     - Access to Sheet Loader
     - Things like blur/focus/animations
 
-For providing a mechanism to cause other windows to redraw, use a global object
+For providing a mechanism to cause other windows to redraw, use a global object?
 */}
 
 /// `Fn(&mut T, Duration) -> (Phase, ShouldStop)`

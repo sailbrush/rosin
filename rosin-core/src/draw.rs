@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
 use crate::layout::Layout;
-use crate::style::Style;
+use crate::prelude::*;
 use crate::tree::ArrayNode;
 
 use druid_shell::{
@@ -9,19 +9,11 @@ use druid_shell::{
     piet::{Color, Piet, RenderContext},
 };
 
-pub struct DrawCtx<'a, 'b> {
-    pub piet: &'a mut Piet<'b>,
-    pub style: &'a Style,
-    pub width: f32,
-    pub height: f32,
-    pub must_draw: bool,
+pub(crate) fn draw<S>(state: &S, tree: &[ArrayNode<S>], layout: &[Layout], piet: &mut Piet<'_>) {
+    draw_inner(state, tree, layout, 0, (0.0, 0.0), piet);
 }
 
-pub(crate) fn render<S>(state: &S, tree: &[ArrayNode<S>], layout: &[Layout], piet: &mut Piet<'_>) {
-    render_node(state, tree, layout, 0, (0.0, 0.0), piet);
-}
-
-fn render_node<S>(state: &S, tree: &[ArrayNode<S>], layout: &[Layout], id: usize, offset: (f32, f32), piet: &mut Piet<'_>) {
+fn draw_inner<S>(state: &S, tree: &[ArrayNode<S>], layout: &[Layout], id: usize, offset: (f32, f32), piet: &mut Piet<'_>) {
     if layout[id].size.width != 0.0 && layout[id].size.height != 0.0 {
         let style = &tree[id].style;
 
@@ -80,7 +72,7 @@ fn render_node<S>(state: &S, tree: &[ArrayNode<S>], layout: &[Layout], id: usize
     }
 
     for i in tree[id].child_ids() {
-        render_node(
+        draw_inner(
             state,
             tree,
             layout,
