@@ -158,8 +158,8 @@ impl<T> WinHandler for Window<T> {
 
     fn mouse_down(&mut self, event: &MouseEvent) {
         let mut ctx = EventCtx {};
-        self.rosin
-            .click(&mut self.state.borrow_mut(), &mut ctx, (event.pos.x as f32, event.pos.y as f32));
+        let mut state = self.state.borrow_mut();
+        self.rosin.click(&mut state, &mut ctx, (event.pos.x as f32, event.pos.y as f32));
         if !self.rosin.is_idle() {
             self.handle.invalidate();
             self.handle.request_anim_frame();
