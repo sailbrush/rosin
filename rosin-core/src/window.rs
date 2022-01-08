@@ -1,7 +1,6 @@
 use crate::alloc::Alloc;
-use crate::layout::hit_test;
 use crate::prelude::*;
-use crate::{alloc::Scope, draw, layout::*, tree::*};
+use crate::{alloc::Scope, draw, layout, layout::Layout, tree::*};
 
 use std::error::Error;
 use std::rc::Rc;
@@ -84,7 +83,7 @@ impl<S, H> RosinWindow<S, H> {
 
     pub fn click(&mut self, state: &mut S, ctx: &mut EventCtx, position: (f32, f32)) {
         if let (Some(tree), Some(layout)) = (&mut self.tree_cache, &mut self.layout_cache) {
-            let id = hit_test(tree.borrow(), layout.borrow_mut(), (position.0 as f32, position.1 as f32));
+            let id = layout::hit_test(tree.borrow(), layout.borrow_mut(), (position.0 as f32, position.1 as f32));
             let test = tree.borrow_mut()[id].trigger(On::MouseDown, state, ctx);
             self.update_phase(test);
         }
@@ -148,7 +147,7 @@ impl<S, H> RosinWindow<S, H> {
                 layout.push(Layout::default());
             }
 
-            calc_layout(&self.temp, tree, self.size.into(), layout);
+            layout::layout(&self.temp, tree, self.size.into(), layout);
         }
 
         let layout: &BumpVec<Layout> = self.layout_cache.as_ref().unwrap().borrow();

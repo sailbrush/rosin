@@ -64,10 +64,10 @@ impl Default for Layout {
 
 // TODO - doesn't handle absolute positioning
 pub(crate) fn hit_test<S>(tree: &[ArrayNode<S>], layout: &mut [Layout], point: (f32, f32)) -> usize {
-    do_hit_test(tree, layout, point.into(), 0, Point::zero()).unwrap_or(0)
+    hit_test_inner(tree, layout, point.into(), 0, Point::zero()).unwrap_or(0)
 }
 
-fn do_hit_test<S>(tree: &[ArrayNode<S>], layout: &mut [Layout], point: Point, id: usize, offset: Point) -> Option<usize> {
+fn hit_test_inner<S>(tree: &[ArrayNode<S>], layout: &mut [Layout], point: Point, id: usize, offset: Point) -> Option<usize> {
     let box_pos = layout[id].position + offset;
 
     if box_pos.x < point.x
@@ -76,7 +76,7 @@ fn do_hit_test<S>(tree: &[ArrayNode<S>], layout: &mut [Layout], point: Point, id
         && box_pos.y + layout[id].size.height > point.y
     {
         for child_id in tree[id].child_ids() {
-            let found = do_hit_test(tree, layout, point, child_id, box_pos);
+            let found = hit_test_inner(tree, layout, point, child_id, box_pos);
             if found.is_some() {
                 return found;
             }
@@ -86,8 +86,8 @@ fn do_hit_test<S>(tree: &[ArrayNode<S>], layout: &mut [Layout], point: Point, id
     None
 }
 
-pub(crate) fn calc_layout<S>(temp: &Bump, tree: &[ArrayNode<S>], root_size: Size, output: &mut [Layout]) {
-    do_layout(temp, tree, 0, root_size, output);
+pub(crate) fn layout<S>(temp: &Bump, tree: &[ArrayNode<S>], root_size: Size, output: &mut [Layout]) {
+    layout_inner(temp, tree, 0, root_size, output);
     output[0] = Layout {
         size: root_size,
         position: Point::zero(),
@@ -110,7 +110,7 @@ fn round_layout<S>(tree: &[ArrayNode<S>], layout: &mut [Layout], id: usize, abs_
     }
 }
 
-fn do_layout<S>(temp: &Bump, tree: &[ArrayNode<S>], id: usize, size: Size, output: &mut [Layout]) {
+fn layout_inner<S>(temp: &Bump, tree: &[ArrayNode<S>], id: usize, size: Size, output: &mut [Layout]) {
     // leaf nodes don't need to do anything
     if tree[id].num_children == 0 {
         return;
@@ -555,7 +555,7 @@ fn do_layout<S>(temp: &Bump, tree: &[ArrayNode<S>], id: usize, size: Size, outpu
         // TODO - support CSS position
         let layout_item = |item: &mut FlexItem| {
             // Now that we know the final size of an item, layout its children
-            do_layout(temp, tree, item.id, item.target_size, output);
+            layout_inner(temp, tree, item.id, item.target_size, output);
 
             let offset_main = total_offset_main + item.offset_main + item.margin.main_start(dir);
             let offset_cross = total_offset_cross + item.offset_cross + line_offset_cross + item.margin.cross_start(dir);
