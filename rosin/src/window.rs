@@ -8,8 +8,8 @@ use std::{
 };
 
 use druid_shell::{
-    kurbo, piet::Piet, Application, FileDialogToken, FileInfo, IdleToken, KeyEvent, MouseEvent, Region, Scale, TimerToken, WinHandler,
-    WindowHandle,
+    kurbo, piet::Piet, Application, Cursor, FileDialogToken, FileInfo, IdleToken, KeyEvent, MouseEvent, Region, Scale, TimerToken,
+    WinHandler, WindowHandle,
 };
 use rosin_core::alloc::Alloc;
 
@@ -53,6 +53,7 @@ impl<S> WindowDesc<S> {
 
 #[allow(dead_code)]
 pub(crate) struct Window<S: 'static> {
+    handle: WindowHandle,
     rosin: RosinWindow<S, WindowHandle>,
     view: View<S>,
     state: Rc<RefCell<S>>,
@@ -79,6 +80,7 @@ impl<S> Window<S> {
         };
 
         Self {
+            handle: WindowHandle::default(),
             rosin,
             view,
             state,
@@ -90,12 +92,35 @@ impl<S> Window<S> {
 
 impl<T> WinHandler for Window<T> {
     fn connect(&mut self, handle: &WindowHandle) {
-        self.rosin.set_handle(handle.clone())
+        self.handle = handle.clone();
+        self.rosin.set_handle(handle.clone());
     }
 
     fn prepare_paint(&mut self) {}
 
     fn paint(&mut self, piet: &mut Piet, _invalid: &Region) {
+        // TODO - don't rebuild when not needed
+        #[cfg(debug_assertions)]
+        {
+            #[cfg(feature = "hot-reload")]
+            if let Ok(libloader) = self.libloader.as_ref().unwrap().try_lock() {
+                if self.last_ext < libloader.get_ext() {
+                    let view_callback = *libloader.get(self.view.name).unwrap();
+                    self.rosin.set_view(view_callback);
+
+                    let func: fn(Option<Rc<Alloc>>) = *libloader.get(b"set_thread_local_alloc").unwrap();
+                    func(Some(self.rosin.get_alloc()));
+
+                    self.handle.invalidate();
+                    self.handle.request_anim_frame();
+                }
+            }
+
+            self.rosin.update_phase(Phase::Build);
+            self.handle.invalidate();
+            self.handle.request_anim_frame();
+        }
+
         self.rosin.draw(&self.state.borrow(), piet).unwrap();
     }
 
@@ -127,14 +152,17 @@ impl<T> WinHandler for Window<T> {
 
     fn zoom(&mut self, delta: f64) {}
 
-    fn mouse_move(&mut self, event: &MouseEvent) {}
+    fn mouse_move(&mut self, event: &MouseEvent) {
+        self.handle.set_cursor(&Cursor::Arrow);
+    }
 
     fn mouse_down(&mut self, event: &MouseEvent) {
         let mut ctx = EventCtx {};
         self.rosin
             .click(&mut self.state.borrow_mut(), &mut ctx, (event.pos.x as f32, event.pos.y as f32));
         if !self.rosin.is_idle() {
-            self.rosin.get_handle_ref().unwrap().request_anim_frame();
+            self.handle.invalidate();
+            self.handle.request_anim_frame();
         }
     }
 
@@ -149,35 +177,12 @@ impl<T> WinHandler for Window<T> {
     fn lost_focus(&mut self) {}
 
     fn request_close(&mut self) {
-        self.rosin.get_handle_ref().unwrap().close();
+        self.handle.close();
     }
 
     fn destroy(&mut self) {
         Application::global().quit()
     }
 
-    fn idle(&mut self, _token: IdleToken) {
-        // TODO - don't rebuild when not needed
-        #[cfg(debug_assertions)]
-        {
-            #[cfg(feature = "hot-reload")]
-            if let Ok(libloader) = self.libloader.as_ref().unwrap().try_lock() {
-                if self.last_ext < libloader.get_ext() {
-                    let view_callback = *libloader.get(self.view.name).unwrap();
-                    self.rosin.set_view(view_callback);
-
-                    let func: fn(Option<Rc<Alloc>>) = *libloader.get(b"set_thread_local_alloc").unwrap();
-                    func(Some(self.rosin.get_alloc()));
-
-                    self.rosin.get_handle_mut().unwrap().request_anim_frame();
-                }
-            }
-
-            self.rosin.update_phase(Phase::Build);
-            self.rosin.get_handle_mut().unwrap().request_anim_frame();
-
-            let mut idle_handle = self.rosin.get_handle_mut().unwrap().get_idle_handle().unwrap();
-            idle_handle.schedule_idle(IdleToken::new(0));
-        }
-    }
+    fn idle(&mut self, _token: IdleToken) {}
 }

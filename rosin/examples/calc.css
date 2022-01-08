@@ -1,5 +1,5 @@
 .root {
-    font-family: Helvetica;
+    font-family: Arial;
     font-size: 30px;
     color:rgb(255, 255, 255);
     flex-direction: column;
@@ -7,9 +7,9 @@
 }
 
 .display {
-    padding: 50px;
-    min-height: 50px;
-    max-height: 50px;
+    padding: 25px;
+    min-height: 30px;
+    max-height: 30px;
 }
 
 .row {

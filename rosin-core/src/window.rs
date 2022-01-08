@@ -9,11 +9,11 @@ use std::sync::{Arc, Mutex};
 use bumpalo::{collections::Vec as BumpVec, Bump};
 use druid_shell::piet::Piet;
 
-pub struct RosinWindow<S: 'static, H> {
+pub struct RosinWindow<S: 'static, H: Default> {
     sheet_loader: Arc<Mutex<SheetLoader>>,
     view: ViewCallback<S>,
     size: (f32, f32),
-    handle: Option<H>,
+    handle: H,
     phase: Phase,
     tree_cache: Option<Scope<BumpVec<'static, ArrayNode<S>>>>,
     layout_cache: Option<Scope<BumpVec<'static, Layout>>>,
@@ -21,13 +21,13 @@ pub struct RosinWindow<S: 'static, H> {
     temp: Bump,
 }
 
-impl<S, H> RosinWindow<S, H> {
+impl<S, H: Default> RosinWindow<S, H> {
     pub fn new(sheet_loader: Arc<Mutex<SheetLoader>>, view: ViewCallback<S>, size: (f32, f32)) -> Self {
         Self {
             sheet_loader,
             view,
             size,
-            handle: None,
+            handle: H::default(),
             phase: Phase::Build,
             tree_cache: None,
             layout_cache: None,
@@ -37,15 +37,7 @@ impl<S, H> RosinWindow<S, H> {
     }
 
     pub fn set_handle(&mut self, handle: H) {
-        self.handle = Some(handle)
-    }
-
-    pub fn get_handle_ref(&self) -> Option<&H> {
-        self.handle.as_ref()
-    }
-
-    pub fn get_handle_mut(&mut self) -> Option<&mut H> {
-        self.handle.as_mut()
+        self.handle = handle;
     }
 
     pub fn reset_cache(&mut self) {
@@ -84,8 +76,8 @@ impl<S, H> RosinWindow<S, H> {
     pub fn click(&mut self, state: &mut S, ctx: &mut EventCtx, position: (f32, f32)) {
         if let (Some(tree), Some(layout)) = (&mut self.tree_cache, &mut self.layout_cache) {
             let id = layout::hit_test(tree.borrow(), layout.borrow_mut(), (position.0 as f32, position.1 as f32));
-            let test = tree.borrow_mut()[id].trigger(On::MouseDown, state, ctx);
-            self.update_phase(test);
+            let phase = tree.borrow_mut()[id].trigger(On::MouseDown, state, ctx);
+            self.update_phase(phase);
         }
     }
 

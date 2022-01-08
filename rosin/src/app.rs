@@ -101,12 +101,6 @@ impl<S> AppLauncher<S> {
 
             let window = builder.build().unwrap();
 
-            #[cfg(debug_assertions)]
-            {
-                let mut idle_handle = window.get_idle_handle().unwrap();
-                idle_handle.schedule_idle(IdleToken::new(0));
-            }
-
             window.show();
         }
 
