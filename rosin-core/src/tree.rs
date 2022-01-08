@@ -18,7 +18,7 @@ macro_rules! ui {
         ui!(Node::new() $(.add_classes($classes))*; $($children)* )
     };
     ($sheet:expr, $($classes:literal)? [ $($children:tt)* ]) => {
-        ui!(Node::new().apply_style_sheet($sheet) $(.add_classes($classes))*; $($children)* )
+        ui!(Node::new().use_style_sheet($sheet) $(.add_classes($classes))*; $($children)* )
     };
     ($tree:expr; $($classes:literal)? [ $($children:tt)* ] $($tail:tt)*) => {
         ui!($tree.add_child(ui!(Node::new() $(.add_classes($classes))*; $($children)* )); $($tail)* )
@@ -156,16 +156,6 @@ impl<S> Node<S> {
         self
     }
 
-    /// Add CSS classes.
-    pub fn add_classes(mut self, classes: &'static str) -> Self {
-        if let Some(class_vec) = &mut self.classes {
-            for class in classes.split_whitespace() {
-                class_vec.push(class);
-            }
-        }
-        self
-    }
-
     /// Register an event callback.
     pub fn event(mut self, event_type: On, callback: impl Fn(&mut S, &mut EventCtx) -> Phase + 'static) -> Self {
         if let Some(callbacks) = &mut self.callbacks {
@@ -175,19 +165,16 @@ impl<S> Node<S> {
         self
     }
 
-    pub fn apply_style_sheet(mut self, id: SheetId) -> Self {
-        self.style_sheet = Some(id);
-        self
-    }
-
-    /// Register a function to modify this node's style right before redrawing.
-    pub fn style_on_draw(mut self, func: impl Fn(&S, &mut Style) + 'static) -> Self {
+    /// Register a function to modify this node's style before drawing.
+    pub fn on_style(mut self, func: impl Fn(&S, &mut Style) + 'static) -> Self {
         let alloc = Alloc::get_thread_local_alloc().unwrap();
         self.style_callback = Some(alloc.alloc(func));
         self
     }
 
-    /// Register a function to draw the contents of this node
+    // TODO - Layout callback?
+
+    /// Register a function to draw the contents of this node.
     pub fn on_draw(mut self, enable_cache: bool, func: impl Fn(&S, &mut DrawCtx) + 'static) -> Self {
         let alloc = Alloc::get_thread_local_alloc().unwrap();
         self.draw_callback = Some(alloc.alloc(func));
@@ -208,6 +195,20 @@ impl<S> Node<S> {
         }
 
         self.last_child = Some(alloc.alloc(new_child));
+        self
+    }
+
+    pub fn use_style_sheet(mut self, id: SheetId) -> Self {
+        self.style_sheet = Some(id);
+        self
+    }
+
+    pub fn add_classes(mut self, classes: &'static str) -> Self {
+        if let Some(class_vec) = &mut self.classes {
+            for class in classes.split_whitespace() {
+                class_vec.push(class);
+            }
+        }
         self
     }
 
