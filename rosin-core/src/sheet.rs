@@ -46,7 +46,7 @@ impl SheetLoader {
     pub fn poll(&mut self) -> Result<bool, Box<dyn Error>> {
         let mut result = false;
         for sheet in &mut self.style_sheets {
-            result &= sheet.poll()?;
+            result |= sheet.poll()?;
         }
         Ok(result)
     }
