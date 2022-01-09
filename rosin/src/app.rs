@@ -12,7 +12,6 @@ use std::{
 use crate::{libloader::*, prelude::*, window::Window};
 
 use druid_shell::{Application, IdleToken, WindowBuilder};
-use rosin_core::grc::Registry;
 use rosin_core::prelude::*;
 
 pub struct AppLauncher<T: 'static> {
@@ -52,22 +51,11 @@ impl<S> AppLauncher<S> {
             let lib_path = std::env::current_dir().unwrap().join(&lib_name);
             let loader = Arc::new(Mutex::new(LibLoader::new(lib_path).expect("[Rosin] Hot-reload: Failed to init")));
 
-            // Init Grc registry
-            if let Ok(mut loader) = loader.try_lock() {
-                if let Ok(_) = loader.poll() {
-                    let func: fn(Arc<Mutex<Registry>>) -> Result<(), Arc<Mutex<Registry>>> = *loader.get(b"set_grc_registry").unwrap();
-                    func(Registry::get_grc_registry().clone()).expect("Failed to set grc registry");
-                }
-            }
-
             // Start a thread that periodically polls the libloader
             let thread_loader = loader.clone();
             thread::spawn(move || loop {
                 if let Ok(mut loader) = thread_loader.try_lock() {
-                    if let Ok(true) = loader.poll() {
-                        let func: fn(Arc<Mutex<Registry>>) -> Result<(), Arc<Mutex<Registry>>> = *loader.get(b"set_grc_registry").unwrap();
-                        func(Registry::get_grc_registry().clone()).expect("Failed to set grc registry");
-                    }
+                    loader.poll().unwrap();
                 }
                 thread::sleep(Duration::from_millis(100));
             });

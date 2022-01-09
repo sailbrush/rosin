@@ -5,7 +5,6 @@ mod parser;
 
 pub mod alloc;
 pub mod callbacks;
-pub mod grc;
 pub mod key;
 pub mod sheet;
 pub mod style;
@@ -20,7 +19,6 @@ pub mod prelude {
     pub use crate::callbacks::{
         AnimCallback, DrawCallback, DrawCtx, EventCallback, EventCtx, On, Phase, ShouldStop, StyleCallback, ViewCallback,
     };
-    pub use crate::grc::{Grc, Weak};
     pub use crate::key::Key;
     pub use crate::sheet::{SheetId, SheetLoader};
     pub use crate::style::Style;

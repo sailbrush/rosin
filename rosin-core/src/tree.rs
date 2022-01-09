@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 use crate::alloc::Alloc;
 use crate::prelude::*;
 
@@ -15,13 +13,13 @@ use bumpalo::collections::Vec as BumpVec;
 #[macro_export]
 macro_rules! ui {
     ($($classes:literal)? [ $($children:tt)* ]) => {
-        ui!(Node::new() $(.add_classes($classes))*; $($children)* )
+        ui!(Node::default() $(.add_classes($classes))*; $($children)* )
     };
     ($sheet:expr, $($classes:literal)? [ $($children:tt)* ]) => {
-        ui!(Node::new().use_style_sheet($sheet) $(.add_classes($classes))*; $($children)* )
+        ui!(Node::default().use_style_sheet($sheet) $(.add_classes($classes))*; $($children)* )
     };
     ($tree:expr; $($classes:literal)? [ $($children:tt)* ] $($tail:tt)*) => {
-        ui!($tree.add_child(ui!(Node::new() $(.add_classes($classes))*; $($children)* )); $($tail)* )
+        ui!($tree.add_child(ui!(Node::default() $(.add_classes($classes))*; $($children)* )); $($tail)* )
     };
     ($tree:expr; $($classes:literal)? ( $($child:tt)* ) $($tail:tt)*) => {
         ui!($tree.add_child($($child)* $(.add_classes($classes))* ); $($tail)* )
@@ -93,6 +91,26 @@ pub(crate) struct ArrayNode<S: 'static> {
     pub last_child: Option<NonZeroUsize>,
 }
 
+impl<S> Drop for ArrayNode<S> {
+    fn drop(&mut self) {
+        for cb in &mut self.callbacks {
+            unsafe {
+                std::ptr::drop_in_place(cb.1);
+            }
+        }
+        if let Some(cb) = &mut self.style_callback {
+            unsafe {
+                std::ptr::drop_in_place(*cb);
+            }
+        }
+        if let Some(cb) = &mut self.draw_callback {
+            unsafe {
+                std::ptr::drop_in_place(*cb);
+            }
+        }
+    }
+}
+
 impl<S> ArrayNode<S> {
     // Note: Children are reversed
     pub(crate) fn child_ids(&self) -> std::ops::Range<usize> {
@@ -130,8 +148,8 @@ pub struct Node<S: 'static> {
     last_child: Option<&'static mut Node<S>>,
 }
 
-impl<S> Node<S> {
-    pub fn new() -> Self {
+impl<S> Default for Node<S> {
+    fn default() -> Self {
         let alloc = Alloc::get_thread_local_alloc().unwrap();
         alloc.increment_counter();
 
@@ -149,7 +167,9 @@ impl<S> Node<S> {
             last_child: None,
         }
     }
+}
 
+impl<S> Node<S> {
     /// Set a key on a node, providing a stable identity between rebuilds.
     pub fn key(mut self, key: Key) -> Self {
         self.key = Some(key);

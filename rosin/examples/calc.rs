@@ -5,7 +5,7 @@ use rosin::widgets::*;
 
 pub struct State {
     root_sheet: SheetId,
-    display: Grc<DynLabel>,
+    display: DynLabel,
     accumulator: f64,
     register: f64,
     mode: Mode,

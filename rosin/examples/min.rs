@@ -4,7 +4,7 @@ use rosin::prelude::*;
 use rosin::widgets::*;
 
 pub struct State {
-    display: Grc<DynLabel>,
+    display: DynLabel,
 }
 
 pub fn main_view(state: &State) -> Node<State> {

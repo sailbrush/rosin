@@ -53,6 +53,7 @@ impl Alloc {
         self.counter.get()
     }
 
+    // NOTE: Drop must be called manually
     pub(crate) fn alloc<T>(&self, val: T) -> &'static mut T {
         assert!(self.enabled.get(), "[Rosin] Allocator used outside of a scope");
         let ptr: *mut T = self.bump.borrow().alloc(val);

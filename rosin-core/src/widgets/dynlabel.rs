@@ -3,6 +3,7 @@
 use std::{
     cell::{Cell, RefCell},
     fmt::Debug,
+    rc::Rc,
     sync::Arc,
 };
 
@@ -14,31 +15,36 @@ use crate::prelude::*;
 #[derive(Debug)]
 pub struct DynLabel {
     key: Key,
+    data: Rc<Data>,
+}
+
+#[derive(Debug)]
+struct Data {
     text: RefCell<String>,
     changed: Cell<bool>,
 }
 
 impl DynLabel {
-    pub fn new(text: &str) -> Grc<Self> {
-        Grc::new(Self {
+    pub fn new(text: &str) -> Self {
+        Self {
             key: Key::new(),
-            text: RefCell::new(text.to_owned()),
-            changed: Cell::new(false),
-        })
+            data: Rc::new(Data {
+                text: RefCell::new(text.to_owned()),
+                changed: Cell::new(false),
+            }),
+        }
     }
 
     pub fn set_text(&self, new_text: &str) -> Phase {
-        let mut text = self.text.borrow_mut();
+        let mut text = self.data.text.borrow_mut();
         text.clear();
         text.push_str(new_text);
-        self.changed.replace(true);
+        self.data.changed.replace(true);
         Phase::Draw
     }
-}
 
-impl Grc<DynLabel> {
     pub fn view<S>(&self) -> Node<S> {
-        let this = Grc::downgrade(self);
+        let weak = Rc::downgrade(&self.data);
 
         ui!("test" [
             .key(self.key)
@@ -46,7 +52,7 @@ impl Grc<DynLabel> {
                 // If the underlying data is gone, then just return since there's nothing to draw.
                 // TODO: Maybe log something?
                 //       Could also draw the cache, if available.
-                let this = if let Some(this) = this.upgrade() { this } else { return };
+                let this = if let Some(this) = weak.upgrade() { this } else { return };
                 if !this.changed.get() && !ctx.must_draw { return }
                 this.changed.set(false);
 
