@@ -1,5 +1,4 @@
 #![forbid(unsafe_code)]
-#![allow(unused_imports)]
 
 use std::{
     cell::RefCell,
@@ -11,7 +10,7 @@ use std::{
 
 use crate::{libloader::*, prelude::*, window::Window};
 
-use druid_shell::{Application, IdleToken, WindowBuilder};
+use druid_shell::{Application, WindowBuilder};
 use rosin_core::prelude::*;
 
 pub struct AppLauncher<T: 'static> {
