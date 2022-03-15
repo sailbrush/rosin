@@ -30,7 +30,7 @@ impl<S> WindowDesc<S> {
     pub fn new(view: View<S>) -> Self {
         Self {
             view,
-            id: WindowId(0),
+            id: WindowId(0), // TODO - create a useful id
             title: None,
             size: (100.0, 100.0),
         }
@@ -132,7 +132,9 @@ impl<T> WinHandler for Window<T> {
         self.rosin.size((size.width as f32, size.height as f32))
     }
 
-    fn scale(&mut self, scale: Scale) {}
+    fn scale(&mut self, scale: Scale) {
+        self.rosin.scale((scale.x() as f32, scale.y() as f32));
+    }
 
     fn rebuild_resources(&mut self) {}
 
@@ -157,9 +159,8 @@ impl<T> WinHandler for Window<T> {
     }
 
     fn mouse_down(&mut self, event: &MouseEvent) {
-        let mut ctx = EventCtx {};
         let mut state = self.state.borrow_mut();
-        self.rosin.click(&mut state, &mut ctx, (event.pos.x as f32, event.pos.y as f32));
+        self.rosin.click(&mut state, (event.pos.x as f32, event.pos.y as f32));
         if !self.rosin.is_idle() {
             self.handle.invalidate();
             self.handle.request_anim_frame();

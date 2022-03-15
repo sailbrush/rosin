@@ -92,6 +92,7 @@ pub(crate) fn layout<S>(temp: &Bump, tree: &[ArrayNode<S>], root_size: Size, out
         size: root_size,
         position: Point::zero(),
     };
+    // TODO - round layout to device pixels
     //round_layout(tree, output, 0, 0.0, 0.0);
 }
 

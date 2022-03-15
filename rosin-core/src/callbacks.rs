@@ -49,10 +49,10 @@ pub struct EventCtx {
 Needs to provide:
     - Event info
     - The integration's Window Handle
-    - Access to Sheet Loader
+    - Access to Resource Loader (for localization)
     - Things like blur/focus/animations
 
-For providing a mechanism to cause other windows to redraw, use a global object?
+For providing a mechanism to cause other windows to redraw, use a global object
 */}
 
 /// `Fn(&mut T, Duration) -> (Phase, ShouldStop)`

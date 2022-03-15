@@ -2,7 +2,7 @@
 name = "rosin"
 version = "0.2.0"
 authors = ["TimTom <timtom.business@gmail.com>"]
-edition = "2018"
+edition = "2021"
 description = "Rosin is a GUI framework for Rust that aims to be extremely easy to use."
 documentation = "https://github.com/sailbrush/rosin"
 homepage = "https://github.com/sailbrush/rosin"

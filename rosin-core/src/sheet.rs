@@ -4,7 +4,7 @@ use std::{error::Error, num::NonZeroUsize};
 
 use crate::{style::Stylesheet, tree::ArrayNode};
 
-/// Load a CSS file. In debug builds, the file will be reloaded when changed.
+/// Load a CSS file. In debug builds, the file will be reloaded when modified.
 #[macro_export]
 macro_rules! load_sheet {
     ($loader:expr, $path:expr) => {

@@ -567,6 +567,12 @@ pub enum Selector {
 
     // Represents a `>` selector relationship
     DirectChildren,
+
+    // TODO - Represents a `:hover` selector
+    //Hover,
+
+    // TODO - Represents a `:focus` selector
+    //Focus,
 }
 
 impl Selector {
@@ -671,14 +677,17 @@ impl Stylesheet {
     }
 
     // Perform selector matching and apply styles to a tree
+    // TODO - pass in a list of nodes that are hovered/focused
     pub(crate) fn apply_style<T>(&self, tree: &mut [ArrayNode<T>]) {
         for id in 0..tree.len() {
-            // TODO benchmark hash map
+            // TODO - benchmark hash map
+            // TODO - use temp bump alloc instead of Vec
             let mut relevant_rules = self
                 .rules
                 .iter()
                 .filter(|rule| {
                     // Find matching rules
+                    // TODO - comment an explanation
                     let mut direct = false;
                     let mut cmp_node = Some(id);
                     for (i, selector) in rule.selectors.iter().rev().enumerate() {

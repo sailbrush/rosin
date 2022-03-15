@@ -82,13 +82,15 @@ pub(crate) struct ArrayNode<S: 'static> {
     pub classes: BumpVec<'static, &'static str>,
     pub callbacks: BumpVec<'static, (On, &'static mut dyn EventCallback<S>)>,
     pub style_sheet: Option<SheetId>,
-    pub style: Style,
     pub style_callback: Option<&'static mut dyn StyleCallback<S>>,
     pub draw_callback: Option<&'static mut dyn DrawCallback<S>>,
     pub _draw_cache_enable: bool, // TODO
     pub parent: usize,
     pub num_children: usize,
     pub last_child: Option<NonZeroUsize>,
+
+    // The only field that should ever be mutated after creation
+    pub style: Style,
 }
 
 impl<S> Drop for ArrayNode<S> {

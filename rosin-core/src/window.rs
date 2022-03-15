@@ -13,6 +13,7 @@ pub struct RosinWindow<S: 'static, H: Default> {
     sheet_loader: Arc<Mutex<SheetLoader>>,
     view: ViewCallback<S>,
     size: (f32, f32),
+    scale: (f32, f32),
     handle: H,
     phase: Phase,
     tree_cache: Option<Scope<BumpVec<'static, ArrayNode<S>>>>,
@@ -27,6 +28,7 @@ impl<S, H: Default> RosinWindow<S, H> {
             sheet_loader,
             view,
             size,
+            scale: (1.0, 1.0),
             handle: H::default(),
             phase: Phase::Build,
             tree_cache: None,
@@ -56,6 +58,10 @@ impl<S, H: Default> RosinWindow<S, H> {
         self.update_phase(Phase::Layout);
     }
 
+    pub fn scale(&mut self, new_scale: (f32, f32)) {
+        self.scale = new_scale;
+    }
+
     pub fn set_view(&mut self, new_view: ViewCallback<S>) {
         self.view = new_view;
         self.phase = Phase::Build;
@@ -73,10 +79,11 @@ impl<S, H: Default> RosinWindow<S, H> {
         self.alloc.clone()
     }
 
-    pub fn click(&mut self, state: &mut S, ctx: &mut EventCtx, position: (f32, f32)) {
+    pub fn click(&mut self, state: &mut S, position: (f32, f32)) {
+        let mut ctx = EventCtx {};
         if let (Some(tree), Some(layout)) = (&mut self.tree_cache, &mut self.layout_cache) {
             let id = layout::hit_test(tree.borrow(), layout.borrow_mut(), (position.0 as f32, position.1 as f32));
-            let phase = tree.borrow_mut()[id].trigger(On::MouseDown, state, ctx);
+            let phase = tree.borrow_mut()[id].trigger(On::MouseDown, state, &mut ctx);
             self.update_phase(phase);
         }
     }
