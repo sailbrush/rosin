@@ -81,7 +81,7 @@ pub(crate) struct ArrayNode<S: 'static> {
     pub _key: Option<Key>, // TODO
     pub classes: BumpVec<'static, &'static str>,
     pub callbacks: BumpVec<'static, (On, &'static mut dyn EventCallback<S>)>,
-    pub style_sheet: Option<SheetId>,
+    pub style_sheet: Option<StyleSheetId>,
     pub style_callback: Option<&'static mut dyn StyleCallback<S>>,
     pub draw_callback: Option<&'static mut dyn DrawCallback<S>>,
     pub _draw_cache_enable: bool, // TODO
@@ -140,7 +140,7 @@ pub struct Node<S: 'static> {
     key: Option<Key>,
     classes: Option<BumpVec<'static, &'static str>>,
     callbacks: Option<BumpVec<'static, (On, &'static mut dyn EventCallback<S>)>>,
-    style_sheet: Option<SheetId>,
+    style_sheet: Option<StyleSheetId>,
     style_callback: Option<&'static mut dyn StyleCallback<S>>,
     draw_callback: Option<&'static mut dyn DrawCallback<S>>,
     draw_cache_enable: bool,
@@ -220,7 +220,7 @@ impl<S> Node<S> {
         self
     }
 
-    pub fn use_style_sheet(mut self, id: SheetId) -> Self {
+    pub fn use_style_sheet(mut self, id: StyleSheetId) -> Self {
         self.style_sheet = Some(id);
         self
     }

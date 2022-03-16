@@ -63,7 +63,7 @@ pub(crate) struct Window<S: 'static> {
 
 impl<S> Window<S> {
     pub fn new(
-        sheet_loader: Arc<Mutex<SheetLoader>>,
+        resource_loader: Arc<Mutex<ResourceLoader>>,
         view: View<S>,
         size: (f32, f32),
         state: Rc<RefCell<S>>,
@@ -71,12 +71,12 @@ impl<S> Window<S> {
     ) -> Self {
         let rosin = if let Some(libloader) = libloader.clone() {
             let view_func = *libloader.lock().unwrap().get(view.name).unwrap();
-            let rosin = RosinWindow::new(sheet_loader, view_func, size);
+            let rosin = RosinWindow::new(resource_loader, view_func, size);
             let func: fn(Option<Rc<Alloc>>) = *libloader.lock().unwrap().get(b"set_thread_local_alloc").unwrap();
             func(Some(rosin.get_alloc()));
             rosin
         } else {
-            RosinWindow::new(sheet_loader, view.func, size)
+            RosinWindow::new(resource_loader, view.func, size)
         };
 
         Self {

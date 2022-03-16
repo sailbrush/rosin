@@ -10,7 +10,7 @@ use bumpalo::{collections::Vec as BumpVec, Bump};
 use druid_shell::piet::Piet;
 
 pub struct RosinWindow<S: 'static, H: Default> {
-    sheet_loader: Arc<Mutex<SheetLoader>>,
+    resource_loader: Arc<Mutex<ResourceLoader>>,
     view: ViewCallback<S>,
     size: (f32, f32),
     scale: (f32, f32),
@@ -23,9 +23,9 @@ pub struct RosinWindow<S: 'static, H: Default> {
 }
 
 impl<S, H: Default> RosinWindow<S, H> {
-    pub fn new(sheet_loader: Arc<Mutex<SheetLoader>>, view: ViewCallback<S>, size: (f32, f32)) -> Self {
+    pub fn new(resource_loader: Arc<Mutex<ResourceLoader>>, view: ViewCallback<S>, size: (f32, f32)) -> Self {
         Self {
-            sheet_loader,
+            resource_loader,
             view,
             size,
             scale: (1.0, 1.0),
@@ -111,7 +111,7 @@ impl<S, H: Default> RosinWindow<S, H> {
             // Panic if the view function didn't return the number of nodes we expected
             assert!(alloc.get_counter() == tree.borrow().len(), "[Rosin] Nodes missing");
 
-            self.sheet_loader.lock().unwrap().apply_style(tree.borrow_mut());
+            self.resource_loader.lock().unwrap().apply_style(tree.borrow_mut());
             self.tree_cache = Some(tree);
         }
 

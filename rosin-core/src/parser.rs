@@ -2,7 +2,8 @@
 
 use std::sync::Arc;
 
-use crate::style::*;
+use crate::properties::*;
+use crate::stylesheet::*;
 
 use cssparser::*;
 

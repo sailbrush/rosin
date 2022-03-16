@@ -4,7 +4,7 @@ use rosin::prelude::*;
 use rosin::widgets::*;
 
 pub struct State {
-    root_sheet: SheetId,
+    root_sheet: StyleSheetId,
     display: DynLabel,
     accumulator: f64,
     register: f64,
@@ -162,10 +162,10 @@ fn main() {
         .with_title("Rosin Calculator")
         .with_size(400.0, 550.0);
 
-    let mut sl = SheetLoader::new();
+    let mut rl = ResourceLoader::new();
 
     let state = State {
-        root_sheet: load_sheet!(sl, "examples/calc.css"),
+        root_sheet: load_css!(rl, "examples/calc.css"),
         display: DynLabel::new("0"),
         accumulator: 0.0,
         register: 0.0,
@@ -173,7 +173,7 @@ fn main() {
         operation: None,
     };
 
-    AppLauncher::new(sl, window)
+    AppLauncher::new(rl, window)
         .run(state)
         .expect("Failed to launch");
 }

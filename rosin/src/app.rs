@@ -14,14 +14,14 @@ use druid_shell::{Application, WindowBuilder};
 use rosin_core::prelude::*;
 
 pub struct AppLauncher<T: 'static> {
-    sheet_loader: Arc<Mutex<SheetLoader>>,
+    resource_loader: Arc<Mutex<ResourceLoader>>,
     windows: Vec<WindowDesc<T>>,
 }
 
 impl<S> AppLauncher<S> {
-    pub fn new(sheet_loader: SheetLoader, window: WindowDesc<S>) -> Self {
+    pub fn new(resource_loader: ResourceLoader, window: WindowDesc<S>) -> Self {
         Self {
-            sheet_loader: Arc::new(Mutex::new(sheet_loader)),
+            resource_loader: Arc::new(Mutex::new(resource_loader)),
             windows: vec![window],
         }
     }
@@ -62,11 +62,11 @@ impl<S> AppLauncher<S> {
             Some(loader)
         };
 
-        let thread_sheet_loader = self.sheet_loader.clone();
+        let thread_resource_loader = self.resource_loader.clone();
         #[cfg(debug_assertions)]
         {
             thread::spawn(move || loop {
-                thread_sheet_loader.lock().unwrap().poll().unwrap();
+                thread_resource_loader.lock().unwrap().poll().unwrap();
                 thread::sleep(Duration::from_millis(100));
             });
         }
@@ -77,7 +77,7 @@ impl<S> AppLauncher<S> {
         for desc in self.windows {
             let mut builder = WindowBuilder::new(druid_app.clone());
 
-            let handler = Window::new(self.sheet_loader.clone(), desc.view, desc.size, state.clone(), libloader.clone());
+            let handler = Window::new(self.resource_loader.clone(), desc.view, desc.size, state.clone(), libloader.clone());
             builder.set_handler(Box::new(handler));
 
             if let Some(title) = desc.title {

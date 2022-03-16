@@ -2,7 +2,7 @@
 
 use std::ops::{Add, Sub};
 
-use crate::style::FlexDirection;
+use crate::properties::FlexDirection;
 
 #[derive(Debug, Default, Copy, Clone)]
 pub struct Rect {

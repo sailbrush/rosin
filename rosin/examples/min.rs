@@ -19,15 +19,15 @@ fn main() {
         .with_title("Rosin Window")
         .with_size(500.0, 500.0);
 
-    let mut sl = SheetLoader::new();
+    let mut rl = ResourceLoader::new();
 
-    load_sheet!(sl, "examples/min.css");
+    load_css!(rl, "examples/min.css");
 
     let state = State {
         display: DynLabel::new("Hello World!"),
     };
 
-    AppLauncher::new(sl, window)
+    AppLauncher::new(rl, window)
         .run(state)
         .expect("Failed to launch");
 }
