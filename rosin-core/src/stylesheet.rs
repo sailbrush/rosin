@@ -4,7 +4,6 @@ use crate::parser::*;
 use crate::style::*;
 use crate::tree::*;
 
-use cssparser::Token;
 use cssparser::{Parser, ParserInput, RuleListParser};
 
 use std::sync::Arc;
@@ -169,30 +168,12 @@ pub enum Length {
     Em(f32),
 }
 
-impl Default for Length {
-    fn default() -> Self {
-        Self::Px(0.0)
-    }
-}
-
 #[derive(Debug, Copy, Clone)]
 pub enum PropertyValue<T> {
     Auto,
     Initial,
     Inherit,
     Exact(T),
-}
-
-impl<T> Default for PropertyValue<T> {
-    fn default() -> Self {
-        PropertyValue::Initial
-    }
-}
-
-impl<T> From<T> for PropertyValue<T> {
-    fn from(value: T) -> Self {
-        PropertyValue::Exact(value)
-    }
 }
 
 #[derive(Debug, Clone)]

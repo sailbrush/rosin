@@ -9,19 +9,6 @@ use cssparser::*;
 
 // ---------- Parse Helper Funcitons ---------- //
 
-impl From<&Token<'_>> for Length {
-    fn from(token: &Token) -> Self {
-        match token {
-            Token::Number { value, .. } => Self::Px(*value as f32),
-            Token::Dimension { value, unit, .. } => match unit.as_ref() {
-                "em" => Self::Em(*value),
-                _ => Self::Px(*value),
-            },
-            _ => panic!(),
-        }
-    }
-}
-
 fn parse_i32<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<PropertyValue<i32>, cssparser::ParseError<'i, ()>> {
     let token = parser.next()?;
     match token {
@@ -79,11 +66,13 @@ fn parse_f32<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<PropertyValue<f32>, 
 fn parse_length<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<PropertyValue<Length>, cssparser::ParseError<'i, ()>> {
     let token = parser.next()?;
     match token {
-        Token::Number { value, .. } => Ok(PropertyValue::Exact(Length::Px(*value as f32))),
-        Token::Dimension { value, unit, .. } => match unit.as_ref() {
-            "em" => Ok(PropertyValue::Exact(Length::Em(*value))),
-            _ => Ok(PropertyValue::Exact(Length::Px(*value))),
-        },
+        Token::Number { .. } | Token::Dimension { .. } => {
+            if let Some(length) = parse_length_token(token) {
+                Ok(PropertyValue::Exact(length))
+            } else {
+                Err(parser.new_error_for_next_token())
+            }
+        }
         Token::Ident(s) => match_ignore_ascii_case! { s,
             "auto" => Ok(PropertyValue::Auto),
             "initial" => Ok(PropertyValue::Initial),
@@ -94,6 +83,17 @@ fn parse_length<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<PropertyValue<Len
     }
 }
 
+fn parse_length_token<'i>(token: &Token) -> Option<Length> {
+    match token {
+        Token::Number { value, .. } => Some(Length::Px(*value as f32)),
+        Token::Dimension { value, unit, .. } => match unit.as_ref() {
+            "em" => Some(Length::Em(*value)),
+            _ => Some(Length::Px(*value)),
+        },
+        _ => None,
+    }
+}
+
 fn parse_quad<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<PropertyValue<Length>>, cssparser::ParseError<'i, ()>> {
     let mut sizes = Vec::with_capacity(4);
 
@@ -101,7 +101,11 @@ fn parse_quad<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<PropertyValue<L
         let token = parser.next()?;
         match token {
             Token::Number { .. } | Token::Dimension { .. } => {
-                sizes.push(PropertyValue::Exact(token.into()));
+                if let Some(length) = parse_length_token(token) {
+                    sizes.push(PropertyValue::Exact(length));
+                } else {
+                    return Err(parser.new_error_for_next_token());
+                }
             }
             Token::Ident(s) => match_ignore_ascii_case! { s,
                 "auto" => sizes.push(PropertyValue::Auto),
@@ -178,10 +182,14 @@ fn parse_border<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>, cs
         let token = parser.next()?;
         match token {
             Token::Number { .. } | Token::Dimension { .. } => {
-                result.push(Property::BorderBottomWidth(PropertyValue::Exact(token.into())));
-                result.push(Property::BorderLeftWidth(PropertyValue::Exact(token.into())));
-                result.push(Property::BorderRightWidth(PropertyValue::Exact(token.into())));
-                result.push(Property::BorderTopWidth(PropertyValue::Exact(token.into())));
+                if let Some(length) = parse_length_token(token) {
+                    result.push(Property::BorderBottomWidth(PropertyValue::Exact(length)));
+                    result.push(Property::BorderLeftWidth(PropertyValue::Exact(length)));
+                    result.push(Property::BorderRightWidth(PropertyValue::Exact(length)));
+                    result.push(Property::BorderTopWidth(PropertyValue::Exact(length)));
+                } else {
+                    return Err(parser.new_error_for_next_token());
+                }
             }
             Token::Ident(s) => match_ignore_ascii_case! { s,
                 "initial" => {
@@ -255,7 +263,11 @@ fn parse_border_width<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Propert
         let token = parser.next()?;
         match token {
             Token::Number { .. } | Token::Dimension { .. } => {
-                sizes.push(PropertyValue::Exact(token.into()));
+                if let Some(length) = parse_length_token(token) {
+                    sizes.push(PropertyValue::Exact(length));
+                } else {
+                    return Err(parser.new_error_for_next_token());
+                }
             }
             Token::Ident(s) => match_ignore_ascii_case! { s,
                 "initial" => sizes.push(PropertyValue::Initial),
@@ -520,6 +532,8 @@ fn parse_position<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>, 
     }
 }
 
+// ---------- Rules Parser ---------- //
+
 pub struct RulesParser;
 
 impl<'i> AtRuleParser<'i> for RulesParser {
@@ -620,6 +634,8 @@ impl<'i> QualifiedRuleParser<'i> for RulesParser {
     }
 }
 
+// ---------- Properties Parser ---------- //
+
 pub struct PropertiesParser;
 
 impl<'i> AtRuleParser<'i> for PropertiesParser {
@@ -655,8 +671,12 @@ impl<'i> DeclarationParser<'i> for PropertiesParser {
                     let token = parser.next()?;
                     match token {
                         Token::Number { .. } | Token::Dimension { .. } => {
-                            result.push(Property::BorderBottomWidth(PropertyValue::Exact(token.into())));
-                        }
+                            if let Some(length) = parse_length_token(token) {
+                                result.push(Property::BorderBottomWidth(PropertyValue::Exact(length)));
+                            } else {
+                                return Err(parser.new_error_for_next_token());
+                            }
+                        },
                         Token::Ident(s) => match_ignore_ascii_case! { s,
                             "initial" => result.push(Property::BorderBottomColor(PropertyValue::Initial)),
                             "inherit" => result.push(Property::BorderBottomColor(PropertyValue::Inherit)),
@@ -731,8 +751,12 @@ impl<'i> DeclarationParser<'i> for PropertiesParser {
                     let token = parser.next()?;
                     match token {
                         Token::Number { .. } | Token::Dimension { .. } => {
-                            result.push(Property::BorderLeftWidth(PropertyValue::Exact(token.into())));
-                        }
+                            if let Some(length) = parse_length_token(token) {
+                                result.push(Property::BorderLeftWidth(PropertyValue::Exact(length)));
+                            } else {
+                                return Err(parser.new_error_for_next_token());
+                            }
+                        },
                         Token::Ident(s) => match_ignore_ascii_case! { s,
                             "initial" => result.push(Property::BorderLeftColor(PropertyValue::Initial)),
                             "inherit" => result.push(Property::BorderLeftColor(PropertyValue::Inherit)),
@@ -757,8 +781,12 @@ impl<'i> DeclarationParser<'i> for PropertiesParser {
                     let token = parser.next()?;
                     match token {
                         Token::Number { .. } | Token::Dimension { .. } => {
-                            result.push(Property::BorderRightWidth(PropertyValue::Exact(token.into())));
-                        }
+                            if let Some(length) = parse_length_token(token) {
+                                result.push(Property::BorderRightWidth(PropertyValue::Exact(length)));
+                            } else {
+                                return Err(parser.new_error_for_next_token());
+                            }
+                        },
                         Token::Ident(s) => match_ignore_ascii_case! { s,
                             "initial" => result.push(Property::BorderRightColor(PropertyValue::Initial)),
                             "inherit" => result.push(Property::BorderRightColor(PropertyValue::Inherit)),
@@ -782,8 +810,12 @@ impl<'i> DeclarationParser<'i> for PropertiesParser {
                     let token = parser.next()?;
                     match token {
                         Token::Number { .. } | Token::Dimension { .. } => {
-                            result.push(Property::BorderTopWidth(PropertyValue::Exact(token.into())));
-                        }
+                            if let Some(length) = parse_length_token(token) {
+                                result.push(Property::BorderTopWidth(PropertyValue::Exact(length)));
+                            } else {
+                                return Err(parser.new_error_for_next_token());
+                            }
+                        },
                         Token::Ident(s) => match_ignore_ascii_case! { s,
                             "initial" => result.push(Property::BorderTopColor(PropertyValue::Initial)),
                             "inherit" => result.push(Property::BorderTopColor(PropertyValue::Inherit)),
