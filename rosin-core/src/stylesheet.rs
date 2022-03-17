@@ -4,8 +4,10 @@ use crate::parser::*;
 use crate::style::*;
 use crate::tree::*;
 
+use cssparser::Token;
 use cssparser::{Parser, ParserInput, RuleListParser};
 
+use std::sync::Arc;
 use std::{cmp::Ordering, error::Error, fs, time::SystemTime};
 
 macro_rules! apply {
@@ -159,6 +161,98 @@ macro_rules! apply {
             _ => debug_assert!(false),
         };
     };
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum Length {
+    Px(f32),
+    Em(f32),
+}
+
+impl Default for Length {
+    fn default() -> Self {
+        Self::Px(0.0)
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum PropertyValue<T> {
+    Auto,
+    Initial,
+    Inherit,
+    Exact(T),
+}
+
+impl<T> Default for PropertyValue<T> {
+    fn default() -> Self {
+        PropertyValue::Initial
+    }
+}
+
+impl<T> From<T> for PropertyValue<T> {
+    fn from(value: T) -> Self {
+        PropertyValue::Exact(value)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum Property {
+    AlignContent(PropertyValue<AlignContent>),
+    AlignItems(PropertyValue<AlignItems>),
+    AlignSelf(PropertyValue<AlignItems>),
+    BackgroundColor(PropertyValue<cssparser::Color>),
+    //TODO
+    //BackgroundImage(PropertyValue<piet::FixedGradient>),
+    BorderBottomColor(PropertyValue<cssparser::Color>),
+    BorderBottomLeftRadius(PropertyValue<Length>),
+    BorderBottomRightRadius(PropertyValue<Length>),
+    BorderBottomWidth(PropertyValue<Length>),
+    BorderLeftColor(PropertyValue<cssparser::Color>),
+    BorderLeftWidth(PropertyValue<Length>),
+    BorderRightColor(PropertyValue<cssparser::Color>),
+    BorderRightWidth(PropertyValue<Length>),
+    BorderTopColor(PropertyValue<cssparser::Color>),
+    BorderTopLeftRadius(PropertyValue<Length>),
+    BorderTopRightRadius(PropertyValue<Length>),
+    BorderTopWidth(PropertyValue<Length>),
+    Bottom(PropertyValue<Length>),
+    BoxShadowOffsetX(PropertyValue<Length>),
+    BoxShadowOffsetY(PropertyValue<Length>),
+    BoxShadowBlur(PropertyValue<Length>),
+    BoxShadowColor(PropertyValue<cssparser::Color>),
+    BoxShadowInset(PropertyValue<bool>),
+    Color(PropertyValue<cssparser::Color>),
+    Cursor(PropertyValue<Cursor>),
+    FlexBasis(PropertyValue<Length>),
+    FlexDirection(PropertyValue<FlexDirection>),
+    FlexGrow(PropertyValue<f32>),
+    FlexShrink(PropertyValue<f32>),
+    FlexWrap(PropertyValue<FlexWrap>),
+    FontFamily(PropertyValue<Arc<str>>),
+    FontSize(PropertyValue<Length>),
+    FontWeight(PropertyValue<u32>),
+    Height(PropertyValue<Length>),
+    JustifyContent(PropertyValue<JustifyContent>),
+    Left(PropertyValue<Length>),
+    MarginBottom(PropertyValue<Length>),
+    MarginLeft(PropertyValue<Length>),
+    MarginRight(PropertyValue<Length>),
+    MarginTop(PropertyValue<Length>),
+    MaxHeight(PropertyValue<Length>),
+    MaxWidth(PropertyValue<Length>),
+    MinHeight(PropertyValue<Length>),
+    MinWidth(PropertyValue<Length>),
+    Opacity(PropertyValue<f32>),
+    Order(PropertyValue<i32>),
+    PaddingBottom(PropertyValue<Length>),
+    PaddingLeft(PropertyValue<Length>),
+    PaddingRight(PropertyValue<Length>),
+    PaddingTop(PropertyValue<Length>),
+    Position(PropertyValue<Position>),
+    Right(PropertyValue<Length>),
+    Top(PropertyValue<Length>),
+    Width(PropertyValue<Length>),
+    ZIndex(PropertyValue<i32>),
 }
 
 #[derive(Debug, Clone)]

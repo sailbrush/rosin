@@ -2,3 +2,4 @@
 //       Then use winit_blit to blit to a window.
 //       Not performant at all, but it should be easy to get working.
 
+fn main() {}

@@ -2,11 +2,116 @@
 #![allow(clippy::cognitive_complexity)]
 
 use crate::geometry::*;
-use crate::properties::*;
 
 use cssparser::RGBA;
 
 use std::sync::Arc;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum AlignContent {
+    Center,
+    FlexEnd,
+    FlexStart,
+    SpaceAround,
+    SpaceBetween,
+    Stretch,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum AlignItems {
+    Stretch,
+    Center,
+    FlexStart,
+    FlexEnd,
+}
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, Clone, Copy)]
+pub enum Cursor {
+    Default,
+    None,
+    ContextMenu,
+    Help,
+    Pointer,
+    Progress,
+    Wait,
+    Cell,
+    Crosshair,
+    Text,
+    VerticalText,
+    Alias,
+    Copy,
+    Move,
+    NoDrop,
+    NotAllowed,
+    Grab,
+    Grabbing,
+    E_Resize,
+    N_Resize,
+    NE_Resize,
+    NW_Resize,
+    S_Resize,
+    SE_Resize,
+    SW_Resize,
+    W_Resize,
+    WE_Resize,
+    NS_Resize,
+    NESW_Resize,
+    NWSE_Resize,
+    ColResize,
+    RowResize,
+    AllScroll,
+    ZoomIn,
+    ZoomOut,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum FlexDirection {
+    Row,
+    RowReverse,
+    Column,
+    ColumnReverse,
+}
+
+impl FlexDirection {
+    pub fn is_row(&self) -> bool {
+        match self {
+            FlexDirection::Row | FlexDirection::RowReverse => true,
+            FlexDirection::Column | FlexDirection::ColumnReverse => false,
+        }
+    }
+
+    pub fn is_reverse(&self) -> bool {
+        match self {
+            FlexDirection::RowReverse | FlexDirection::ColumnReverse => true,
+            FlexDirection::Row | FlexDirection::Column => false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FlexWrap {
+    NoWrap,
+    Wrap,
+    WrapReverse,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum JustifyContent {
+    FlexStart,
+    FlexEnd,
+    Center,
+    SpaceBetween,
+    SpaceAround,
+    SpaceEvenly,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Position {
+    Static,
+    Relative,
+    Fixed,
+}
 
 /// Computed style properties of a Node.
 #[derive(Debug, Clone)]

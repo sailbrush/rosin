@@ -2,163 +2,12 @@
 
 use std::sync::Arc;
 
-use crate::properties::*;
+use crate::style::*;
 use crate::stylesheet::*;
 
 use cssparser::*;
 
-// TODO: if debug_assertions, print parse errors to stderr
-// TODO: :focus, :hover, etc
-
-macro_rules! parse {
-    (@color, $parser:ident, $property_type:expr) => {
-        Ok(vec![$property_type(PropertyValue::Exact(cssparser::Color::parse($parser)?))])
-    };
-    (@enum, $parser:ident, $property_type:expr, $enum:ident) => {{
-        let token = $parser.next()?;
-        match token {
-            Token::Ident(s) => match_ignore_ascii_case! { s,
-                "auto" => Ok(vec![$property_type(PropertyValue::Auto)]),
-                "initial" => Ok(vec![$property_type(PropertyValue::Initial)]),
-                "inherit" => Ok(vec![$property_type(PropertyValue::Inherit)]),
-                _ => {
-                    if let Ok(value) = $enum::from_css_token(&s) {
-                        Ok(vec![$property_type(PropertyValue::Exact(value))])
-                    } else {
-                        Err($parser.new_error_for_next_token())
-                    }
-                }
-            },
-            _ => Err($parser.new_error_for_next_token()),
-        }
-    }};
-    (@length, $parser:ident, $property_type:expr) => {{
-        let token = $parser.next()?;
-        match token {
-            Token::Number { .. } | Token::Dimension { .. } => Ok(vec![$property_type(PropertyValue::Exact(token.into()))]),
-            Token::Ident(s) => match_ignore_ascii_case! { s,
-                "auto" => Ok(vec![$property_type(PropertyValue::Auto)]),
-                "initial" => Ok(vec![$property_type(PropertyValue::Initial)]),
-                "inherit" => Ok(vec![$property_type(PropertyValue::Inherit)]),
-                _ => Err($parser.new_error_for_next_token()),
-            },
-            _ => Err($parser.new_error_for_next_token()),
-        }
-    }};
-    (@i32, $parser:ident, $property_type:expr) => {{
-        let token = $parser.next()?;
-        match token {
-            Token::Number { int_value, .. } => {
-                if let Some(int_value) = *int_value {
-                    Ok(vec![$property_type(PropertyValue::Exact(int_value))])
-                } else {
-                    Err($parser.new_error_for_next_token())
-                }
-            }
-            Token::Ident(s) => match_ignore_ascii_case! { s,
-                "auto" => Ok(vec![$property_type(PropertyValue::Auto)]),
-                "initial" => Ok(vec![$property_type(PropertyValue::Initial)]),
-                "inherit" => Ok(vec![$property_type(PropertyValue::Inherit)]),
-                _ => Err($parser.new_error_for_next_token()),
-            },
-            _ => Err($parser.new_error_for_next_token()),
-        }
-    }};
-    (@u32, $parser:ident, $property_type:expr) => {{
-        let token = $parser.next()?;
-        match token {
-            Token::Number { int_value, .. } => {
-                if let Some(int_value) = *int_value {
-                    Ok(vec![$property_type(PropertyValue::Exact(int_value as u32))])
-                } else {
-                    Err($parser.new_error_for_next_token())
-                }
-            }
-            Token::Ident(s) => match_ignore_ascii_case! { s,
-                "auto" => Ok(vec![$property_type(PropertyValue::Auto)]),
-                "initial" => Ok(vec![$property_type(PropertyValue::Initial)]),
-                "inherit" => Ok(vec![$property_type(PropertyValue::Inherit)]),
-                _ => Err($parser.new_error_for_next_token()),
-            },
-            _ => Err($parser.new_error_for_next_token()),
-        }
-    }};
-    (@f32, $parser:ident, $property_type:expr) => {{
-        let token = $parser.next()?;
-        match token {
-            Token::Number { value, .. } => Ok(vec![$property_type(PropertyValue::Exact(*value))]),
-            Token::Ident(s) => match_ignore_ascii_case! { s,
-                "auto" => Ok(vec![$property_type(PropertyValue::Auto)]),
-                "initial" => Ok(vec![$property_type(PropertyValue::Initial)]),
-                "inherit" => Ok(vec![$property_type(PropertyValue::Inherit)]),
-                _ => Err($parser.new_error_for_next_token()),
-            },
-            _ => Err($parser.new_error_for_next_token()),
-        }
-    }};
-    (@quad, $parser:ident, $top:expr, $right:expr, $bottom:expr, $left:expr) => {{
-        let mut result = Vec::new();
-        let mut sizes: Vec<PropertyValue<Length>> = Vec::with_capacity(4);
-
-        while !$parser.is_exhausted() {
-            let token = $parser.next()?;
-            match token {
-                Token::Number { .. } | Token::Dimension { .. } => {
-                    sizes.push(PropertyValue::Exact(token.into()));
-                }
-                Token::Ident(s) => match_ignore_ascii_case! { s,
-                    "auto" => sizes.push(PropertyValue::Auto),
-                    "initial" => sizes.push(PropertyValue::Initial),
-                    "inherit" => sizes.push(PropertyValue::Inherit),
-                    _ => return Err($parser.new_error_for_next_token()),
-                },
-                _ => return Err($parser.new_error_for_next_token()),
-            }
-        }
-
-        match sizes.len() {
-            1 => {
-                result.push($top(sizes[0]));
-                result.push($right(sizes[0]));
-                result.push($bottom(sizes[0]));
-                result.push($left(sizes[0]));
-            }
-            2 => {
-                result.push($top(sizes[0]));
-                result.push($right(sizes[1]));
-                result.push($bottom(sizes[0]));
-                result.push($left(sizes[1]));
-            }
-            3 => {
-                result.push($top(sizes[0]));
-                result.push($right(sizes[1]));
-                result.push($bottom(sizes[2]));
-                result.push($left(sizes[1]));
-            }
-            4 => {
-                result.push($top(sizes[0]));
-                result.push($right(sizes[1]));
-                result.push($bottom(sizes[2]));
-                result.push($left(sizes[3]));
-            }
-            _ => return Err($parser.new_error_for_next_token()),
-        }
-
-        Ok(result)
-    }};
-}
-
-#[derive(Debug, Copy, Clone)]
-pub enum Length {
-    Px(f32),
-    Em(f32),
-}
-
-impl Default for Length {
-    fn default() -> Self {
-        Self::Px(0.0)
-    }
-}
+// ---------- Parse Helper Funcitons ---------- //
 
 impl From<&Token<'_>> for Length {
     fn from(token: &Token) -> Self {
@@ -173,84 +22,502 @@ impl From<&Token<'_>> for Length {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
-pub enum PropertyValue<T> {
-    Auto,
-    Initial,
-    Inherit,
-    Exact(T),
-}
-
-impl<T> Default for PropertyValue<T> {
-    fn default() -> Self {
-        PropertyValue::Initial
+fn parse_i32<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<PropertyValue<i32>, cssparser::ParseError<'i, ()>> {
+    let token = parser.next()?;
+    match token {
+        Token::Number { int_value, .. } => {
+            if let Some(int_value) = *int_value {
+                Ok(PropertyValue::Exact(int_value))
+            } else {
+                Err(parser.new_error_for_next_token())
+            }
+        }
+        Token::Ident(s) => match_ignore_ascii_case! { s,
+            "auto" => Ok(PropertyValue::Auto),
+            "initial" => Ok(PropertyValue::Initial),
+            "inherit" => Ok(PropertyValue::Inherit),
+            _ => Err(parser.new_error_for_next_token()),
+        },
+        _ => Err(parser.new_error_for_next_token()),
     }
 }
 
-impl<T> From<T> for PropertyValue<T> {
-    fn from(value: T) -> Self {
-        PropertyValue::Exact(value)
+fn parse_u32<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<PropertyValue<u32>, cssparser::ParseError<'i, ()>> {
+    let token = parser.next()?;
+    match token {
+        Token::Number { int_value, .. } => {
+            if let Some(int_value) = *int_value {
+                Ok(PropertyValue::Exact(int_value as u32))
+            } else {
+                Err(parser.new_error_for_next_token())
+            }
+        }
+        Token::Ident(s) => match_ignore_ascii_case! { s,
+            "auto" => Ok(PropertyValue::Auto),
+            "initial" => Ok(PropertyValue::Initial),
+            "inherit" => Ok(PropertyValue::Inherit),
+            _ => Err(parser.new_error_for_next_token()),
+        },
+        _ => Err(parser.new_error_for_next_token()),
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum Property {
-    AlignContent(PropertyValue<AlignContent>),
-    AlignItems(PropertyValue<AlignItems>),
-    AlignSelf(PropertyValue<AlignItems>),
-    BackgroundColor(PropertyValue<cssparser::Color>),
-    //TODO
-    //BackgroundImage(PropertyValue<piet::FixedGradient>),
-    BorderBottomColor(PropertyValue<cssparser::Color>),
-    BorderBottomLeftRadius(PropertyValue<Length>),
-    BorderBottomRightRadius(PropertyValue<Length>),
-    BorderBottomWidth(PropertyValue<Length>),
-    BorderLeftColor(PropertyValue<cssparser::Color>),
-    BorderLeftWidth(PropertyValue<Length>),
-    BorderRightColor(PropertyValue<cssparser::Color>),
-    BorderRightWidth(PropertyValue<Length>),
-    BorderTopColor(PropertyValue<cssparser::Color>),
-    BorderTopLeftRadius(PropertyValue<Length>),
-    BorderTopRightRadius(PropertyValue<Length>),
-    BorderTopWidth(PropertyValue<Length>),
-    Bottom(PropertyValue<Length>),
-    BoxShadowOffsetX(PropertyValue<Length>),
-    BoxShadowOffsetY(PropertyValue<Length>),
-    BoxShadowBlur(PropertyValue<Length>),
-    BoxShadowColor(PropertyValue<cssparser::Color>),
-    BoxShadowInset(PropertyValue<bool>),
-    Color(PropertyValue<cssparser::Color>),
-    Cursor(PropertyValue<Cursor>),
-    FlexBasis(PropertyValue<Length>),
-    FlexDirection(PropertyValue<FlexDirection>),
-    FlexGrow(PropertyValue<f32>),
-    FlexShrink(PropertyValue<f32>),
-    FlexWrap(PropertyValue<FlexWrap>),
-    FontFamily(PropertyValue<Arc<str>>),
-    FontSize(PropertyValue<Length>),
-    FontWeight(PropertyValue<u32>),
-    Height(PropertyValue<Length>),
-    JustifyContent(PropertyValue<JustifyContent>),
-    Left(PropertyValue<Length>),
-    MarginBottom(PropertyValue<Length>),
-    MarginLeft(PropertyValue<Length>),
-    MarginRight(PropertyValue<Length>),
-    MarginTop(PropertyValue<Length>),
-    MaxHeight(PropertyValue<Length>),
-    MaxWidth(PropertyValue<Length>),
-    MinHeight(PropertyValue<Length>),
-    MinWidth(PropertyValue<Length>),
-    Opacity(PropertyValue<f32>),
-    Order(PropertyValue<i32>),
-    PaddingBottom(PropertyValue<Length>),
-    PaddingLeft(PropertyValue<Length>),
-    PaddingRight(PropertyValue<Length>),
-    PaddingTop(PropertyValue<Length>),
-    Position(PropertyValue<Position>),
-    Right(PropertyValue<Length>),
-    Top(PropertyValue<Length>),
-    Width(PropertyValue<Length>),
-    ZIndex(PropertyValue<i32>),
+fn parse_f32<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<PropertyValue<f32>, cssparser::ParseError<'i, ()>> {
+    let token = parser.next()?;
+    match token {
+        Token::Number { value, .. } => Ok(PropertyValue::Exact(*value)),
+        Token::Ident(s) => match_ignore_ascii_case! { s,
+            "auto" => Ok(PropertyValue::Auto),
+            "initial" => Ok(PropertyValue::Initial),
+            "inherit" => Ok(PropertyValue::Inherit),
+            _ => Err(parser.new_error_for_next_token()),
+        },
+        _ => Err(parser.new_error_for_next_token()),
+    }
+}
+
+fn parse_length<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<PropertyValue<Length>, cssparser::ParseError<'i, ()>> {
+    let token = parser.next()?;
+    match token {
+        Token::Number { value, .. } => Ok(PropertyValue::Exact(Length::Px(*value as f32))),
+        Token::Dimension { value, unit, .. } => match unit.as_ref() {
+            "em" => Ok(PropertyValue::Exact(Length::Em(*value))),
+            _ => Ok(PropertyValue::Exact(Length::Px(*value))),
+        },
+        Token::Ident(s) => match_ignore_ascii_case! { s,
+            "auto" => Ok(PropertyValue::Auto),
+            "initial" => Ok(PropertyValue::Initial),
+            "inherit" => Ok(PropertyValue::Inherit),
+            _ => Err(parser.new_error_for_next_token()),
+        },
+        _ => Err(parser.new_error_for_next_token()),
+    }
+}
+
+fn parse_quad<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<PropertyValue<Length>>, cssparser::ParseError<'i, ()>> {
+    let mut sizes = Vec::with_capacity(4);
+
+    while !parser.is_exhausted() {
+        let token = parser.next()?;
+        match token {
+            Token::Number { .. } | Token::Dimension { .. } => {
+                sizes.push(PropertyValue::Exact(token.into()));
+            }
+            Token::Ident(s) => match_ignore_ascii_case! { s,
+                "auto" => sizes.push(PropertyValue::Auto),
+                "initial" => sizes.push(PropertyValue::Initial),
+                "inherit" => sizes.push(PropertyValue::Inherit),
+                _ => return Err(parser.new_error_for_next_token()),
+            },
+            _ => return Err(parser.new_error_for_next_token()),
+        }
+    }
+
+    Ok(sizes)
+}
+
+// ---------- Property Parsers ---------- //
+
+fn parse_align_content<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>, cssparser::ParseError<'i, ()>> {
+    let token = parser.next()?;
+    match token {
+        Token::Ident(s) => Ok(vec![Property::AlignContent(match_ignore_ascii_case! { s,
+            "auto" => PropertyValue::Auto,
+            "initial" => PropertyValue::Initial,
+            "inherit" => PropertyValue::Inherit,
+            "stretch" => PropertyValue::Exact(AlignContent::Stretch),
+            "center" => PropertyValue::Exact(AlignContent::Center),
+            "flex-start" => PropertyValue::Exact(AlignContent::FlexStart),
+            "flex-end" => PropertyValue::Exact(AlignContent::FlexEnd),
+            "space-between" => PropertyValue::Exact(AlignContent::SpaceBetween),
+            "space-around" => PropertyValue::Exact(AlignContent::SpaceAround),
+            _ => return Err(parser.new_error_for_next_token()),
+        })]),
+        _ => return Err(parser.new_error_for_next_token()),
+    }
+}
+
+fn parse_align_items<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>, cssparser::ParseError<'i, ()>> {
+    let token = parser.next()?;
+    match token {
+        Token::Ident(s) => Ok(vec![Property::AlignItems(match_ignore_ascii_case! { s,
+            "auto" => PropertyValue::Auto,
+            "initial" => PropertyValue::Initial,
+            "inherit" => PropertyValue::Inherit,
+            "stretch" => PropertyValue::Exact(AlignItems::Stretch),
+            "center" => PropertyValue::Exact(AlignItems::Center),
+            "flex-start" => PropertyValue::Exact(AlignItems::FlexStart),
+            "flex-end" => PropertyValue::Exact(AlignItems::FlexEnd),
+            _ => return Err(parser.new_error_for_next_token()),
+        })]),
+        _ => return Err(parser.new_error_for_next_token()),
+    }
+}
+
+fn parse_align_self<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>, cssparser::ParseError<'i, ()>> {
+    let token = parser.next()?;
+    match token {
+        Token::Ident(s) => Ok(vec![Property::AlignSelf(match_ignore_ascii_case! { s,
+            "auto" => PropertyValue::Auto,
+            "initial" => PropertyValue::Initial,
+            "inherit" => PropertyValue::Inherit,
+            "stretch" => PropertyValue::Exact(AlignItems::Stretch),
+            "center" => PropertyValue::Exact(AlignItems::Center),
+            "flex-start" => PropertyValue::Exact(AlignItems::FlexStart),
+            "flex-end" => PropertyValue::Exact(AlignItems::FlexEnd),
+            _ => return Err(parser.new_error_for_next_token()),
+        })]),
+        _ => return Err(parser.new_error_for_next_token()),
+    }
+}
+
+fn parse_border<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>, cssparser::ParseError<'i, ()>> {
+    let mut result = Vec::new();
+
+    while !parser.is_exhausted() {
+        let token = parser.next()?;
+        match token {
+            Token::Number { .. } | Token::Dimension { .. } => {
+                result.push(Property::BorderBottomWidth(PropertyValue::Exact(token.into())));
+                result.push(Property::BorderLeftWidth(PropertyValue::Exact(token.into())));
+                result.push(Property::BorderRightWidth(PropertyValue::Exact(token.into())));
+                result.push(Property::BorderTopWidth(PropertyValue::Exact(token.into())));
+            }
+            Token::Ident(s) => match_ignore_ascii_case! { s,
+                "initial" => {
+                    result.push(Property::BorderBottomColor(PropertyValue::Initial));
+                    result.push(Property::BorderLeftColor(PropertyValue::Initial));
+                    result.push(Property::BorderRightColor(PropertyValue::Initial));
+                    result.push(Property::BorderTopColor(PropertyValue::Initial));
+                },
+                "inherit" => {
+                    result.push(Property::BorderBottomColor(PropertyValue::Inherit));
+                    result.push(Property::BorderLeftColor(PropertyValue::Inherit));
+                    result.push(Property::BorderRightColor(PropertyValue::Inherit));
+                    result.push(Property::BorderTopColor(PropertyValue::Inherit));
+                },
+                _ => {
+                    let color = cssparser::Color::parse(parser)?;
+
+                    result.push(Property::BorderBottomColor(PropertyValue::Exact(color)));
+                    result.push(Property::BorderLeftColor(PropertyValue::Exact(color)));
+                    result.push(Property::BorderRightColor(PropertyValue::Exact(color)));
+                    result.push(Property::BorderTopColor(PropertyValue::Exact(color)));
+                },
+            },
+            _ => return Err(parser.new_error_for_next_token()),
+        }
+    }
+
+    Ok(result)
+}
+
+fn parse_border_radius<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>, cssparser::ParseError<'i, ()>> {
+    let mut result = Vec::with_capacity(4);
+    let sizes = parse_quad(parser)?;
+
+    match sizes.len() {
+        1 => {
+            result.push(Property::BorderTopLeftRadius(sizes[0]));
+            result.push(Property::BorderTopRightRadius(sizes[0]));
+            result.push(Property::BorderBottomRightRadius(sizes[0]));
+            result.push(Property::BorderBottomLeftRadius(sizes[0]));
+        }
+        2 => {
+            result.push(Property::BorderTopLeftRadius(sizes[0]));
+            result.push(Property::BorderTopRightRadius(sizes[1]));
+            result.push(Property::BorderBottomRightRadius(sizes[0]));
+            result.push(Property::BorderBottomLeftRadius(sizes[1]));
+        }
+        3 => {
+            result.push(Property::BorderTopLeftRadius(sizes[0]));
+            result.push(Property::BorderTopRightRadius(sizes[1]));
+            result.push(Property::BorderBottomRightRadius(sizes[2]));
+            result.push(Property::BorderBottomLeftRadius(sizes[1]));
+        }
+        4 => {
+            result.push(Property::BorderTopLeftRadius(sizes[0]));
+            result.push(Property::BorderTopRightRadius(sizes[1]));
+            result.push(Property::BorderBottomRightRadius(sizes[2]));
+            result.push(Property::BorderBottomLeftRadius(sizes[3]));
+        }
+        _ => return Err(parser.new_error_for_next_token()),
+    }
+
+    Ok(result)
+}
+
+fn parse_border_width<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>, cssparser::ParseError<'i, ()>> {
+    let mut result = Vec::new();
+    let mut sizes: Vec<PropertyValue<Length>> = Vec::with_capacity(4);
+
+    while !parser.is_exhausted() {
+        let token = parser.next()?;
+        match token {
+            Token::Number { .. } | Token::Dimension { .. } => {
+                sizes.push(PropertyValue::Exact(token.into()));
+            }
+            Token::Ident(s) => match_ignore_ascii_case! { s,
+                "initial" => sizes.push(PropertyValue::Initial),
+                "inherit" => sizes.push(PropertyValue::Inherit),
+                "thin" => sizes.push(PropertyValue::Exact(Length::Px(2.0))),
+                "medium" => sizes.push(PropertyValue::Exact(Length::Px(4.0))),
+                "thick" => sizes.push(PropertyValue::Exact(Length::Px(6.0))),
+                _ => return Err(parser.new_error_for_next_token()),
+            },
+            _ => return Err(parser.new_error_for_next_token()),
+        }
+    }
+
+    match sizes.len() {
+        1 => {
+            result.push(Property::BorderTopWidth(sizes[0]));
+            result.push(Property::BorderRightWidth(sizes[0]));
+            result.push(Property::BorderBottomWidth(sizes[0]));
+            result.push(Property::BorderLeftWidth(sizes[0]));
+        },
+        2 => {
+            result.push(Property::BorderTopWidth(sizes[0]));
+            result.push(Property::BorderRightWidth(sizes[1]));
+            result.push(Property::BorderBottomWidth(sizes[0]));
+            result.push(Property::BorderLeftWidth(sizes[1]));
+        },
+        3 => {
+            result.push(Property::BorderTopWidth(sizes[0]));
+            result.push(Property::BorderRightWidth(sizes[1]));
+            result.push(Property::BorderBottomWidth(sizes[2]));
+            result.push(Property::BorderLeftWidth(sizes[1]));
+        },
+        4 => {
+            result.push(Property::BorderTopWidth(sizes[0]));
+            result.push(Property::BorderRightWidth(sizes[1]));
+            result.push(Property::BorderBottomWidth(sizes[2]));
+            result.push(Property::BorderLeftWidth(sizes[3]));
+        },
+        _ => return Err(parser.new_error_for_next_token()),
+    }
+
+    Ok(result)
+}
+
+fn parse_cursor<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>, cssparser::ParseError<'i, ()>> {
+    let token = parser.next()?;
+    match token {
+        Token::Ident(s) => Ok(vec![Property::Cursor(match_ignore_ascii_case! { s,
+            "auto" => PropertyValue::Auto,
+            "initial" => PropertyValue::Initial,
+            "inherit" => PropertyValue::Inherit,
+            "default" => PropertyValue::Exact(Cursor::Default),
+            "none" => PropertyValue::Exact(Cursor::None),
+            "context-menu" => PropertyValue::Exact(Cursor::ContextMenu),
+            "help" => PropertyValue::Exact(Cursor::Help),
+            "pointer" => PropertyValue::Exact(Cursor::Pointer),
+            "progress" => PropertyValue::Exact(Cursor::Progress),
+            "wait" => PropertyValue::Exact(Cursor::Wait),
+            "cell" => PropertyValue::Exact(Cursor::Cell),
+            "crosshair" => PropertyValue::Exact(Cursor::Crosshair),
+            "text" => PropertyValue::Exact(Cursor::Text),
+            "vertical-text" => PropertyValue::Exact(Cursor::VerticalText),
+            "alias" => PropertyValue::Exact(Cursor::Alias),
+            "copy" => PropertyValue::Exact(Cursor::Copy),
+            "move" => PropertyValue::Exact(Cursor::Move),
+            "no-drop" => PropertyValue::Exact(Cursor::NoDrop),
+            "not-allowed" => PropertyValue::Exact(Cursor::NotAllowed),
+            "grab" => PropertyValue::Exact(Cursor::Grab),
+            "grabbing" => PropertyValue::Exact(Cursor::Grabbing),
+            "e-resize" => PropertyValue::Exact(Cursor::E_Resize),
+            "n-resize" => PropertyValue::Exact(Cursor::N_Resize),
+            "ne-resize" => PropertyValue::Exact(Cursor::NE_Resize),
+            "nw-resize" => PropertyValue::Exact(Cursor::NW_Resize),
+            "s-resize" => PropertyValue::Exact(Cursor::S_Resize),
+            "se-resize" => PropertyValue::Exact(Cursor::SE_Resize),
+            "sw-resize" => PropertyValue::Exact(Cursor::SW_Resize),
+            "w-resize" => PropertyValue::Exact(Cursor::W_Resize),
+            "we-resize" => PropertyValue::Exact(Cursor::WE_Resize),
+            "ns-resize" => PropertyValue::Exact(Cursor::NS_Resize),
+            "nesw-resize" => PropertyValue::Exact(Cursor::NESW_Resize),
+            "nwse-resize" => PropertyValue::Exact(Cursor::NWSE_Resize),
+            "col-resize" => PropertyValue::Exact(Cursor::ColResize),
+            "row-resize" => PropertyValue::Exact(Cursor::RowResize),
+            "all-scroll" => PropertyValue::Exact(Cursor::AllScroll),
+            "zoom-in" => PropertyValue::Exact(Cursor::ZoomIn),
+            "zoom-out" => PropertyValue::Exact(Cursor::ZoomOut),
+            _ => return Err(parser.new_error_for_next_token()),
+        })]),
+        _ => return Err(parser.new_error_for_next_token()),
+    }
+}
+
+fn parse_flex_direction<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>, cssparser::ParseError<'i, ()>> {
+    let token = parser.next()?;
+    match token {
+        Token::Ident(s) => Ok(vec![Property::FlexDirection(match_ignore_ascii_case! { s,
+            "auto" => PropertyValue::Auto,
+            "initial" => PropertyValue::Initial,
+            "inherit" => PropertyValue::Inherit,
+            "row" => PropertyValue::Exact(FlexDirection::Row),
+            "row-reverse" => PropertyValue::Exact(FlexDirection::RowReverse),
+            "column" => PropertyValue::Exact(FlexDirection::Column),
+            "column-reverse" => PropertyValue::Exact(FlexDirection::ColumnReverse),
+            _ => return Err(parser.new_error_for_next_token()),
+        })]),
+        _ => return Err(parser.new_error_for_next_token()),
+    }
+}
+
+fn parse_flex_flow<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>, cssparser::ParseError<'i, ()>> {
+    let mut result = Vec::new();
+
+    while !parser.is_exhausted() {
+        /*let token = parser.next()?;
+        match token {
+            Token::Ident(s) => match_ignore_ascii_case! { s,
+                "initial" => {
+                    result.push(Property::FlexDirection(PropertyValue::Initial));
+                    result.push(Property::FlexWrap(PropertyValue::Initial));
+                },
+                "inherit" => {
+                    result.push(Property::FlexDirection(PropertyValue::Inherit));
+                    result.push(Property::FlexWrap(PropertyValue::Inherit));
+                },
+                _ => {
+                    if let Ok(value) = FlexDirection::from_css_token(s) {
+                        result.push(Property::FlexDirection(PropertyValue::Exact(value)));
+                    } else if let Ok(value) = FlexWrap::from_css_token(s) {
+                        result.push(Property::FlexWrap(PropertyValue::Exact(value)));
+                    } else {
+                        return Err(parser.new_error_for_next_token())
+                    }
+                },
+            },
+            _ => return Err(parser.new_error_for_next_token()),
+        }*/
+    }
+
+    todo!();
+
+    Ok(result)
+}
+
+fn parse_flex_wrap<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>, cssparser::ParseError<'i, ()>> {
+    let token = parser.next()?;
+    match token {
+        Token::Ident(s) => Ok(vec![Property::FlexWrap(match_ignore_ascii_case! { s,
+            "auto" => PropertyValue::Auto,
+            "initial" => PropertyValue::Initial,
+            "inherit" => PropertyValue::Inherit,
+            "no-wrap" => PropertyValue::Exact(FlexWrap::NoWrap),
+            "wrap" => PropertyValue::Exact(FlexWrap::Wrap),
+            "wrap-reverse" => PropertyValue::Exact(FlexWrap::WrapReverse),
+            _ => return Err(parser.new_error_for_next_token()),
+        })]),
+        _ => return Err(parser.new_error_for_next_token()),
+    }
+}
+
+fn parse_justify_content<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>, cssparser::ParseError<'i, ()>> {
+    let token = parser.next()?;
+    match token {
+        Token::Ident(s) => Ok(vec![Property::JustifyContent(match_ignore_ascii_case! { s,
+            "auto" => PropertyValue::Auto,
+            "initial" => PropertyValue::Initial,
+            "inherit" => PropertyValue::Inherit,
+            "flex-start" => PropertyValue::Exact(JustifyContent::FlexStart),
+            "flex-end" => PropertyValue::Exact(JustifyContent::FlexEnd),
+            "center" => PropertyValue::Exact(JustifyContent::Center),
+            "space-between" => PropertyValue::Exact(JustifyContent::SpaceBetween),
+            "space-around" => PropertyValue::Exact(JustifyContent::SpaceAround),
+            "space-evenly" => PropertyValue::Exact(JustifyContent::SpaceEvenly),
+            _ => return Err(parser.new_error_for_next_token()),
+        })]),
+        _ => return Err(parser.new_error_for_next_token()),
+    }
+}
+
+fn parse_margin<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>, cssparser::ParseError<'i, ()>> {
+    let mut result = Vec::with_capacity(4);
+    let sizes = parse_quad(parser)?;
+
+    match sizes.len() {
+        1 => {
+            result.push(Property::MarginTop(sizes[0]));
+            result.push(Property::MarginRight(sizes[0]));
+            result.push(Property::MarginBottom(sizes[0]));
+            result.push(Property::MarginLeft(sizes[0]));
+        }
+        2 => {
+            result.push(Property::MarginTop(sizes[0]));
+            result.push(Property::MarginRight(sizes[1]));
+            result.push(Property::MarginBottom(sizes[0]));
+            result.push(Property::MarginLeft(sizes[1]));
+        }
+        3 => {
+            result.push(Property::MarginTop(sizes[0]));
+            result.push(Property::MarginRight(sizes[1]));
+            result.push(Property::MarginBottom(sizes[2]));
+            result.push(Property::MarginLeft(sizes[1]));
+        }
+        4 => {
+            result.push(Property::MarginTop(sizes[0]));
+            result.push(Property::MarginRight(sizes[1]));
+            result.push(Property::MarginBottom(sizes[2]));
+            result.push(Property::MarginLeft(sizes[3]));
+        }
+        _ => return Err(parser.new_error_for_next_token()),
+    }
+
+    Ok(result)
+}
+
+fn parse_padding<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>, cssparser::ParseError<'i, ()>> {
+    let mut result = Vec::with_capacity(4);
+    let sizes = parse_quad(parser)?;
+
+    match sizes.len() {
+        1 => {
+            result.push(Property::PaddingTop(sizes[0]));
+            result.push(Property::PaddingRight(sizes[0]));
+            result.push(Property::PaddingBottom(sizes[0]));
+            result.push(Property::PaddingLeft(sizes[0]));
+        }
+        2 => {
+            result.push(Property::PaddingTop(sizes[0]));
+            result.push(Property::PaddingRight(sizes[1]));
+            result.push(Property::PaddingBottom(sizes[0]));
+            result.push(Property::PaddingLeft(sizes[1]));
+        }
+        3 => {
+            result.push(Property::PaddingTop(sizes[0]));
+            result.push(Property::PaddingRight(sizes[1]));
+            result.push(Property::PaddingBottom(sizes[2]));
+            result.push(Property::PaddingLeft(sizes[1]));
+        }
+        4 => {
+            result.push(Property::PaddingTop(sizes[0]));
+            result.push(Property::PaddingRight(sizes[1]));
+            result.push(Property::PaddingBottom(sizes[2]));
+            result.push(Property::PaddingLeft(sizes[3]));
+        }
+        _ => return Err(parser.new_error_for_next_token()),
+    }
+
+    Ok(result)
+}
+
+fn parse_position<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>, cssparser::ParseError<'i, ()>> {
+    let token = parser.next()?;
+    match token {
+        Token::Ident(s) => Ok(vec![Property::Position(match_ignore_ascii_case! { s,
+            "auto" => PropertyValue::Auto,
+            "initial" => PropertyValue::Initial,
+            "inherit" => PropertyValue::Inherit,
+            "static" => PropertyValue::Exact(Position::Static),
+            "relative" => PropertyValue::Exact(Position::Relative),
+            "fixed" => PropertyValue::Exact(Position::Fixed),
+            _ => return Err(parser.new_error_for_next_token()),
+        })]),
+        _ => return Err(parser.new_error_for_next_token()),
+    }
 }
 
 pub struct RulesParser;
@@ -372,54 +639,15 @@ impl<'i> DeclarationParser<'i> for PropertiesParser {
         parser: &mut Parser<'i, 't>,
     ) -> Result<Self::Declaration, ParseError<'i, Self::Error>> {
         match_ignore_ascii_case! { &name,
-            "align-content" => parse!(@enum, parser, Property::AlignContent, AlignContent),
-            "align-items" => parse!(@enum, parser, Property::AlignItems, AlignItems),
-            "align-self" => parse!(@enum, parser, Property::AlignSelf, AlignItems),
-            "background-color" => parse!(@color, parser, Property::BackgroundColor),
+            "align-content" => parse_align_content(parser),
+            "align-items" => parse_align_items(parser),
+            "align-self" => parse_align_self(parser),
+            "background-color" => Ok(vec![Property::BackgroundColor(PropertyValue::Exact(cssparser::Color::parse(parser)?))]),
             "background-image" => {
                 // Parse gradient function
                 todo!()
             },
-            "border" => {
-                let mut result = Vec::new();
-
-                while !parser.is_exhausted() {
-                    let token = parser.next()?;
-                    match token {
-                        Token::Number { .. } | Token::Dimension { .. } => {
-                            result.push(Property::BorderBottomWidth(PropertyValue::Exact(token.into())));
-                            result.push(Property::BorderLeftWidth(PropertyValue::Exact(token.into())));
-                            result.push(Property::BorderRightWidth(PropertyValue::Exact(token.into())));
-                            result.push(Property::BorderTopWidth(PropertyValue::Exact(token.into())));
-                        }
-                        Token::Ident(s) => match_ignore_ascii_case! { s,
-                            "initial" => {
-                                result.push(Property::BorderBottomColor(PropertyValue::Initial));
-                                result.push(Property::BorderLeftColor(PropertyValue::Initial));
-                                result.push(Property::BorderRightColor(PropertyValue::Initial));
-                                result.push(Property::BorderTopColor(PropertyValue::Initial));
-                            },
-                            "inherit" => {
-                                result.push(Property::BorderBottomColor(PropertyValue::Inherit));
-                                result.push(Property::BorderLeftColor(PropertyValue::Inherit));
-                                result.push(Property::BorderRightColor(PropertyValue::Inherit));
-                                result.push(Property::BorderTopColor(PropertyValue::Inherit));
-                            },
-                            _ => {
-                                let color = cssparser::Color::parse(parser)?;
-
-                                result.push(Property::BorderBottomColor(PropertyValue::Exact(color)));
-                                result.push(Property::BorderLeftColor(PropertyValue::Exact(color)));
-                                result.push(Property::BorderRightColor(PropertyValue::Exact(color)));
-                                result.push(Property::BorderTopColor(PropertyValue::Exact(color)));
-                            },
-                        },
-                        _ => return Err(parser.new_error_for_next_token()),
-                    }
-                }
-
-                Ok(result)
-            },
+            "border" => parse_border(parser),
             "border-bottom" => {
                 let mut result = Vec::new();
 
@@ -443,10 +671,10 @@ impl<'i> DeclarationParser<'i> for PropertiesParser {
 
                 Ok(result)
             },
-            "border-bottom-color" => parse!(@color, parser, Property::BorderBottomColor),
-            "border-bottom-left-radius" => parse!(@length, parser, Property::BorderBottomLeftRadius),
-            "border-bottom-right-radius" => parse!(@length, parser, Property::BorderBottomRightRadius),
-            "border-bottom-width" => parse!(@length, parser, Property::BorderBottomWidth),
+            "border-bottom-color" => Ok(vec![Property::BorderBottomColor(PropertyValue::Exact(cssparser::Color::parse(parser)?))]),
+            "border-bottom-left-radius" => Ok(vec![Property::BorderBottomLeftRadius(parse_length(parser)?)]),
+            "border-bottom-right-radius" => Ok(vec![Property::BorderBottomRightRadius(parse_length(parser)?)]),
+            "border-bottom-width" => Ok(vec![Property::BorderBottomWidth(parse_length(parser)?)]),
             "border-color" => {
                 let mut result = Vec::new();
                 let mut colors: Vec<PropertyValue<Color>> = Vec::with_capacity(4);
@@ -519,9 +747,9 @@ impl<'i> DeclarationParser<'i> for PropertiesParser {
 
                 Ok(result)
             },
-            "border-left-color" => parse!(@color, parser, Property::BorderLeftColor),
-            "border-left-width" => parse!(@length, parser, Property::BorderLeftWidth),
-            "border-radius" => parse!(@quad, parser, Property::BorderTopLeftRadius, Property::BorderTopRightRadius, Property::BorderBottomRightRadius, Property::BorderBottomLeftRadius),
+            "border-left-color" => Ok(vec![Property::BorderLeftColor(PropertyValue::Exact(cssparser::Color::parse(parser)?))]),
+            "border-left-width" => Ok(vec![Property::BorderLeftWidth(parse_length(parser)?)]),
+            "border-radius" => parse_border_radius(parser),
             "border-right" => {
                 let mut result = Vec::new();
 
@@ -545,8 +773,8 @@ impl<'i> DeclarationParser<'i> for PropertiesParser {
 
                 Ok(result)
             },
-            "border-right-color" => parse!(@color, parser, Property::BorderRightColor),
-            "border-right-width" => parse!(@length, parser, Property::BorderRightWidth),
+            "border-right-color" => Ok(vec![Property::BorderRightColor(PropertyValue::Exact(cssparser::Color::parse(parser)?))]),
+            "border-right-width" => Ok(vec![Property::BorderRightWidth(parse_length(parser)?)]),
             "border-top" => {
                 let mut result = Vec::new();
 
@@ -570,66 +798,15 @@ impl<'i> DeclarationParser<'i> for PropertiesParser {
 
                 Ok(result)
             },
-            "border-top-color" => parse!(@color, parser, Property::BorderTopColor),
-            "border-top-left-radius" => parse!(@length, parser, Property::BorderTopLeftRadius),
-            "border-top-right-radius" => parse!(@length, parser, Property::BorderTopRightRadius),
-            "border-top-width" => parse!(@length, parser, Property::BorderTopWidth),
-            "border-width" => {
-                let mut result = Vec::new();
-                let mut sizes: Vec<PropertyValue<Length>> = Vec::with_capacity(4);
-
-                while !parser.is_exhausted() {
-                    let token = parser.next()?;
-                    match token {
-                        Token::Number { .. } | Token::Dimension { .. } => {
-                            sizes.push(PropertyValue::Exact(token.into()));
-                        }
-                        Token::Ident(s) => match_ignore_ascii_case! { s,
-                            "initial" => sizes.push(PropertyValue::Initial),
-                            "inherit" => sizes.push(PropertyValue::Inherit),
-                            "thin" => sizes.push(PropertyValue::Exact(Length::Px(2.0))),
-                            "medium" => sizes.push(PropertyValue::Exact(Length::Px(4.0))),
-                            "thick" => sizes.push(PropertyValue::Exact(Length::Px(6.0))),
-                            _ => return Err(parser.new_error_for_next_token()),
-                        },
-                        _ => return Err(parser.new_error_for_next_token()),
-                    }
-                }
-
-                match sizes.len() {
-                    1 => {
-                        result.push(Property::BorderTopWidth(sizes[0]));
-                        result.push(Property::BorderRightWidth(sizes[0]));
-                        result.push(Property::BorderBottomWidth(sizes[0]));
-                        result.push(Property::BorderLeftWidth(sizes[0]));
-                    },
-                    2 => {
-                        result.push(Property::BorderTopWidth(sizes[0]));
-                        result.push(Property::BorderRightWidth(sizes[1]));
-                        result.push(Property::BorderBottomWidth(sizes[0]));
-                        result.push(Property::BorderLeftWidth(sizes[1]));
-                    },
-                    3 => {
-                        result.push(Property::BorderTopWidth(sizes[0]));
-                        result.push(Property::BorderRightWidth(sizes[1]));
-                        result.push(Property::BorderBottomWidth(sizes[2]));
-                        result.push(Property::BorderLeftWidth(sizes[1]));
-                    },
-                    4 => {
-                        result.push(Property::BorderTopWidth(sizes[0]));
-                        result.push(Property::BorderRightWidth(sizes[1]));
-                        result.push(Property::BorderBottomWidth(sizes[2]));
-                        result.push(Property::BorderLeftWidth(sizes[3]));
-                    },
-                    _ => return Err(parser.new_error_for_next_token()),
-                }
-
-                Ok(result)
-            },
-            "bottom" => parse!(@length, parser, Property::Bottom),
+            "border-top-color" => Ok(vec![Property::BorderTopColor(PropertyValue::Exact(cssparser::Color::parse(parser)?))]),
+            "border-top-left-radius" => Ok(vec![Property::BorderTopLeftRadius(parse_length(parser)?)]),
+            "border-top-right-radius" => Ok(vec![Property::BorderTopRightRadius(parse_length(parser)?)]),
+            "border-top-width" => Ok(vec![Property::BorderTopWidth(parse_length(parser)?)]),
+            "border-width" => parse_border_width(parser),
+            "bottom" => Ok(vec![Property::Bottom(parse_length(parser)?)]),
             "box-shadow" => todo!(),
-            "color" => parse!(@color, parser, Property::Color),
-            "cursor" => parse!(@enum, parser, Property::Cursor, Cursor),
+            "color" => Ok(vec![Property::Color(PropertyValue::Exact(cssparser::Color::parse(parser)?))]),
+            "cursor" => parse_cursor(parser),
             "flex" => {
                 let mut result = Vec::new();
 
@@ -687,42 +864,12 @@ impl<'i> DeclarationParser<'i> for PropertiesParser {
 
                 Ok(result)
             },
-            "flex-basis" => parse!(@length, parser, Property::FlexBasis),
-            "flex-direction" => parse!(@enum, parser, Property::FlexDirection, FlexDirection),
-            "flex-flow" => {
-                let mut result = Vec::new();
-
-                while !parser.is_exhausted() {
-                    let token = parser.next()?;
-                    match token {
-                        Token::Ident(s) => match_ignore_ascii_case! { s,
-                            "initial" => {
-                                result.push(Property::FlexDirection(PropertyValue::Initial));
-                                result.push(Property::FlexWrap(PropertyValue::Initial));
-                            },
-                            "inherit" => {
-                                result.push(Property::FlexDirection(PropertyValue::Inherit));
-                                result.push(Property::FlexWrap(PropertyValue::Inherit));
-                            },
-                            _ => {
-                                if let Ok(value) = FlexDirection::from_css_token(s) {
-                                    result.push(Property::FlexDirection(PropertyValue::Exact(value)));
-                                } else if let Ok(value) = FlexWrap::from_css_token(s) {
-                                    result.push(Property::FlexWrap(PropertyValue::Exact(value)));
-                                } else {
-                                    return Err(parser.new_error_for_next_token())
-                                }
-                            },
-                        },
-                        _ => return Err(parser.new_error_for_next_token()),
-                    }
-                }
-
-                Ok(result)
-            },
-            "flex-grow" => parse!(@f32, parser, Property::FlexGrow),
-            "flex-shrink" => parse!(@f32, parser, Property::FlexShrink),
-            "flex-wrap" => parse!(@enum, parser, Property::FlexWrap, FlexWrap),
+            "flex-basis" => Ok(vec![Property::FlexBasis(parse_length(parser)?)]),
+            "flex-direction" => parse_flex_direction(parser),
+            "flex-flow" => parse_flex_flow(parser),
+            "flex-grow" => Ok(vec![Property::FlexGrow(parse_f32(parser)?)]),
+            "flex-shrink" => Ok(vec![Property::FlexShrink(parse_f32(parser)?)]),
+            "flex-wrap" => parse_flex_wrap(parser),
             "font" => todo!(),
             "font-family" => {
                 let token = parser.next()?;
@@ -731,32 +878,32 @@ impl<'i> DeclarationParser<'i> for PropertiesParser {
                     _ => Err(parser.new_error_for_next_token()),
                 }
             },
-            "font-size" => parse!(@length, parser, Property::FontSize),
-            "font-weight" => parse!(@u32, parser, Property::FontWeight),
-            "height" => parse!(@length, parser, Property::Height),
-            "justify-content" => parse!(@enum, parser, Property::JustifyContent, JustifyContent),
-            "left" => parse!(@length, parser, Property::Left),
-            "margin" => parse!(@quad, parser, Property::MarginTop, Property::MarginRight, Property::MarginBottom, Property::MarginLeft),
-            "margin-bottom" => parse!(@length, parser, Property::MarginBottom),
-            "margin-left" => parse!(@length, parser, Property::MarginLeft),
-            "margin-right" => parse!(@length, parser, Property::MarginRight),
-            "margin-top" => parse!(@length, parser, Property::MarginTop),
-            "max-height" => parse!(@length, parser, Property::MaxHeight),
-            "max-width" => parse!(@length, parser, Property::MaxWidth),
-            "min-height" => parse!(@length, parser, Property::MinHeight),
-            "min-width" => parse!(@length, parser, Property::MinWidth),
-            "opacity" => parse!(@f32, parser, Property::Opacity),
-            "order" => parse!(@i32, parser, Property::Order),
-            "padding" => parse!(@quad, parser, Property::PaddingTop, Property::PaddingRight, Property::PaddingBottom, Property::PaddingLeft),
-            "padding-bottom" => parse!(@length, parser, Property::PaddingBottom),
-            "padding-left" => parse!(@length, parser, Property::PaddingLeft),
-            "padding-right" => parse!(@length, parser, Property::PaddingRight),
-            "padding-top" => parse!(@length, parser, Property::PaddingTop),
-            "position" => parse!(@enum, parser, Property::Position, Position),
-            "right" => parse!(@length, parser, Property::Right),
-            "top" => parse!(@length, parser, Property::Top),
-            "width" => parse!(@length, parser, Property::Width),
-            "z-index" => parse!(@i32, parser, Property::ZIndex),
+            "font-size" => Ok(vec![Property::FontSize(parse_length(parser)?)]),
+            "font-weight" => Ok(vec![Property::FontWeight(parse_u32(parser)?)]),
+            "height" => Ok(vec![Property::Height(parse_length(parser)?)]),
+            "justify-content" => parse_justify_content(parser),
+            "left" => Ok(vec![Property::Left(parse_length(parser)?)]),
+            "margin" => parse_margin(parser),
+            "margin-bottom" => Ok(vec![Property::MarginBottom(parse_length(parser)?)]),
+            "margin-left" => Ok(vec![Property::MarginLeft(parse_length(parser)?)]),
+            "margin-right" => Ok(vec![Property::MarginRight(parse_length(parser)?)]),
+            "margin-top" => Ok(vec![Property::MarginTop(parse_length(parser)?)]),
+            "max-height" => Ok(vec![Property::MaxHeight(parse_length(parser)?)]),
+            "max-width" => Ok(vec![Property::MaxWidth(parse_length(parser)?)]),
+            "min-height" => Ok(vec![Property::MinHeight(parse_length(parser)?)]),
+            "min-width" => Ok(vec![Property::MinWidth(parse_length(parser)?)]),
+            "opacity" => Ok(vec![Property::Opacity(parse_f32(parser)?)]),
+            "order" => Ok(vec![Property::Order(parse_i32(parser)?)]),
+            "padding" => parse_padding(parser),
+            "padding-bottom" => Ok(vec![Property::PaddingBottom(parse_length(parser)?)]),
+            "padding-left" => Ok(vec![Property::PaddingLeft(parse_length(parser)?)]),
+            "padding-right" => Ok(vec![Property::PaddingRight(parse_length(parser)?)]),
+            "padding-top" => Ok(vec![Property::PaddingTop(parse_length(parser)?)]),
+            "position" => parse_position(parser),
+            "right" => Ok(vec![Property::Right(parse_length(parser)?)]),
+            "top" => Ok(vec![Property::Top(parse_length(parser)?)]),
+            "width" => Ok(vec![Property::Width(parse_length(parser)?)]),
+            "z-index" => Ok(vec![Property::ZIndex(parse_i32(parser)?)]),
             _ => Err(parser.new_error_for_next_token()),
         }
     }

@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
 use crate::geometry::*;
-use crate::properties::*;
+use crate::style::*;
 use crate::tree::ArrayNode;
 
 use bumpalo::{collections::Vec as BumpVec, Bump};

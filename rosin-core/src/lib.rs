@@ -7,7 +7,6 @@ mod stylesheet;
 pub mod alloc;
 pub mod callbacks;
 pub mod key;
-pub mod properties;
 pub mod resource;
 pub mod style;
 pub mod tree;
@@ -22,7 +21,6 @@ pub mod prelude {
         AnimCallback, DrawCallback, DrawCtx, EventCallback, EventCtx, On, Phase, ShouldStop, StyleCallback, ViewCallback,
     };
     pub use crate::key::Key;
-    pub use crate::properties;
     pub use crate::resource::{ResourceLoader, StyleSheetId};
     pub use crate::style::Style;
     pub use crate::tree::Node;
