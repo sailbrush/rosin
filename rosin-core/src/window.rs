@@ -117,17 +117,6 @@ impl<S, H: Default> RosinWindow<S, H> {
 
         let tree: &mut BumpVec<ArrayNode<S>> = self.tree_cache.as_mut().unwrap().borrow_mut();
 
-        // Stash default styles, and run style callbacks
-        let mut default_styles: BumpVec<(usize, Style)> = BumpVec::new_in(&self.temp);
-        if self.phase != Phase::Idle {
-            for (id, node) in tree.iter_mut().enumerate() {
-                if let Some(style_callback) = &mut node.style_callback {
-                    default_styles.push((id, node.style.clone()));
-                    style_callback(state, &mut node.style);
-                }
-            }
-        }
-
         // ---------- Layout Phase ----------
         if self.phase >= Phase::Layout || self.layout_cache.is_none() {
             if self.layout_cache.is_none() {
@@ -158,6 +147,19 @@ impl<S, H: Default> RosinWindow<S, H> {
         let layout: &BumpVec<Layout> = self.layout_cache.as_ref().unwrap().borrow();
 
         // ---------- Draw Phase ----------
+        // Stash default styles, apply hover/focus styles, and run style callbacks
+        let mut default_styles: BumpVec<(usize, Style)> = BumpVec::new_in(&self.temp);
+        if self.phase != Phase::Idle {
+            for (id, node) in tree.iter_mut().enumerate() {
+                // TODO - hit test, apply hover/focus styles
+
+                if let Some(style_callback) = &mut node.style_callback {
+                    default_styles.push((id, node.style.clone()));
+                    style_callback(state, &mut node.style);
+                }
+            }
+        }
+
         // TODO - If phase == Idle, re-issue commands from last frame
         draw::draw(state, tree, layout, piet);
 

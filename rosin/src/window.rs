@@ -121,7 +121,7 @@ impl<T> WinHandler for Window<T> {
             self.handle.request_anim_frame();
         }
 
-        self.rosin.draw(&self.state.borrow(), piet).unwrap();
+        self.rosin.draw(&mut self.state.borrow_mut(), piet).unwrap();
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
