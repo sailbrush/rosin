@@ -275,25 +275,25 @@ fn parse_border_width<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Propert
             result.push(Property::BorderRightWidth(sizes[0]));
             result.push(Property::BorderBottomWidth(sizes[0]));
             result.push(Property::BorderLeftWidth(sizes[0]));
-        },
+        }
         2 => {
             result.push(Property::BorderTopWidth(sizes[0]));
             result.push(Property::BorderRightWidth(sizes[1]));
             result.push(Property::BorderBottomWidth(sizes[0]));
             result.push(Property::BorderLeftWidth(sizes[1]));
-        },
+        }
         3 => {
             result.push(Property::BorderTopWidth(sizes[0]));
             result.push(Property::BorderRightWidth(sizes[1]));
             result.push(Property::BorderBottomWidth(sizes[2]));
             result.push(Property::BorderLeftWidth(sizes[1]));
-        },
+        }
         4 => {
             result.push(Property::BorderTopWidth(sizes[0]));
             result.push(Property::BorderRightWidth(sizes[1]));
             result.push(Property::BorderBottomWidth(sizes[2]));
             result.push(Property::BorderLeftWidth(sizes[3]));
-        },
+        }
         _ => return Err(parser.new_error_for_next_token()),
     }
 
