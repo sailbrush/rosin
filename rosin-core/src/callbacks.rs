@@ -2,6 +2,7 @@
 
 use druid_shell::piet::Piet;
 
+use crate::geometry::Size;
 use crate::prelude::*;
 
 use std::time::Duration;
@@ -66,6 +67,10 @@ impl<F, S> DrawCallback<S> for F where F: 'static + Fn(&S, &mut DrawCtx) {}
 /// `Fn(&mut T, &mut App<T>) -> Phase`
 pub trait EventCallback<S>: 'static + Fn(&mut S, &mut EventCtx) -> Phase {}
 impl<F, S> EventCallback<S> for F where F: 'static + Fn(&mut S, &mut EventCtx) -> Phase {}
+
+/// `Fn(&T, &mut Style)`
+pub trait LayoutCallback<S>: 'static + Fn(&mut S, Size) {}
+impl<F, S> LayoutCallback<S> for F where F: 'static + Fn(&mut S, Size) {}
 
 /// `Fn(&T, &mut Style)`
 pub trait StyleCallback<S>: 'static + Fn(&S, &mut Style) {}

@@ -1,4 +1,5 @@
 use crate::alloc::Alloc;
+use crate::geometry::Size;
 use crate::prelude::*;
 
 use std::num::NonZeroUsize;
@@ -83,6 +84,7 @@ pub(crate) struct ArrayNode<S: 'static> {
     pub callbacks: BumpVec<'static, (On, &'static mut dyn EventCallback<S>)>,
     pub style_sheet: Option<StyleSheetId>,
     pub style_callback: Option<&'static mut dyn StyleCallback<S>>,
+    pub layout_callback: Option<&'static mut dyn LayoutCallback<S>>,
     pub draw_callback: Option<&'static mut dyn DrawCallback<S>>,
     pub _draw_cache_enable: bool, // TODO
     pub parent: usize,
@@ -142,6 +144,7 @@ pub struct Node<S: 'static> {
     callbacks: Option<BumpVec<'static, (On, &'static mut dyn EventCallback<S>)>>,
     style_sheet: Option<StyleSheetId>,
     style_callback: Option<&'static mut dyn StyleCallback<S>>,
+    layout_callback: Option<&'static mut dyn LayoutCallback<S>>,
     draw_callback: Option<&'static mut dyn DrawCallback<S>>,
     draw_cache_enable: bool,
     size: usize,
@@ -161,6 +164,7 @@ impl<S> Default for Node<S> {
             callbacks: Some(alloc.vec()),
             style_sheet: None,
             style_callback: None,
+            layout_callback: None,
             draw_callback: None,
             draw_cache_enable: false,
             size: 1,
@@ -194,7 +198,12 @@ impl<S> Node<S> {
         self
     }
 
-    // TODO - Layout callback?
+    /// Register a funciton to layout the contents of this node.
+    pub fn on_layout(mut self, func: impl Fn(&mut S, Size) + 'static) -> Self {
+        let alloc = Alloc::get_thread_local_alloc().unwrap();
+        self.layout_callback = Some(alloc.alloc(func));
+        self
+    }
 
     /// Register a function to draw the contents of this node.
     pub fn on_draw(mut self, enable_cache: bool, func: impl Fn(&S, &mut DrawCtx) + 'static) -> Self {
@@ -254,7 +263,8 @@ impl<S> Node<S> {
                 style_sheet: curr_node.style_sheet.take(),
                 style: Style::default(),
                 style_callback: curr_node.style_callback.take(),
-                draw_callback: std::mem::take(&mut curr_node.draw_callback),
+                layout_callback: curr_node.layout_callback.take(),
+                draw_callback: curr_node.draw_callback.take(),
                 _draw_cache_enable: curr_node.draw_cache_enable,
                 parent,
                 num_children: curr_node.num_children,

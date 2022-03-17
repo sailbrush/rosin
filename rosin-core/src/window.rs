@@ -88,7 +88,7 @@ impl<S, H: Default> RosinWindow<S, H> {
         }
     }
 
-    pub fn draw(&mut self, state: &S, piet: &mut Piet<'_>) -> Result<(), Box<dyn Error>> {
+    pub fn draw(&mut self, state: &mut S, piet: &mut Piet<'_>) -> Result<(), Box<dyn Error>> {
         Alloc::set_thread_local_alloc(Some(self.alloc.clone()));
         let alloc = self.alloc.clone();
 
@@ -121,9 +121,9 @@ impl<S, H: Default> RosinWindow<S, H> {
         let mut default_styles: BumpVec<(usize, Style)> = BumpVec::new_in(&self.temp);
         if self.phase != Phase::Idle {
             for (id, node) in tree.iter_mut().enumerate() {
-                if let Some(modify_style) = &mut node.style_callback {
+                if let Some(style_callback) = &mut node.style_callback {
                     default_styles.push((id, node.style.clone()));
-                    modify_style(state, &mut node.style);
+                    style_callback(state, &mut node.style);
                 }
             }
         }
@@ -147,6 +147,12 @@ impl<S, H: Default> RosinWindow<S, H> {
             }
 
             layout::layout(&self.temp, tree, self.size.into(), layout);
+
+            for (id, node) in tree.iter_mut().enumerate() {
+                if let Some(layout_callback) = &mut node.layout_callback {
+                    layout_callback(state, layout[id].size);
+                }
+            }
         }
 
         let layout: &BumpVec<Layout> = self.layout_cache.as_ref().unwrap().borrow();

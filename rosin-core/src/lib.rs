@@ -18,7 +18,7 @@ pub mod widgets;
 /// The public API
 pub mod prelude {
     pub use crate::callbacks::{
-        AnimCallback, DrawCallback, DrawCtx, EventCallback, EventCtx, On, Phase, ShouldStop, StyleCallback, ViewCallback,
+        AnimCallback, DrawCallback, DrawCtx, EventCallback, EventCtx, LayoutCallback, On, Phase, ShouldStop, StyleCallback, ViewCallback,
     };
     pub use crate::key::Key;
     pub use crate::resource::{ResourceLoader, StyleSheetId};
