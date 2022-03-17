@@ -1,5 +1,3 @@
-#![allow(clippy::cognitive_complexity)]
-
 use std::sync::Arc;
 
 use crate::style::*;
