@@ -2,6 +2,7 @@ mod draw;
 mod geometry;
 mod layout;
 mod parser;
+mod properties;
 mod stylesheet;
 
 pub mod alloc;
