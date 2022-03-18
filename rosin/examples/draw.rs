@@ -11,8 +11,7 @@ pub struct State {
 }
 
 pub fn main_view(_: &State) -> Node<State, WindowHandle> {
-    ui!("root" [
-        {
+    ui!("root" [{
             .event(On::MouseDown, |s: &mut State, _| {
                 s.lines.push(Vec::new());
                 s.down = true;
@@ -38,7 +37,7 @@ pub fn main_view(_: &State) -> Node<State, WindowHandle> {
                     for point in line {
                         if let Some(prev) = prev_point {
                             let path = Line::new(prev, point.clone());
-                            ctx.piet.stroke(path, &Color::BLACK, 1.0);
+                            ctx.piet.stroke(path, &Color::BLACK, 5.0);
                         }
                         prev_point = Some(point.clone());
                     }
