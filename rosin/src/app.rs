@@ -77,7 +77,14 @@ impl<S> AppLauncher<S> {
         for desc in self.windows {
             let mut builder = WindowBuilder::new(druid_app.clone());
 
-            let handler = Window::new(self.resource_loader.clone(), desc.view, desc.size, state.clone(), libloader.clone(), desc.anim_tasks);
+            let handler = Window::new(
+                self.resource_loader.clone(),
+                desc.view,
+                desc.size,
+                state.clone(),
+                libloader.clone(),
+                desc.anim_tasks,
+            );
             builder.set_handler(Box::new(handler));
 
             if let Some(title) = desc.title {

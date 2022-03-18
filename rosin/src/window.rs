@@ -4,7 +4,8 @@ use std::{
     any::Any,
     cell::RefCell,
     rc::Rc,
-    sync::{Arc, Mutex}, time::Duration,
+    sync::{Arc, Mutex},
+    time::Duration,
 };
 
 use druid_shell::{

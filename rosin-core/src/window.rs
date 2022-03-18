@@ -6,7 +6,7 @@ use crate::{alloc::Scope, draw, layout, layout::Layout, tree::*};
 use std::error::Error;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
-use std::time::{Instant, Duration};
+use std::time::{Duration, Instant};
 
 use bumpalo::{collections::Vec as BumpVec, Bump};
 use druid_shell::piet::Piet;
