@@ -34,7 +34,7 @@ pub enum Selector {
 
 impl Selector {
     // Check if this selector applies to a node
-    pub(crate) fn check<T>(&self, node: &ArrayNode<T>) -> bool {
+    pub(crate) fn check<S, H>(&self, node: &ArrayNode<S, H>) -> bool {
         match self {
             Selector::Wildcard => true,
             Selector::Id(selector) | Selector::Class(selector) => node.classes.iter().any(|class| class == selector),
@@ -134,7 +134,7 @@ impl Stylesheet {
     }
 
     // Perform selector matching and apply styles to a tree
-    pub(crate) fn apply_style<T>(&self, tree: &mut [ArrayNode<T>]) {
+    pub(crate) fn apply_style<S, H>(&self, tree: &mut [ArrayNode<S, H>]) {
         for id in 0..tree.len() {
             // TODO - benchmark hash map
             // TODO - use temp bump alloc instead of Vec

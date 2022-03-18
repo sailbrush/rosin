@@ -9,11 +9,11 @@ use druid_shell::{
     piet::{Color, Piet, RenderContext},
 };
 
-pub(crate) fn draw<S>(state: &S, tree: &[ArrayNode<S>], layout: &[Layout], piet: &mut Piet<'_>) {
-    draw_inner(state, tree, layout, 0, (0.0, 0.0), piet);
+pub(crate) fn draw<S, H>(state: &S, tree: &[ArrayNode<S, H>], layout: &[Layout], piet: &mut Piet<'_>) {
+    draw_inner(state, tree, layout, 0, piet);
 }
 
-fn draw_inner<S>(state: &S, tree: &[ArrayNode<S>], layout: &[Layout], id: usize, offset: (f32, f32), piet: &mut Piet<'_>) {
+fn draw_inner<S, H>(state: &S, tree: &[ArrayNode<S, H>], layout: &[Layout], id: usize, piet: &mut Piet<'_>) {
     if layout[id].size.width != 0.0 && layout[id].size.height != 0.0 {
         let style = &tree[id].style;
 
@@ -30,10 +30,10 @@ fn draw_inner<S>(state: &S, tree: &[ArrayNode<S>], layout: &[Layout], id: usize,
         let border_color = Color::rgba8(border_color.red, border_color.green, border_color.blue, border_color.alpha);
 
         let path = RoundedRect::new(
-            layout[id].position.x as f64 + offset.0 as f64,
-            layout[id].position.y as f64 + offset.1 as f64,
-            layout[id].position.x as f64 + layout[id].size.width as f64 + offset.0 as f64,
-            layout[id].position.y as f64 + layout[id].size.height as f64 + offset.1 as f64,
+            layout[id].position.x as f64,
+            layout[id].position.y as f64,
+            layout[id].position.x as f64 + layout[id].size.width as f64,
+            layout[id].position.y as f64 + layout[id].size.height as f64,
             (
                 style.border_top_left_radius.into(),
                 style.border_top_right_radius.into(),
@@ -51,8 +51,8 @@ fn draw_inner<S>(state: &S, tree: &[ArrayNode<S>], layout: &[Layout], id: usize,
             piet.clip(path);
 
             piet.transform(Affine::translate((
-                layout[id].position.x as f64 + offset.0 as f64 + style.border_left_width as f64,
-                layout[id].position.y as f64 + offset.1 as f64 + style.border_top_width as f64,
+                layout[id].position.x as f64 + style.border_left_width as f64,
+                layout[id].position.y as f64 + style.border_top_width as f64,
             )));
 
             let mut ctx = DrawCtx {
@@ -72,13 +72,6 @@ fn draw_inner<S>(state: &S, tree: &[ArrayNode<S>], layout: &[Layout], id: usize,
     }
 
     for i in tree[id].child_ids() {
-        draw_inner(
-            state,
-            tree,
-            layout,
-            i,
-            (layout[id].position.x + offset.0, layout[id].position.y + offset.1),
-            piet,
-        );
+        draw_inner(state, tree, layout, i, piet);
     }
 }

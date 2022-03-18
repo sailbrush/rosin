@@ -19,15 +19,15 @@ use crate::{libloader::LibLoader, prelude::*};
 pub struct WindowId(u32);
 
 /// A description of a window.
-pub struct WindowDesc<S: 'static> {
-    pub(crate) view: View<S>,
+pub struct WindowDesc<S: 'static, H: 'static> {
+    pub(crate) view: View<S, H>,
     pub(crate) id: WindowId,
     pub(crate) title: Option<String>,
     pub(crate) size: (f32, f32),
 }
 
-impl<S> WindowDesc<S> {
-    pub fn new(view: View<S>) -> Self {
+impl<S, H> WindowDesc<S, H> {
+    pub fn new(view: View<S, H>) -> Self {
         Self {
             view,
             id: WindowId(0), // TODO - create a useful id
@@ -55,7 +55,7 @@ impl<S> WindowDesc<S> {
 pub(crate) struct Window<S: 'static> {
     handle: WindowHandle,
     rosin: RosinWindow<S, WindowHandle>,
-    view: View<S>,
+    view: View<S, WindowHandle>,
     state: Rc<RefCell<S>>,
     libloader: Option<Arc<Mutex<LibLoader>>>,
     last_ext: u32,
@@ -64,7 +64,7 @@ pub(crate) struct Window<S: 'static> {
 impl<S> Window<S> {
     pub fn new(
         resource_loader: Arc<Mutex<ResourceLoader>>,
-        view: View<S>,
+        view: View<S, WindowHandle>,
         size: (f32, f32),
         state: Rc<RefCell<S>>,
         libloader: Option<Arc<Mutex<LibLoader>>>,
@@ -90,7 +90,7 @@ impl<S> Window<S> {
     }
 }
 
-impl<T> WinHandler for Window<T> {
+impl<S> WinHandler for Window<S> {
     fn connect(&mut self, handle: &WindowHandle) {
         self.handle = handle.clone();
         self.rosin.set_handle(handle.clone());
@@ -166,7 +166,7 @@ impl<T> WinHandler for Window<T> {
 
     fn mouse_down(&mut self, event: &MouseEvent) {
         let mut state = self.state.borrow_mut();
-        self.rosin.mouse_down(&mut self.state.borrow_mut(), event);
+        self.rosin.mouse_down(&mut state, event);
         if !self.rosin.is_idle() {
             self.handle.invalidate();
             self.handle.request_anim_frame();

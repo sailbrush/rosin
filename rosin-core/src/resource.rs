@@ -57,7 +57,7 @@ impl ResourceLoader {
         &self.style_sheets[index]
     }
 
-    pub(crate) fn apply_style<S>(&self, tree: &mut [ArrayNode<S>]) {
+    pub(crate) fn apply_style<S, H>(&self, tree: &mut [ArrayNode<S, H>]) {
         self.style_sheets[0].apply_style(tree);
     }
 }

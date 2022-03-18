@@ -62,32 +62,24 @@ impl Default for Layout {
     }
 }
 
-// TODO - doesn't handle absolute positioning
-pub(crate) fn hit_test<S>(tree: &[ArrayNode<S>], layout: &mut [Layout], point: (f32, f32)) -> usize {
-    hit_test_inner(tree, layout, point.into(), 0, Point::zero()).unwrap_or(0)
-}
+pub(crate) fn hit_test<'a>(temp: &'a Bump, layout: &[Layout], point: Point) -> BumpVec<'a, usize> {
+    let mut result = BumpVec::new_in(temp);
 
-fn hit_test_inner<S>(tree: &[ArrayNode<S>], layout: &mut [Layout], point: Point, id: usize, offset: Point) -> Option<usize> {
-    let box_pos = layout[id].position + offset;
-
-    if box_pos.x < point.x
-        && box_pos.x + layout[id].size.width > point.x
-        && box_pos.y < point.y
-        && box_pos.y + layout[id].size.height > point.y
-    {
-        for child_id in tree[id].child_ids() {
-            let found = hit_test_inner(tree, layout, point, child_id, box_pos);
-            if found.is_some() {
-                return found;
-            }
+    for (id, node) in layout.iter().enumerate() {
+        if node.position.x < point.x
+            && node.position.x + node.size.width > point.x
+            && node.position.y < point.y
+            && node.position.y + node.size.height > point.y
+        {
+            result.push(id);
         }
-        return Some(id);
     }
-    None
+
+    result
 }
 
-pub(crate) fn layout<S>(temp: &Bump, tree: &[ArrayNode<S>], root_size: Size, output: &mut [Layout]) {
-    layout_inner(temp, tree, 0, root_size, output);
+pub(crate) fn layout<S, H>(temp: &Bump, tree: &[ArrayNode<S, H>], root_size: Size, output: &mut [Layout]) {
+    layout_inner(temp, tree, 0, root_size, output, Point::default());
     output[0] = Layout {
         size: root_size,
         position: Point::zero(),
@@ -96,7 +88,7 @@ pub(crate) fn layout<S>(temp: &Bump, tree: &[ArrayNode<S>], root_size: Size, out
     //round_layout(tree, output, 0, 0.0, 0.0);
 }
 
-fn round_layout<S>(tree: &[ArrayNode<S>], layout: &mut [Layout], id: usize, abs_x: f32, abs_y: f32) {
+fn round_layout<S, H>(tree: &[ArrayNode<S, H>], layout: &mut [Layout], id: usize, abs_x: f32, abs_y: f32) {
     let abs_x = abs_x + layout[id].position.x;
     let abs_y = abs_y + layout[id].position.y;
 
@@ -111,7 +103,7 @@ fn round_layout<S>(tree: &[ArrayNode<S>], layout: &mut [Layout], id: usize, abs_
     }
 }
 
-fn layout_inner<S>(temp: &Bump, tree: &[ArrayNode<S>], id: usize, size: Size, output: &mut [Layout]) {
+fn layout_inner<S, H>(temp: &Bump, tree: &[ArrayNode<S, H>], id: usize, size: Size, output: &mut [Layout], position_offset: Point) {
     // leaf nodes don't need to do anything
     if tree[id].num_children == 0 {
         return;
@@ -555,18 +547,21 @@ fn layout_inner<S>(temp: &Bump, tree: &[ArrayNode<S>], id: usize, size: Size, ou
 
         // TODO - support CSS position
         let layout_item = |item: &mut FlexItem| {
-            // Now that we know the final size of an item, layout its children
-            layout_inner(temp, tree, item.id, item.target_size, output);
-
             let offset_main = total_offset_main + item.offset_main + item.margin.main_start(dir);
             let offset_cross = total_offset_cross + item.offset_cross + line_offset_cross + item.margin.cross_start(dir);
 
-            output[item.id] = Layout {
-                size: item.target_size + item.border_padding.size(),
-                position: Point {
+            let position = position_offset
+                + Point {
                     x: if dir.is_row() { offset_main } else { offset_cross },
                     y: if !dir.is_row() { offset_main } else { offset_cross },
-                },
+                };
+
+            // Now that we know the final size and position of an item, layout its children
+            layout_inner(temp, tree, item.id, item.target_size, output, position);
+
+            output[item.id] = Layout {
+                size: item.target_size + item.border_padding.size(),
+                position,
             };
 
             total_offset_main += item.offset_main + item.target_size.main(dir) + item.border_padding.main(dir) + item.margin.main(dir);

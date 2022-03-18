@@ -19,7 +19,8 @@ pub mod widgets;
 /// The public API
 pub mod prelude {
     pub use crate::callbacks::{
-        AnimCallback, DrawCallback, DrawCtx, EventCallback, EventCtx, LayoutCallback, On, Phase, ShouldStop, StyleCallback, ViewCallback,
+        AnimCallback, DrawCallback, DrawCtx, EventCallback, EventCtx, EventInfo, LayoutCallback, On, Phase, ShouldStop, StyleCallback,
+        ViewCallback,
     };
     pub use crate::key::Key;
     pub use crate::resource::{ResourceLoader, StyleSheetId};
@@ -27,4 +28,5 @@ pub mod prelude {
     pub use crate::tree::Node;
     pub use crate::window::RosinWindow;
     pub use crate::{load_css, ui};
+    pub use druid_shell::WindowHandle;
 }

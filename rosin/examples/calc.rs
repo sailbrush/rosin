@@ -120,7 +120,7 @@ impl State {
 }
 
 #[no_mangle]
-pub fn main_view(state: &State) -> Node<State> {
+pub fn main_view(state: &State) -> Node<State, WindowHandle> {
     ui!(state.root_sheet, "root" [
         "display" (state.display.view())
         "row" [

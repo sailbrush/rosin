@@ -13,20 +13,20 @@ use crate::{libloader::*, prelude::*, window::Window};
 use druid_shell::{Application, WindowBuilder};
 use rosin_core::prelude::*;
 
-pub struct AppLauncher<T: 'static> {
+pub struct AppLauncher<S: 'static> {
     resource_loader: Arc<Mutex<ResourceLoader>>,
-    windows: Vec<WindowDesc<T>>,
+    windows: Vec<WindowDesc<S, WindowHandle>>,
 }
 
 impl<S> AppLauncher<S> {
-    pub fn new(resource_loader: ResourceLoader, window: WindowDesc<S>) -> Self {
+    pub fn new(resource_loader: ResourceLoader, window: WindowDesc<S, WindowHandle>) -> Self {
         Self {
             resource_loader: Arc::new(Mutex::new(resource_loader)),
             windows: vec![window],
         }
     }
 
-    pub fn add_window(mut self, window: WindowDesc<S>) -> Self {
+    pub fn add_window(mut self, window: WindowDesc<S, WindowHandle>) -> Self {
         self.windows.push(window);
         self
     }

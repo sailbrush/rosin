@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use druid_shell::WindowHandle;
 use rosin::prelude::*;
 use rosin::widgets::*;
 
@@ -7,7 +8,7 @@ pub struct State {
     display: DynLabel,
 }
 
-pub fn main_view(state: &State) -> Node<State> {
+pub fn main_view(state: &State) -> Node<State, WindowHandle> {
     ui!("root"[(state.display.view())])
 }
 

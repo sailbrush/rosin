@@ -43,7 +43,7 @@ impl DynLabel {
         Phase::Draw
     }
 
-    pub fn view<S>(&self) -> Node<S> {
+    pub fn view<S, H>(&self) -> Node<S, H> {
         let weak = Rc::downgrade(&self.data);
 
         ui!("test" [

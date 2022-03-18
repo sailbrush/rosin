@@ -78,10 +78,10 @@ macro_rules! ui {
     };
 }
 
-pub(crate) struct ArrayNode<S: 'static> {
+pub(crate) struct ArrayNode<S: 'static, H: 'static> {
     pub _key: Option<Key>, // TODO
     pub classes: BumpVec<'static, &'static str>,
-    pub callbacks: BumpVec<'static, (On, &'static mut dyn EventCallback<S>)>,
+    pub callbacks: BumpVec<'static, (On, &'static mut dyn EventCallback<S, H>)>,
     pub style_sheet: Option<StyleSheetId>,
     pub style_callback: Option<&'static mut dyn StyleCallback<S>>,
     pub layout_callback: Option<&'static mut dyn LayoutCallback<S>>,
@@ -95,7 +95,7 @@ pub(crate) struct ArrayNode<S: 'static> {
     pub style: Style,
 }
 
-impl<S> Drop for ArrayNode<S> {
+impl<S, H> Drop for ArrayNode<S, H> {
     fn drop(&mut self) {
         for cb in &mut self.callbacks {
             unsafe {
@@ -115,7 +115,7 @@ impl<S> Drop for ArrayNode<S> {
     }
 }
 
-impl<S> ArrayNode<S> {
+impl<S, H> ArrayNode<S, H> {
     // Note: Children are reversed
     pub(crate) fn child_ids(&self) -> std::ops::Range<usize> {
         if let Some(last_child) = self.last_child {
@@ -126,7 +126,7 @@ impl<S> ArrayNode<S> {
     }
 
     // TODO
-    pub(crate) fn trigger(&mut self, event_type: On, state: &mut S, ctx: &mut EventCtx) -> Phase {
+    pub(crate) fn trigger(&mut self, event_type: On, state: &mut S, ctx: &mut EventCtx<S, H>) -> Phase {
         let mut phase = Phase::Idle;
         for (et, callback) in &mut self.callbacks {
             if *et == event_type {
@@ -138,10 +138,10 @@ impl<S> ArrayNode<S> {
 }
 
 /// A node in the view tree. Panics if created outside of a `ViewCallback`.
-pub struct Node<S: 'static> {
+pub struct Node<S: 'static, H: 'static> {
     key: Option<Key>,
     classes: Option<BumpVec<'static, &'static str>>,
-    callbacks: Option<BumpVec<'static, (On, &'static mut dyn EventCallback<S>)>>,
+    callbacks: Option<BumpVec<'static, (On, &'static mut dyn EventCallback<S, H>)>>,
     style_sheet: Option<StyleSheetId>,
     style_callback: Option<&'static mut dyn StyleCallback<S>>,
     layout_callback: Option<&'static mut dyn LayoutCallback<S>>,
@@ -149,11 +149,11 @@ pub struct Node<S: 'static> {
     draw_cache_enable: bool,
     size: usize,
     num_children: usize,
-    prev_sibling: Option<&'static mut Node<S>>,
-    last_child: Option<&'static mut Node<S>>,
+    prev_sibling: Option<&'static mut Node<S, H>>,
+    last_child: Option<&'static mut Node<S, H>>,
 }
 
-impl<S> Default for Node<S> {
+impl<S, H> Default for Node<S, H> {
     fn default() -> Self {
         let alloc = Alloc::get_thread_local_alloc().unwrap();
         alloc.increment_counter();
@@ -175,7 +175,7 @@ impl<S> Default for Node<S> {
     }
 }
 
-impl<S> Node<S> {
+impl<S, H> Node<S, H> {
     /// Set a key on a node, providing a stable identity between rebuilds.
     pub fn key(mut self, key: Key) -> Self {
         self.key = Some(key);
@@ -183,7 +183,7 @@ impl<S> Node<S> {
     }
 
     /// Register an event callback.
-    pub fn event(mut self, event_type: On, callback: impl Fn(&mut S, &mut EventCtx) -> Phase + 'static) -> Self {
+    pub fn event(mut self, event_type: On, callback: impl Fn(&mut S, &mut EventCtx<S, H>) -> Phase + 'static) -> Self {
         if let Some(callbacks) = &mut self.callbacks {
             let alloc = Alloc::get_thread_local_alloc().unwrap();
             callbacks.push((event_type, alloc.alloc(callback)));
@@ -243,11 +243,11 @@ impl<S> Node<S> {
         self
     }
 
-    pub(crate) fn finish(mut self) -> Option<BumpVec<'static, ArrayNode<S>>> {
+    pub(crate) fn finish(mut self) -> Option<BumpVec<'static, ArrayNode<S, H>>> {
         let alloc = Alloc::get_thread_local_alloc().unwrap();
 
-        let mut tree: BumpVec<ArrayNode<S>> = alloc.vec_capacity(self.size);
-        let mut stack: BumpVec<(bool, usize, &mut Node<S>)> = alloc.vec();
+        let mut tree: BumpVec<ArrayNode<S, H>> = alloc.vec_capacity(self.size);
+        let mut stack: BumpVec<(bool, usize, &mut Node<S, H>)> = alloc.vec();
 
         stack.push((false, 0, &mut self));
         while let Some((is_last_child, parent, curr_node)) = stack.pop() {

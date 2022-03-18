@@ -1,4 +1,5 @@
 use crate::alloc::Alloc;
+use crate::geometry::Point;
 use crate::prelude::*;
 use crate::{alloc::Scope, draw, layout, layout::Layout, tree::*};
 
@@ -11,24 +12,25 @@ use bumpalo::{collections::Vec as BumpVec, Bump};
 use druid_shell::piet::Piet;
 use druid_shell::{KeyEvent, MouseEvent};
 
-pub struct RosinWindow<S: 'static, H: Default> {
+pub struct RosinWindow<S: 'static, H: Default + Clone + 'static> {
     resource_loader: Arc<Mutex<ResourceLoader>>,
-    view: ViewCallback<S>,
+    view: ViewCallback<S, H>,
     size: (f32, f32),
     scale: (f32, f32),
     handle: H,
     phase: Phase,
     last_frame: Instant,
     focused_node: Option<Key>,
+    mouse_over_nodes: Vec<usize>,
     anim_tasks: Vec<Box<dyn AnimCallback<S>>>,
-    tree_cache: Option<Scope<BumpVec<'static, ArrayNode<S>>>>,
+    tree_cache: Option<Scope<BumpVec<'static, ArrayNode<S, H>>>>,
     layout_cache: Option<Scope<BumpVec<'static, Layout>>>,
     alloc: Rc<Alloc>,
     temp: Bump,
 }
 
-impl<S, H: Default> RosinWindow<S, H> {
-    pub fn new(resource_loader: Arc<Mutex<ResourceLoader>>, view: ViewCallback<S>, size: (f32, f32)) -> Self {
+impl<S, H: Default + Clone> RosinWindow<S, H> {
+    pub fn new(resource_loader: Arc<Mutex<ResourceLoader>>, view: ViewCallback<S, H>, size: (f32, f32)) -> Self {
         Self {
             resource_loader,
             view,
@@ -38,6 +40,7 @@ impl<S, H: Default> RosinWindow<S, H> {
             phase: Phase::Build,
             last_frame: Instant::now(),
             focused_node: None,
+            mouse_over_nodes: Vec::new(),
             anim_tasks: Vec::new(),
             tree_cache: None,
             layout_cache: None,
@@ -74,7 +77,7 @@ impl<S, H: Default> RosinWindow<S, H> {
         self.scale = new_scale;
     }
 
-    pub fn set_view(&mut self, new_view: ViewCallback<S>) {
+    pub fn set_view(&mut self, new_view: ViewCallback<S, H>) {
         self.view = new_view;
         self.phase = Phase::Build;
     }
@@ -88,18 +91,54 @@ impl<S, H: Default> RosinWindow<S, H> {
     }
 
     pub fn mouse_down(&mut self, state: &mut S, event: &MouseEvent) {
-        let mut ctx = EventCtx {};
         if let (Some(tree), Some(layout)) = (&mut self.tree_cache, &mut self.layout_cache) {
-            let id = layout::hit_test(tree.borrow(), layout.borrow_mut(), (event.pos.x as f32, event.pos.y as f32));
-            let phase = tree.borrow_mut()[id].trigger(On::MouseDown, state, &mut ctx);
+            let mut ctx = EventCtx::new(
+                EventInfo::Mouse(event.clone()),
+                self.handle.clone(),
+                self.resource_loader.clone(),
+                self.focused_node,
+            );
+
+            let position = Point {
+                x: event.pos.x as f32,
+                y: event.pos.y as f32,
+            };
+
+            let mut phase = Phase::Idle;
+            let ids = layout::hit_test(&self.temp, layout.borrow_mut(), position);
+            for id in ids {
+                phase = phase.max(tree.borrow_mut()[id].trigger(On::MouseDown, state, &mut ctx));
+            }
             self.update_phase(phase);
+
+            self.focused_node = ctx.focus;
+            self.anim_tasks.append(&mut ctx.anim_tasks);
         }
     }
 
     pub fn mouse_move(&mut self, state: &mut S, event: &MouseEvent) {
-        let mut ctx = EventCtx {};
         if let (Some(tree), Some(layout)) = (&mut self.tree_cache, &mut self.layout_cache) {
-            let id = layout::hit_test(tree.borrow(), layout.borrow_mut(), (event.pos.x as f32, event.pos.y as f32));
+            let mut ctx = EventCtx::new(
+                EventInfo::Mouse(event.clone()),
+                self.handle.clone(),
+                self.resource_loader.clone(),
+                self.focused_node,
+            );
+
+            let position = Point {
+                x: event.pos.x as f32,
+                y: event.pos.y as f32,
+            };
+
+            let mut phase = Phase::Idle;
+            let ids = layout::hit_test(&self.temp, layout.borrow_mut(), position);
+            for id in ids {
+                phase = phase.max(tree.borrow_mut()[id].trigger(On::MouseMove, state, &mut ctx));
+            }
+            self.update_phase(phase);
+
+            self.focused_node = ctx.focus;
+            self.anim_tasks.append(&mut ctx.anim_tasks);
         }
     }
 
@@ -110,8 +149,8 @@ impl<S, H: Default> RosinWindow<S, H> {
 
     pub fn draw(&mut self, state: &mut S, piet: &mut Piet<'_>) -> Result<(), Box<dyn Error>> {
         // Get time since last frame
-        let current_frame = Instant::now();
-        let frame_time = current_frame.duration_since(self.last_frame);
+        let now = Instant::now();
+        let dt = now.duration_since(self.last_frame);
 
         // Set up allocators
         Alloc::set_thread_local_alloc(Some(self.alloc.clone()));
@@ -121,7 +160,7 @@ impl<S, H: Default> RosinWindow<S, H> {
         // Run Animation Tasks
         let mut anim_phase = Phase::Idle;
         self.anim_tasks.retain(|task| {
-            let (phase, stop) = task(state, frame_time);
+            let (phase, stop) = task(state, dt);
             anim_phase = anim_phase.max(phase);
             stop == ShouldStop::No
         });
@@ -147,7 +186,7 @@ impl<S, H: Default> RosinWindow<S, H> {
             self.tree_cache = Some(tree);
         }
 
-        let tree: &mut BumpVec<ArrayNode<S>> = self.tree_cache.as_mut().unwrap().borrow_mut();
+        let tree: &mut BumpVec<ArrayNode<S, H>> = self.tree_cache.as_mut().unwrap().borrow_mut();
 
         // Stash default styles, apply hover/focus styles, and run style callbacks
         let mut default_styles: BumpVec<(usize, Style)> = BumpVec::new_in(&self.temp);
@@ -198,7 +237,7 @@ impl<S, H: Default> RosinWindow<S, H> {
         // ---------- Cleanup ----------
         Alloc::set_thread_local_alloc(None);
         self.phase = Phase::Idle;
-        self.last_frame = current_frame;
+        self.last_frame = now;
 
         // Restore default styles
         for (id, style) in default_styles {
