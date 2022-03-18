@@ -1,6 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use druid_shell::WindowHandle;
 use rosin::prelude::*;
 use rosin::widgets::*;
 
