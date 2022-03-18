@@ -176,6 +176,10 @@ impl<S> WinHandler for Window<S> {
     fn mouse_move(&mut self, event: &MouseEvent) {
         self.handle.set_cursor(&Cursor::Arrow);
         self.rosin.mouse_move(&mut self.state.borrow_mut(), event);
+        if !self.rosin.is_idle() {
+            self.handle.invalidate();
+            self.handle.request_anim_frame();
+        }
     }
 
     fn mouse_down(&mut self, event: &MouseEvent) {
@@ -187,7 +191,14 @@ impl<S> WinHandler for Window<S> {
         }
     }
 
-    fn mouse_up(&mut self, event: &MouseEvent) {}
+    fn mouse_up(&mut self, event: &MouseEvent) {
+        let mut state = self.state.borrow_mut();
+        self.rosin.mouse_up(&mut state, event);
+        if !self.rosin.is_idle() {
+            self.handle.invalidate();
+            self.handle.request_anim_frame();
+        }
+    }
 
     fn mouse_leave(&mut self) {}
 

@@ -120,6 +120,32 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
         }
     }
 
+    pub fn mouse_up(&mut self, state: &mut S, event: &MouseEvent) {
+        if let (Some(tree), Some(layout)) = (&mut self.tree_cache, &mut self.layout_cache) {
+            let mut ctx = EventCtx::new(
+                EventInfo::Mouse(event.clone()),
+                self.handle.clone(),
+                self.resource_loader.clone(),
+                self.focused_node,
+            );
+
+            let position = Point {
+                x: event.pos.x as f32,
+                y: event.pos.y as f32,
+            };
+
+            let mut phase = Phase::Idle;
+            let ids = layout::hit_test(&self.temp, layout.borrow_mut(), position);
+            for id in ids {
+                phase = phase.max(tree.borrow_mut()[id].trigger(On::MouseUp, state, &mut ctx));
+            }
+            self.update_phase(phase);
+
+            self.focused_node = ctx.focus;
+            self.anim_tasks.append(&mut ctx.anim_tasks);
+        }
+    }
+
     pub fn mouse_move(&mut self, state: &mut S, event: &MouseEvent) {
         if let (Some(tree), Some(layout)) = (&mut self.tree_cache, &mut self.layout_cache) {
             let mut ctx = EventCtx::new(
