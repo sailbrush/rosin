@@ -231,7 +231,7 @@ macro_rules! apply {
     };
 }
 
-pub(crate) fn apply_properties(properties: &[Property], style: &mut Style, par_style: &Option<Style>) {
+pub fn apply_properties(properties: &[Property], style: &mut Style, par_style: &Option<Style>) {
     for property in properties {
         match property {
             Property::FontSize(_) => { /* already handled */ }
