@@ -48,8 +48,9 @@ impl<S, H> WindowDesc<S, H> {
         self
     }
 
-    pub fn add_anim_task(&mut self, callback: impl Fn(&mut S, Duration) -> (Phase, ShouldStop) + 'static) {
+    pub fn add_anim_task(mut self, callback: impl Fn(&mut S, Duration) -> (Phase, ShouldStop) + 'static) -> Self {
         self.anim_tasks.push(Box::new(callback));
+        self
     }
 
     pub fn get_id(&self) -> WindowId {
