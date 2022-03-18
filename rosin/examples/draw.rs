@@ -3,6 +3,7 @@
 use druid_shell::kurbo::{Line, Point};
 use druid_shell::piet::{Color, RenderContext};
 use rosin::prelude::*;
+use rosin::widgets::*;
 
 pub struct State {
     down: bool,
@@ -11,35 +12,44 @@ pub struct State {
 
 pub fn main_view(_: &State) -> Node<State, WindowHandle> {
     ui!("root" [
-        .event(On::MouseDown, |s: &mut State, _| {
-            s.lines.push(Vec::new());
-            s.down = true;
-            Phase::Draw
-        })
-        .event(On::MouseUp, |s: &mut State, _| {
-            s.down = false;
-            Phase::Draw
-        })
-        .event(On::MouseMove, |s: &mut State, ctx| {
-            if s.down {
-                if let EventInfo::Mouse(e) = &mut ctx.event_info {
-                    s.lines.last_mut().unwrap().push(e.pos);
-                }
-            }
-            Phase::Draw
-        })
-        .on_draw(false, |s, ctx| {
-            for line in &s.lines {
-                let mut prev_point = None;
-                for point in line {
-                    if let Some(prev) = prev_point {
-                        let path = Line::new(prev, point.clone());
-                        ctx.piet.stroke(path, &Color::BLACK, 1.0);
+        {
+            .event(On::MouseDown, |s: &mut State, _| {
+                s.lines.push(Vec::new());
+                s.down = true;
+                Phase::Draw
+            })
+            .event(On::MouseUp, |s: &mut State, _| {
+                s.down = false;
+                Phase::Draw
+            })
+            .event(On::MouseMove, |s: &mut State, ctx| {
+                if s.down {
+                    if let EventInfo::Mouse(e) = &mut ctx.event_info {
+                        if let Some(line) = s.lines.last_mut() {
+                            line.push(e.pos);
+                        }
                     }
-                    prev_point = Some(point.clone());
                 }
-            }
-        })
+                Phase::Draw
+            })
+            .on_draw(false, |s, ctx| {
+                for line in &s.lines {
+                    let mut prev_point = None;
+                    for point in line {
+                        if let Some(prev) = prev_point {
+                            let path = Line::new(prev, point.clone());
+                            ctx.piet.stroke(path, &Color::BLACK, 1.0);
+                        }
+                        prev_point = Some(point.clone());
+                    }
+                }
+            })
+        }
+
+        "clear" (button("Clear", |s: &mut State, _| {
+            s.lines = Vec::new();
+            Phase::Draw
+        }))
     ])
 }
 
