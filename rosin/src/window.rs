@@ -4,7 +4,7 @@ use std::{
     any::Any,
     cell::RefCell,
     rc::Rc,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex}, time::Duration,
 };
 
 use druid_shell::{
@@ -24,6 +24,7 @@ pub struct WindowDesc<S: 'static, H: 'static> {
     pub(crate) id: WindowId,
     pub(crate) title: Option<String>,
     pub(crate) size: (f32, f32),
+    pub(crate) anim_tasks: Vec<Box<dyn AnimCallback<S>>>,
 }
 
 impl<S, H> WindowDesc<S, H> {
@@ -33,6 +34,7 @@ impl<S, H> WindowDesc<S, H> {
             id: WindowId(0), // TODO - create a useful id
             title: None,
             size: (100.0, 100.0),
+            anim_tasks: Vec::new(),
         }
     }
 
@@ -46,7 +48,12 @@ impl<S, H> WindowDesc<S, H> {
         self
     }
 
+    pub fn add_anim_task(&mut self, callback: impl Fn(&mut S, Duration) -> (Phase, ShouldStop) + 'static) {
+        self.anim_tasks.push(Box::new(callback));
+    }
+
     pub fn get_id(&self) -> WindowId {
+        // TODO
         self.id
     }
 }
@@ -68,8 +75,9 @@ impl<S> Window<S> {
         size: (f32, f32),
         state: Rc<RefCell<S>>,
         libloader: Option<Arc<Mutex<LibLoader>>>,
+        anim_tasks: Vec<Box<dyn AnimCallback<S>>>,
     ) -> Self {
-        let rosin = if let Some(libloader) = libloader.clone() {
+        let mut rosin = if let Some(libloader) = libloader.clone() {
             let view_func = *libloader.lock().unwrap().get(view.name).unwrap();
             let rosin = RosinWindow::new(resource_loader, view_func, size);
             let func: fn(Option<Rc<Alloc>>) = *libloader.lock().unwrap().get(b"set_thread_local_alloc").unwrap();
@@ -78,6 +86,10 @@ impl<S> Window<S> {
         } else {
             RosinWindow::new(resource_loader, view.func, size)
         };
+
+        for anim in anim_tasks {
+            rosin.add_anim_task(anim);
+        }
 
         Self {
             handle: WindowHandle::default(),

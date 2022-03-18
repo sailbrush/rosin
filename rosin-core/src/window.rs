@@ -6,7 +6,7 @@ use crate::{alloc::Scope, draw, layout, layout::Layout, tree::*};
 use std::error::Error;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use std::time::{Instant, Duration};
 
 use bumpalo::{collections::Vec as BumpVec, Bump};
 use druid_shell::piet::Piet;
@@ -88,6 +88,10 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
 
     pub fn has_anim_tasks(&self) -> bool {
         self.anim_tasks.len() > 0
+    }
+
+    pub fn add_anim_task(&mut self, callback: impl Fn(&mut S, Duration) -> (Phase, ShouldStop) + 'static) {
+        self.anim_tasks.push(Box::new(callback));
     }
 
     pub fn mouse_down(&mut self, state: &mut S, event: &MouseEvent) {
