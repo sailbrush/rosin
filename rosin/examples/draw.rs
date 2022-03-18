@@ -17,12 +17,13 @@ pub fn main_view(_: &State) -> Node<State, WindowHandle> {
             Phase::Draw
         })
         .on_draw(false, |s, ctx| {
-            let color = Color::BLACK;
-            let mut prev_point = Point::new(0.0, 0.0);
+            let mut prev_point = None;
             for point in &s.points {
-                let path = Line::new(prev_point, point.clone());
-                ctx.piet.stroke(path, &color, 1.0);
-                prev_point = point.clone();
+                if let Some(prev) = prev_point {
+                    let path = Line::new(prev, point.clone());
+                    ctx.piet.stroke(path, &Color::BLACK, 1.0);
+                }
+                prev_point = Some(point.clone());
             }
         })
     ])
