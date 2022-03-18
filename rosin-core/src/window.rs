@@ -5,6 +5,7 @@ use crate::{alloc::Scope, draw, layout, layout::Layout, tree::*};
 use std::error::Error;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use bumpalo::{collections::Vec as BumpVec, Bump};
 use druid_shell::piet::Piet;
@@ -16,6 +17,8 @@ pub struct RosinWindow<S: 'static, H: Default> {
     scale: (f32, f32),
     handle: H,
     phase: Phase,
+    last_frame: Instant,
+    anim_tasks: Vec<Box<dyn AnimCallback<S>>>,
     tree_cache: Option<Scope<BumpVec<'static, ArrayNode<S>>>>,
     layout_cache: Option<Scope<BumpVec<'static, Layout>>>,
     alloc: Rc<Alloc>,
@@ -31,6 +34,8 @@ impl<S, H: Default> RosinWindow<S, H> {
             scale: (1.0, 1.0),
             handle: H::default(),
             phase: Phase::Build,
+            last_frame: Instant::now(),
+            anim_tasks: Vec::new(),
             tree_cache: None,
             layout_cache: None,
             alloc: Rc::new(Alloc::default()),
@@ -67,10 +72,6 @@ impl<S, H: Default> RosinWindow<S, H> {
         self.phase = Phase::Build;
     }
 
-    pub fn do_anim_frame(&mut self, state: &mut S) {
-        todo!();
-    }
-
     pub fn is_idle(&self) -> bool {
         self.phase == Phase::Idle
     }
@@ -89,11 +90,23 @@ impl<S, H: Default> RosinWindow<S, H> {
     }
 
     pub fn draw(&mut self, state: &mut S, piet: &mut Piet<'_>) -> Result<(), Box<dyn Error>> {
+        // Get time since last frame
+        let current_frame = Instant::now();
+        let frame_time = current_frame.duration_since(self.last_frame);
+
+        // Set up allocators
         Alloc::set_thread_local_alloc(Some(self.alloc.clone()));
         let alloc = self.alloc.clone();
-
-        // Reset scratch allocator
         self.temp.reset();
+
+        // Run Animation Tasks
+        let mut anim_phase = Phase::Idle;
+        self.anim_tasks.retain(|task| {
+            let (phase, stop) = task(state, frame_time);
+            anim_phase = anim_phase.max(phase);
+            stop == ShouldStop::No
+        });
+        self.update_phase(anim_phase);
 
         // ---------- Build Phase ----------
         if self.phase == Phase::Build || self.tree_cache.is_none() {
@@ -116,6 +129,19 @@ impl<S, H: Default> RosinWindow<S, H> {
         }
 
         let tree: &mut BumpVec<ArrayNode<S>> = self.tree_cache.as_mut().unwrap().borrow_mut();
+
+        // Stash default styles, apply hover/focus styles, and run style callbacks
+        let mut default_styles: BumpVec<(usize, Style)> = BumpVec::new_in(&self.temp);
+        if self.phase != Phase::Idle {
+            for (id, node) in tree.iter_mut().enumerate() {
+                // TODO - hit test, apply hover/focus styles
+
+                if let Some(style_callback) = &mut node.style_callback {
+                    default_styles.push((id, node.style.clone()));
+                    style_callback(state, &mut node.style);
+                }
+            }
+        }
 
         // ---------- Layout Phase ----------
         if self.phase >= Phase::Layout || self.layout_cache.is_none() {
@@ -147,25 +173,13 @@ impl<S, H: Default> RosinWindow<S, H> {
         let layout: &BumpVec<Layout> = self.layout_cache.as_ref().unwrap().borrow();
 
         // ---------- Draw Phase ----------
-        // Stash default styles, apply hover/focus styles, and run style callbacks
-        let mut default_styles: BumpVec<(usize, Style)> = BumpVec::new_in(&self.temp);
-        if self.phase != Phase::Idle {
-            for (id, node) in tree.iter_mut().enumerate() {
-                // TODO - hit test, apply hover/focus styles
-
-                if let Some(style_callback) = &mut node.style_callback {
-                    default_styles.push((id, node.style.clone()));
-                    style_callback(state, &mut node.style);
-                }
-            }
-        }
-
         // TODO - If phase == Idle, re-issue commands from last frame
         draw::draw(state, tree, layout, piet);
 
         // ---------- Cleanup ----------
         Alloc::set_thread_local_alloc(None);
         self.phase = Phase::Idle;
+        self.last_frame = current_frame;
 
         // Restore default styles
         for (id, style) in default_styles {
