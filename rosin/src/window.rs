@@ -122,6 +122,10 @@ impl<T> WinHandler for Window<T> {
         }
 
         self.rosin.draw(&mut self.state.borrow_mut(), piet).unwrap();
+
+        if self.rosin.has_anim_tasks() {
+            self.handle.request_anim_frame();
+        }
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -145,7 +149,8 @@ impl<T> WinHandler for Window<T> {
     fn open_file(&mut self, token: FileDialogToken, file: Option<FileInfo>) {}
 
     fn key_down(&mut self, event: KeyEvent) -> bool {
-        false
+        let mut state = self.state.borrow_mut();
+        self.rosin.key_down(&mut state, event)
     }
 
     fn key_up(&mut self, event: KeyEvent) {}
@@ -156,11 +161,12 @@ impl<T> WinHandler for Window<T> {
 
     fn mouse_move(&mut self, event: &MouseEvent) {
         self.handle.set_cursor(&Cursor::Arrow);
+        self.rosin.mouse_move(&mut self.state.borrow_mut(), event);
     }
 
     fn mouse_down(&mut self, event: &MouseEvent) {
         let mut state = self.state.borrow_mut();
-        self.rosin.click(&mut state, (event.pos.x as f32, event.pos.y as f32));
+        self.rosin.mouse_down(&mut self.state.borrow_mut(), event);
         if !self.rosin.is_idle() {
             self.handle.invalidate();
             self.handle.request_anim_frame();

@@ -9,6 +9,7 @@ use std::time::Instant;
 
 use bumpalo::{collections::Vec as BumpVec, Bump};
 use druid_shell::piet::Piet;
+use druid_shell::{KeyEvent, MouseEvent};
 
 pub struct RosinWindow<S: 'static, H: Default> {
     resource_loader: Arc<Mutex<ResourceLoader>>,
@@ -18,6 +19,7 @@ pub struct RosinWindow<S: 'static, H: Default> {
     handle: H,
     phase: Phase,
     last_frame: Instant,
+    focused_node: Option<Key>,
     anim_tasks: Vec<Box<dyn AnimCallback<S>>>,
     tree_cache: Option<Scope<BumpVec<'static, ArrayNode<S>>>>,
     layout_cache: Option<Scope<BumpVec<'static, Layout>>>,
@@ -35,6 +37,7 @@ impl<S, H: Default> RosinWindow<S, H> {
             handle: H::default(),
             phase: Phase::Build,
             last_frame: Instant::now(),
+            focused_node: None,
             anim_tasks: Vec::new(),
             tree_cache: None,
             layout_cache: None,
@@ -51,6 +54,10 @@ impl<S, H: Default> RosinWindow<S, H> {
         self.layout_cache = None;
         self.tree_cache = None;
         self.alloc.reset().expect("[Rosin] Failed to reset cache");
+    }
+
+    pub fn get_alloc(&self) -> Rc<Alloc> {
+        self.alloc.clone()
     }
 
     pub fn update_phase(&mut self, new_phase: Phase) {
@@ -76,17 +83,29 @@ impl<S, H: Default> RosinWindow<S, H> {
         self.phase == Phase::Idle
     }
 
-    pub fn get_alloc(&self) -> Rc<Alloc> {
-        self.alloc.clone()
+    pub fn has_anim_tasks(&self) -> bool {
+        self.anim_tasks.len() > 0
     }
 
-    pub fn click(&mut self, state: &mut S, position: (f32, f32)) {
+    pub fn mouse_down(&mut self, state: &mut S, event: &MouseEvent) {
         let mut ctx = EventCtx {};
         if let (Some(tree), Some(layout)) = (&mut self.tree_cache, &mut self.layout_cache) {
-            let id = layout::hit_test(tree.borrow(), layout.borrow_mut(), (position.0 as f32, position.1 as f32));
+            let id = layout::hit_test(tree.borrow(), layout.borrow_mut(), (event.pos.x as f32, event.pos.y as f32));
             let phase = tree.borrow_mut()[id].trigger(On::MouseDown, state, &mut ctx);
             self.update_phase(phase);
         }
+    }
+
+    pub fn mouse_move(&mut self, state: &mut S, event: &MouseEvent) {
+        let mut ctx = EventCtx {};
+        if let (Some(tree), Some(layout)) = (&mut self.tree_cache, &mut self.layout_cache) {
+            let id = layout::hit_test(tree.borrow(), layout.borrow_mut(), (event.pos.x as f32, event.pos.y as f32));
+        }
+    }
+
+    pub fn key_down(&mut self, state: &mut S, event: KeyEvent) -> bool {
+        // TODO
+        false
     }
 
     pub fn draw(&mut self, state: &mut S, piet: &mut Piet<'_>) -> Result<(), Box<dyn Error>> {
