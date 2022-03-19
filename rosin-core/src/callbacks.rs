@@ -13,15 +13,16 @@ use std::time::Duration;
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum On {
+    // Can be used by widgets to signal that they have changed
+    Change,
     MouseDown,
     MouseUp,
     MouseMove,
     MouseEnter,
     MouseLeave,
-
-    Change, // Can be used by widgets to signal that they have changed
+    MouseWheel,
     Focus,
-    Blur, // TODO - cache id on focus, so blur doesn't have to search
+    Blur,
 }
 
 /// A return type for callbacks to signal which render phase to skip to.
@@ -61,6 +62,7 @@ pub struct EventCtx<S, H> {
     pub resource_loader: Arc<Mutex<ResourceLoader>>,
     pub focus: Option<Key>,
     pub(crate) anim_tasks: Vec<Box<dyn AnimCallback<S>>>,
+    pub(crate) change: bool,
 }
 
 impl<S, H> EventCtx<S, H> {
@@ -74,6 +76,10 @@ impl<S, H> EventCtx<S, H> {
 
     pub fn start_animation(&mut self, callback: impl Fn(&mut S, Duration) -> (Phase, ShouldStop) + 'static) {
         self.anim_tasks.push(Box::new(callback));
+    }
+
+    pub fn emit_change(&mut self) {
+        self.change = true;
     }
 }
 

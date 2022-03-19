@@ -169,7 +169,13 @@ impl<S> WinHandler for Window<S> {
 
     fn key_up(&mut self, event: KeyEvent) {}
 
-    fn wheel(&mut self, event: &MouseEvent) {}
+    fn wheel(&mut self, event: &MouseEvent) {
+        self.rosin.mouse_wheel(&mut self.state.borrow_mut(), event);
+        if !self.rosin.is_idle() {
+            self.handle.invalidate();
+            self.handle.request_anim_frame();
+        }
+    }
 
     fn zoom(&mut self, delta: f64) {}
 

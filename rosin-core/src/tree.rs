@@ -126,8 +126,7 @@ impl<S, H> ArrayNode<S, H> {
         }
     }
 
-    // TODO
-    pub(crate) fn trigger(&mut self, event_type: On, state: &mut S, ctx: &mut EventCtx<S, H>) -> Phase {
+    pub fn run_callbacks(&mut self, event_type: On, state: &mut S, ctx: &mut EventCtx<S, H>) -> Phase {
         let mut phase = Phase::Idle;
         for (et, callback) in &mut self.callbacks {
             if *et == event_type {
@@ -135,6 +134,15 @@ impl<S, H> ArrayNode<S, H> {
             }
         }
         phase
+    }
+
+    pub fn has_callback(&mut self, event_type: On) -> bool {
+        for (et, _) in &mut self.callbacks {
+            if *et == event_type {
+                return true;
+            }
+        }
+        return false;
     }
 }
 

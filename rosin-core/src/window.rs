@@ -106,11 +106,14 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
 
     pub fn mouse_leave(&mut self, state: &mut S) {
         if let Some(tree) = &mut self.tree_cache {
+            let tree = tree.borrow_mut();
+
             let mut ctx = EventCtx {
                 event_info: EventInfo::None,
                 window_handle: self.handle.clone(),
                 resource_loader: self.resource_loader.clone(),
                 focus: self.focused_node,
+                change: false,
                 anim_tasks: Vec::new(),
             };
 
@@ -125,17 +128,19 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
             // Dispatch MouseLeave event to all previously hovered nodes
             let mut phase = Phase::Idle;
             for &id in &self.prev_hover_nodes {
-                phase = phase.max(tree.borrow_mut()[id].trigger(On::MouseLeave, state, &mut ctx));
+                phase = phase.max(Self::dispatch_event(On::MouseLeave, state, &mut ctx, tree, id));
             }
+            phase = phase.max(self.handle_ctx(state, ctx));
             self.update_phase(phase);
 
             // The mouse has left the window, so it's not hovering over anything this frame
             self.prev_hover_nodes.clear();
             self.prev_hover_keys.clear();
-
-            self.focused_node = ctx.focus;
-            self.anim_tasks.append(&mut ctx.anim_tasks);
         }
+    }
+
+    pub fn mouse_wheel(&mut self, state: &mut S, event: &MouseEvent) {
+        self.mouse_event(state, event, On::MouseWheel)
     }
 
     pub fn mouse_move(&mut self, state: &mut S, event: &MouseEvent) {
@@ -152,6 +157,8 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
 
     fn mouse_event(&mut self, state: &mut S, event: &MouseEvent, event_type: On) {
         if let (Some(tree), Some(layout)) = (&mut self.tree_cache, &mut self.layout_cache) {
+            let tree = tree.borrow_mut();
+            let layout = layout.borrow();
             self.temp.reset();
 
             let mut ctx = EventCtx {
@@ -159,6 +166,7 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
                 window_handle: self.handle.clone(),
                 resource_loader: self.resource_loader.clone(),
                 focus: self.focused_node,
+                change: false,
                 anim_tasks: Vec::new(),
             };
 
@@ -169,7 +177,7 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
 
             // Get ids of nodes the mouse is over
             self.hover_nodes.clear();
-            layout::hit_test(layout.borrow_mut(), position, &mut self.hover_nodes);
+            layout::hit_test(layout, position, &mut self.hover_nodes);
 
             // If there are no hovered ids from the previous frame, the tree might have been rebuilt
             // So, use keys to get the ids of previously hovered nodes
@@ -221,36 +229,126 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
             let mut phase = Phase::Idle;
 
             for id in mouse_leave_nodes {
-                phase = phase.max(tree.borrow_mut()[id].trigger(On::MouseLeave, state, &mut ctx));
+                phase = phase.max(Self::dispatch_event(On::MouseLeave, state, &mut ctx, tree, id));
             }
 
             for id in mouse_enter_nodes {
-                phase = phase.max(tree.borrow_mut()[id].trigger(On::MouseEnter, state, &mut ctx));
+                phase = phase.max(Self::dispatch_event(On::MouseEnter, state, &mut ctx, tree, id));
             }
 
             for &id in &self.hover_nodes {
-                phase = phase.max(tree.borrow_mut()[id].trigger(event_type, state, &mut ctx));
+                phase = phase.max(Self::dispatch_event(event_type, state, &mut ctx, tree, id));
             }
 
             // Store the keys from hovered nodes in case the tree gets rebuilt
             std::mem::swap(&mut self.hover_nodes, &mut self.prev_hover_nodes);
             self.prev_hover_keys.clear();
             for &id in &self.prev_hover_nodes {
-                if let Some(key) = tree.borrow()[id].key {
+                if let Some(key) = tree[id].key {
                     self.prev_hover_keys.push(key);
                 }
             }
 
+            phase = phase.max(self.handle_ctx(state, ctx));
             self.update_phase(phase);
-
-            self.focused_node = ctx.focus;
-            self.anim_tasks.append(&mut ctx.anim_tasks);
         }
     }
 
     pub fn key_down(&mut self, state: &mut S, event: KeyEvent) -> bool {
         // TODO
         false
+    }
+
+    fn dispatch_event(event_type: On, state: &mut S, ctx: &mut EventCtx<S, H>, tree: &mut [ArrayNode<S, H>], id: usize) -> Phase {
+        ctx.change = false;
+        let mut phase = tree[id].run_callbacks(event_type, state, ctx);
+
+        // If requested, dispatch a change event
+        if ctx.change {
+            let mut change_ctx: EventCtx<S, H> = EventCtx {
+                event_info: EventInfo::None,
+                window_handle: ctx.window_handle.clone(),
+                resource_loader: ctx.resource_loader.clone(),
+                focus: ctx.focus,
+                change: false,
+                anim_tasks: Vec::new(),
+            };
+
+            if event_type != On::Change && tree[id].has_callback(On::Change) {
+                phase = phase.max(Self::dispatch_event(On::Change, state, ctx, tree, id));
+            } else {
+                // Search up tree for change event handler
+                let mut curr = tree[id].parent;
+                while curr != 0 {
+                    if tree[curr].has_callback(On::Change) {
+                        phase = phase.max(Self::dispatch_event(On::Change, state, ctx, tree, curr));
+                        ctx.anim_tasks.append(&mut change_ctx.anim_tasks);
+                        ctx.focus = change_ctx.focus;
+                        return phase;
+                    }
+                    curr = tree[curr].parent;
+                }
+
+                // Check root node
+                if id != 0 && tree[0].has_callback(On::Change) {
+                    phase = phase.max(Self::dispatch_event(On::Change, state, ctx, tree, 0));
+                }
+            }
+
+            ctx.anim_tasks.append(&mut change_ctx.anim_tasks);
+            ctx.focus = change_ctx.focus;
+        }
+
+        phase
+    }
+
+    fn handle_ctx(&mut self, state: &mut S, mut ctx: EventCtx<S, H>) -> Phase {
+        let mut phase = Phase::Idle;
+
+        if let Some(tree) = &mut self.tree_cache {
+            let tree = tree.borrow_mut();
+
+            let mut focus_ctx: EventCtx<S, H> = EventCtx {
+                event_info: EventInfo::None,
+                window_handle: ctx.window_handle.clone(),
+                resource_loader: ctx.resource_loader.clone(),
+                focus: ctx.focus,
+                change: false,
+                anim_tasks: Vec::new(),
+            };
+
+            // Dispatch focus and blur events
+            match (self.focused_node, ctx.focus) {
+                (Some(blur_key), Some(focus_key)) => {
+                    if blur_key != focus_key {
+                        if let Some(&id) = self.key_map.get(&blur_key) {
+                            phase = phase.max(Self::dispatch_event(On::Blur, state, &mut focus_ctx, tree, id));
+                        }
+                        if let Some(&id) = self.key_map.get(&focus_key) {
+                            phase = phase.max(Self::dispatch_event(On::Focus, state, &mut focus_ctx, tree, id));
+                        }
+                    }
+                }
+                (Some(blur_key), None) => {
+                    if let Some(&id) = self.key_map.get(&blur_key) {
+                        phase = phase.max(Self::dispatch_event(On::Blur, state, &mut focus_ctx, tree, id));
+                    }
+                }
+                (None, Some(focus_key)) => {
+                    if let Some(&id) = self.key_map.get(&focus_key) {
+                        phase = phase.max(Self::dispatch_event(On::Focus, state, &mut focus_ctx, tree, id));
+                    }
+                }
+                (None, None) => {}
+            }
+
+            self.anim_tasks.append(&mut focus_ctx.anim_tasks);
+        }
+
+        self.focused_node = ctx.focus;
+        self.anim_tasks.append(&mut ctx.anim_tasks);
+
+        phase
     }
 
     pub fn draw(&mut self, state: &mut S, piet: &mut Piet<'_>) -> Result<(), Box<dyn Error>> {
