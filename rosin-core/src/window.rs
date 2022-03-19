@@ -104,6 +104,37 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
         self.anim_tasks.push(Box::new(callback));
     }
 
+    pub fn got_focus(&mut self, state: &mut S) {
+        self.root_event(state, On::WindowFocus);
+    }
+
+    pub fn lost_focus(&mut self, state: &mut S) {
+        self.root_event(state, On::WindowFocus);
+    }
+
+    pub fn close(&mut self, state: &mut S) {
+        self.root_event(state, On::WindowClose);
+    }
+
+    fn root_event(&mut self, state: &mut S, event_type: On) {
+        if let Some(tree) = &mut self.tree_cache {
+            let tree = tree.borrow_mut();
+
+            let mut ctx = EventCtx {
+                event_info: EventInfo::None,
+                window_handle: self.handle.clone(),
+                resource_loader: self.resource_loader.clone(),
+                focus: self.focused_node,
+                change: false,
+                anim_tasks: Vec::new(),
+            };
+
+            let mut phase = Self::dispatch_event(event_type, state, &mut ctx, tree, 0);
+            phase.update(self.handle_ctx(state, ctx));
+            self.update_phase(phase);
+        }
+    }
+
     pub fn mouse_leave(&mut self, state: &mut S) {
         if let Some(tree) = &mut self.tree_cache {
             let tree = tree.borrow_mut();

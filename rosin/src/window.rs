@@ -164,12 +164,21 @@ impl<S> WinHandler for Window<S> {
 
     fn key_down(&mut self, event: KeyEvent) -> bool {
         let mut state = self.state.borrow_mut();
-        self.rosin.key_down(&mut state, event)
+        let result = self.rosin.key_down(&mut state, event);
+        if !self.rosin.is_idle() {
+            self.handle.invalidate();
+            self.handle.request_anim_frame();
+        }
+        result
     }
 
     fn key_up(&mut self, event: KeyEvent) {
         let mut state = self.state.borrow_mut();
         self.rosin.key_up(&mut state, event);
+        if !self.rosin.is_idle() {
+            self.handle.invalidate();
+            self.handle.request_anim_frame();
+        }
     }
 
     fn wheel(&mut self, event: &MouseEvent) {
@@ -220,11 +229,27 @@ impl<S> WinHandler for Window<S> {
 
     fn timer(&mut self, token: TimerToken) {}
 
-    fn got_focus(&mut self) {}
+    fn got_focus(&mut self) {
+        let mut state = self.state.borrow_mut();
+        self.rosin.got_focus(&mut state);
+        if !self.rosin.is_idle() {
+            self.handle.invalidate();
+            self.handle.request_anim_frame();
+        }
+    }
 
-    fn lost_focus(&mut self) {}
+    fn lost_focus(&mut self) {
+        let mut state = self.state.borrow_mut();
+        self.rosin.lost_focus(&mut state);
+        if !self.rosin.is_idle() {
+            self.handle.invalidate();
+            self.handle.request_anim_frame();
+        }
+    }
 
     fn request_close(&mut self) {
+        let mut state = self.state.borrow_mut();
+        self.rosin.close(&mut state);
         self.handle.close();
     }
 

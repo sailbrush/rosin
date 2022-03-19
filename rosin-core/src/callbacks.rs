@@ -25,6 +25,9 @@ pub enum On {
     KeyUp,
     Focus,
     Blur,
+    WindowFocus,
+    WindowBlur,
+    WindowClose,
 }
 
 /// A return type for callbacks to signal which render phase to skip to.

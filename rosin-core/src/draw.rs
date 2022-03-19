@@ -47,7 +47,7 @@ fn draw_inner<S, H>(state: &S, tree: &[ArrayNode<S, H>], layout: &[Layout], id: 
 
         // Call on_draw()
         if let Some(on_draw) = &tree[id].draw_callback {
-            piet.save();
+            piet.save().unwrap();
             piet.clip(path);
 
             piet.transform(Affine::translate((
@@ -65,7 +65,7 @@ fn draw_inner<S, H>(state: &S, tree: &[ArrayNode<S, H>], layout: &[Layout], id: 
 
             (*on_draw)(state, &mut ctx);
 
-            piet.restore();
+            piet.restore().unwrap();
         }
 
         piet.stroke(path, &border_color, style.border_top_width.into());
