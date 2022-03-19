@@ -2,6 +2,7 @@ use crate::alloc::Alloc;
 use crate::geometry::Size;
 use crate::prelude::*;
 
+use std::collections::HashMap;
 use std::num::NonZeroUsize;
 
 use bumpalo::collections::Vec as BumpVec;
@@ -79,7 +80,7 @@ macro_rules! ui {
 }
 
 pub(crate) struct ArrayNode<S: 'static, H: 'static> {
-    pub _key: Option<Key>, // TODO
+    pub key: Option<Key>, // TODO
     pub classes: BumpVec<'static, &'static str>,
     pub callbacks: BumpVec<'static, (On, &'static mut dyn EventCallback<S, H>)>,
     pub style_sheet: Option<StyleSheetId>,
@@ -243,7 +244,7 @@ impl<S, H> Node<S, H> {
         self
     }
 
-    pub(crate) fn finish(mut self) -> Option<BumpVec<'static, ArrayNode<S, H>>> {
+    pub(crate) fn finish(mut self, key_map: &mut HashMap<Key, usize>) -> Option<BumpVec<'static, ArrayNode<S, H>>> {
         let alloc = Alloc::get_thread_local_alloc().unwrap();
 
         let mut tree: BumpVec<ArrayNode<S, H>> = alloc.vec_capacity(self.size);
@@ -256,8 +257,12 @@ impl<S, H> Node<S, H> {
                 tree[parent].last_child = NonZeroUsize::new(index);
             }
 
+            if let Some(key) = curr_node.key {
+                key_map.insert(key, tree.len());
+            }
+
             tree.push(ArrayNode {
-                _key: curr_node.key,
+                key: curr_node.key,
                 classes: curr_node.classes.take()?,
                 callbacks: curr_node.callbacks.take()?,
                 style_sheet: curr_node.style_sheet.take(),

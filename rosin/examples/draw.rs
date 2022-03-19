@@ -9,11 +9,11 @@ pub struct State {
     lines: Vec<Vec<Point>>,
 }
 
-pub fn main_view(_: &State) -> Node<State, WindowHandle> {
+pub fn main_view(s: &State) -> Node<State, WindowHandle> {
     ui!("root" [{
             .event(On::MouseDown, |s: &mut State, _| {
                 s.lines.push(Vec::new());
-                Phase::Draw
+                Phase::Build
             })
             .event(On::MouseLeave, |s: &mut State, _| {
                 s.lines.push(Vec::new());
@@ -43,10 +43,12 @@ pub fn main_view(_: &State) -> Node<State, WindowHandle> {
             })
         }
 
-        "clear" (button("Clear", |s: &mut State, _| {
-            s.lines = Vec::new();
-            Phase::Draw
-        }))
+        if s.lines.len() > 0 {
+            "clear" (button("Clear", |s: &mut State, _| {
+                s.lines = Vec::new();
+                Phase::Draw
+            }))
+        }
     ])
 }
 

@@ -3,6 +3,7 @@ use crate::geometry::Point;
 use crate::prelude::*;
 use crate::{alloc::Scope, draw, layout, layout::Layout, tree::*};
 
+use std::collections::HashMap;
 use std::error::Error;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
@@ -21,9 +22,11 @@ pub struct RosinWindow<S: 'static, H: Default + Clone + 'static> {
     phase: Phase,
     last_frame: Instant,
     focused_node: Option<Key>,
-    prev_hover_nodes: Vec<usize>,
     hover_nodes: Vec<usize>,
+    prev_hover_nodes: Vec<usize>,
+    prev_hover_keys: Vec<Key>,
     anim_tasks: Vec<Box<dyn AnimCallback<S>>>,
+    key_map: HashMap<Key, usize>,
     tree_cache: Option<Scope<BumpVec<'static, ArrayNode<S, H>>>>,
     layout_cache: Option<Scope<BumpVec<'static, Layout>>>,
     alloc: Rc<Alloc>,
@@ -43,7 +46,9 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
             focused_node: None,
             hover_nodes: Vec::new(),
             prev_hover_nodes: Vec::new(),
+            prev_hover_keys: Vec::new(),
             anim_tasks: Vec::new(),
+            key_map: HashMap::new(),
             tree_cache: None,
             layout_cache: None,
             alloc: Rc::new(Alloc::default()),
@@ -59,6 +64,9 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
         self.layout_cache = None;
         self.tree_cache = None;
         self.alloc.reset().expect("[Rosin] Failed to reset cache");
+
+        self.prev_hover_nodes.clear();
+        self.key_map.clear();
     }
 
     pub fn get_alloc(&self) -> Rc<Alloc> {
@@ -106,12 +114,24 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
                 anim_tasks: Vec::new(),
             };
 
-            let mut phase = Phase::Idle;
-            for id in &self.prev_hover_nodes {
-                phase = phase.max(tree.borrow_mut()[*id].trigger(On::MouseLeave, state, &mut ctx));
+            if self.prev_hover_nodes.is_empty() {
+                for key in &self.prev_hover_keys {
+                    if let Some(&id) = self.key_map.get(key) {
+                        self.prev_hover_nodes.push(id);
+                    }
+                }
             }
-            self.prev_hover_nodes.clear();
+
+            // Dispatch MouseLeave event to all previously hovered nodes
+            let mut phase = Phase::Idle;
+            for &id in &self.prev_hover_nodes {
+                phase = phase.max(tree.borrow_mut()[id].trigger(On::MouseLeave, state, &mut ctx));
+            }
             self.update_phase(phase);
+
+            // The mouse has left the window, so it's not hovering over anything this frame
+            self.prev_hover_nodes.clear();
+            self.prev_hover_keys.clear();
 
             self.focused_node = ctx.focus;
             self.anim_tasks.append(&mut ctx.anim_tasks);
@@ -147,8 +167,20 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
                 y: event.pos.y as f32,
             };
 
+            // Get ids of nodes the mouse is over
             self.hover_nodes.clear();
             layout::hit_test(layout.borrow_mut(), position, &mut self.hover_nodes);
+
+            // If there are no hovered ids from the previous frame, the tree might have been rebuilt
+            // So, use keys to get the ids of previously hovered nodes
+            if self.prev_hover_nodes.is_empty() {
+                for key in &self.prev_hover_keys {
+                    if let Some(&id) = self.key_map.get(key) {
+                        self.prev_hover_nodes.push(id);
+                    }
+                }
+                self.prev_hover_nodes.sort();
+            }
 
             let mut mouse_enter_nodes: BumpVec<usize> = BumpVec::new_in(&self.temp);
             let mut mouse_leave_nodes: BumpVec<usize> = BumpVec::new_in(&self.temp);
@@ -157,17 +189,20 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
             let mut prev: usize = 0;
 
             // Compare hovered nodes with previous frame in a single pass
+            // NOTE: Assumes the vecs are sorted ascending
             while curr < self.hover_nodes.len() || prev < self.prev_hover_nodes.len() {
                 if curr >= self.hover_nodes.len() {
                     while prev < self.prev_hover_nodes.len() {
                         mouse_leave_nodes.push(self.prev_hover_nodes[prev]);
                         prev += 1;
                     }
+                    break;
                 } else if prev >= self.prev_hover_nodes.len() {
                     while curr < self.hover_nodes.len() {
                         mouse_enter_nodes.push(self.hover_nodes[curr]);
                         curr += 1;
                     }
+                    break;
                 } else {
                     if self.hover_nodes[curr] == self.prev_hover_nodes[prev] {
                         curr += 1;
@@ -182,6 +217,7 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
                 }
             }
 
+            // Dispatch events
             let mut phase = Phase::Idle;
 
             for id in mouse_leave_nodes {
@@ -192,11 +228,19 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
                 phase = phase.max(tree.borrow_mut()[id].trigger(On::MouseEnter, state, &mut ctx));
             }
 
-            for id in &self.hover_nodes {
-                phase = phase.max(tree.borrow_mut()[*id].trigger(event_type, state, &mut ctx));
+            for &id in &self.hover_nodes {
+                phase = phase.max(tree.borrow_mut()[id].trigger(event_type, state, &mut ctx));
             }
 
+            // Store the keys from hovered nodes in case the tree gets rebuilt
             std::mem::swap(&mut self.hover_nodes, &mut self.prev_hover_nodes);
+            self.prev_hover_keys.clear();
+            for &id in &self.prev_hover_nodes {
+                if let Some(key) = tree.borrow()[id].key {
+                    self.prev_hover_keys.push(key);
+                }
+            }
+
             self.update_phase(phase);
 
             self.focused_node = ctx.focus;
@@ -238,7 +282,7 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
             // SAFETY: This is safe because we panic if client code breaks scope()'s contract
             let mut tree = unsafe {
                 // Run the view function
-                alloc.scope(|| (self.view)(state).finish().unwrap())
+                alloc.scope(|| (self.view)(state).finish(&mut self.key_map).unwrap())
             };
 
             // Panic if the view function didn't return the number of nodes we expected
