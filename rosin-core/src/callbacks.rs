@@ -21,6 +21,8 @@ pub enum On {
     MouseEnter,
     MouseLeave,
     MouseWheel,
+    KeyDown,
+    KeyUp,
     Focus,
     Blur,
 }

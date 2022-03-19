@@ -253,9 +253,45 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
             self.update_phase(phase);
         }
     }
-
     pub fn key_down(&mut self, state: &mut S, event: KeyEvent) -> bool {
-        // TODO
+        self.key_event(state, event, On::KeyDown)
+    }
+
+    pub fn key_up(&mut self, state: &mut S, event: KeyEvent) {
+        self.key_event(state, event, On::KeyUp);
+    }
+
+    pub fn key_event(&mut self, state: &mut S, event: KeyEvent, event_type: On) -> bool {
+        if let Some(tree) = &mut self.tree_cache {
+            let tree = tree.borrow_mut();
+
+            // Find the id of the focused node, or route event to root node
+            let id = if let Some(key) = &self.focused_node {
+                if let Some(&id) = self.key_map.get(key) {
+                    id
+                } else {
+                    0
+                }
+            } else {
+                0
+            };
+
+            if tree[id].has_callback(event_type) {
+                let mut ctx = EventCtx {
+                    event_info: EventInfo::Key(event.clone()),
+                    window_handle: self.handle.clone(),
+                    resource_loader: self.resource_loader.clone(),
+                    focus: self.focused_node,
+                    change: false,
+                    anim_tasks: Vec::new(),
+                };
+
+                let mut phase = Self::dispatch_event(event_type, state, &mut ctx, tree, id);
+                phase = phase.max(self.handle_ctx(state, ctx));
+                self.update_phase(phase);
+                return true;
+            }
+        }
         false
     }
 

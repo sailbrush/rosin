@@ -14,7 +14,7 @@ use crate::prelude::*;
 // ---------- Dynamic Label ----------
 #[derive(Debug)]
 pub struct DynLabel {
-    key: Key,
+    pub key: Key,
     data: Rc<Data>,
 }
 
@@ -38,6 +38,13 @@ impl DynLabel {
     pub fn set_text(&self, new_text: &str) -> Phase {
         let mut text = self.data.text.borrow_mut();
         text.clear();
+        text.push_str(new_text);
+        self.data.changed.replace(true);
+        Phase::Draw
+    }
+
+    pub fn append_text(&self, new_text: &str) -> Phase {
+        let mut text = self.data.text.borrow_mut();
         text.push_str(new_text);
         self.data.changed.replace(true);
         Phase::Draw
