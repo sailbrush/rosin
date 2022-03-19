@@ -130,7 +130,7 @@ impl<S, H> ArrayNode<S, H> {
         let mut phase = Phase::Idle;
         for (et, callback) in &mut self.callbacks {
             if *et == event_type {
-                phase = phase.max((callback)(state, ctx));
+                phase.update((callback)(state, ctx));
             }
         }
         phase

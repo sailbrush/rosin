@@ -15,10 +15,6 @@ pub fn main_view(s: &State) -> Node<State, WindowHandle> {
                 s.lines.push(Vec::new());
                 Phase::Build
             })
-            .event(On::MouseLeave, |s: &mut State, _| {
-                s.lines.push(Vec::new());
-                Phase::Draw
-            })
             .event(On::MouseMove, |s: &mut State, ctx| {
                 if let EventInfo::Mouse(e) = &mut ctx.event_info {
                     if e.buttons.has_left() {

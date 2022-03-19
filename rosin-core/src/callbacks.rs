@@ -37,6 +37,12 @@ pub enum Phase {
     Build = 3,
 }
 
+impl Phase {
+    pub fn update(&mut self, mut other: Phase) {
+        *self = *self.max(&mut other);
+    }
+}
+
 /// A return type for tasks and animations to signal if they should stop running.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ShouldStop {

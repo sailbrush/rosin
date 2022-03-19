@@ -74,7 +74,7 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
     }
 
     pub fn update_phase(&mut self, new_phase: Phase) {
-        self.phase = self.phase.max(new_phase);
+        self.phase.update(new_phase);
     }
 
     pub fn size(&mut self, new_size: (f32, f32)) {
@@ -128,9 +128,9 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
             // Dispatch MouseLeave event to all previously hovered nodes
             let mut phase = Phase::Idle;
             for &id in &self.prev_hover_nodes {
-                phase = phase.max(Self::dispatch_event(On::MouseLeave, state, &mut ctx, tree, id));
+                phase.update(Self::dispatch_event(On::MouseLeave, state, &mut ctx, tree, id));
             }
-            phase = phase.max(self.handle_ctx(state, ctx));
+            phase.update(self.handle_ctx(state, ctx));
             self.update_phase(phase);
 
             // The mouse has left the window, so it's not hovering over anything this frame
@@ -229,15 +229,15 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
             let mut phase = Phase::Idle;
 
             for id in mouse_leave_nodes {
-                phase = phase.max(Self::dispatch_event(On::MouseLeave, state, &mut ctx, tree, id));
+                phase.update(Self::dispatch_event(On::MouseLeave, state, &mut ctx, tree, id));
             }
 
             for id in mouse_enter_nodes {
-                phase = phase.max(Self::dispatch_event(On::MouseEnter, state, &mut ctx, tree, id));
+                phase.update(Self::dispatch_event(On::MouseEnter, state, &mut ctx, tree, id));
             }
 
             for &id in &self.hover_nodes {
-                phase = phase.max(Self::dispatch_event(event_type, state, &mut ctx, tree, id));
+                phase.update(Self::dispatch_event(event_type, state, &mut ctx, tree, id));
             }
 
             // Store the keys from hovered nodes in case the tree gets rebuilt
@@ -249,7 +249,7 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
                 }
             }
 
-            phase = phase.max(self.handle_ctx(state, ctx));
+            phase.update(self.handle_ctx(state, ctx));
             self.update_phase(phase);
         }
     }
@@ -287,7 +287,7 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
                 };
 
                 let mut phase = Self::dispatch_event(event_type, state, &mut ctx, tree, id);
-                phase = phase.max(self.handle_ctx(state, ctx));
+                phase.update(self.handle_ctx(state, ctx));
                 self.update_phase(phase);
                 return true;
             }
@@ -311,13 +311,13 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
             };
 
             if event_type != On::Change && tree[id].has_callback(On::Change) {
-                phase = phase.max(Self::dispatch_event(On::Change, state, ctx, tree, id));
+                phase.update(Self::dispatch_event(On::Change, state, ctx, tree, id));
             } else {
                 // Search up tree for change event handler
                 let mut curr = tree[id].parent;
                 while curr != 0 {
                     if tree[curr].has_callback(On::Change) {
-                        phase = phase.max(Self::dispatch_event(On::Change, state, ctx, tree, curr));
+                        phase.update(Self::dispatch_event(On::Change, state, ctx, tree, curr));
                         ctx.anim_tasks.append(&mut change_ctx.anim_tasks);
                         ctx.focus = change_ctx.focus;
                         return phase;
@@ -327,7 +327,7 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
 
                 // Check root node
                 if id != 0 && tree[0].has_callback(On::Change) {
-                    phase = phase.max(Self::dispatch_event(On::Change, state, ctx, tree, 0));
+                    phase.update(Self::dispatch_event(On::Change, state, ctx, tree, 0));
                 }
             }
 
@@ -358,21 +358,21 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
                 (Some(blur_key), Some(focus_key)) => {
                     if blur_key != focus_key {
                         if let Some(&id) = self.key_map.get(&blur_key) {
-                            phase = phase.max(Self::dispatch_event(On::Blur, state, &mut focus_ctx, tree, id));
+                            phase.update(Self::dispatch_event(On::Blur, state, &mut focus_ctx, tree, id));
                         }
                         if let Some(&id) = self.key_map.get(&focus_key) {
-                            phase = phase.max(Self::dispatch_event(On::Focus, state, &mut focus_ctx, tree, id));
+                            phase.update(Self::dispatch_event(On::Focus, state, &mut focus_ctx, tree, id));
                         }
                     }
                 }
                 (Some(blur_key), None) => {
                     if let Some(&id) = self.key_map.get(&blur_key) {
-                        phase = phase.max(Self::dispatch_event(On::Blur, state, &mut focus_ctx, tree, id));
+                        phase.update(Self::dispatch_event(On::Blur, state, &mut focus_ctx, tree, id));
                     }
                 }
                 (None, Some(focus_key)) => {
                     if let Some(&id) = self.key_map.get(&focus_key) {
-                        phase = phase.max(Self::dispatch_event(On::Focus, state, &mut focus_ctx, tree, id));
+                        phase.update(Self::dispatch_event(On::Focus, state, &mut focus_ctx, tree, id));
                     }
                 }
                 (None, None) => {}
