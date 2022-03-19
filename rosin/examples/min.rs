@@ -4,11 +4,11 @@ use rosin::prelude::*;
 use rosin::widgets::*;
 
 pub struct State {
-    display: DynLabel,
+    text: TextBox,
 }
 
 pub fn main_view(state: &State) -> Node<State, WindowHandle> {
-    ui!("root"[(state.display.view())])
+    ui!("root"["text"(state.text.view())])
 }
 
 #[rustfmt::skip]
@@ -24,7 +24,7 @@ fn main() {
     load_css!(rl, "examples/min.css");
 
     let state = State {
-        display: DynLabel::new("Hello World!"),
+        text: TextBox::new("Hello World!"),
     };
 
     AppLauncher::new(rl, window)

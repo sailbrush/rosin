@@ -169,7 +169,7 @@ impl<S> WinHandler for Window<S> {
 
     fn key_up(&mut self, event: KeyEvent) {
         let mut state = self.state.borrow_mut();
-        self.rosin.key_down(&mut state, event);
+        self.rosin.key_up(&mut state, event);
     }
 
     fn wheel(&mut self, event: &MouseEvent) {
