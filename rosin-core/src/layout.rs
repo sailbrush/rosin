@@ -62,9 +62,7 @@ impl Default for Layout {
     }
 }
 
-pub(crate) fn hit_test<'a>(temp: &'a Bump, layout: &[Layout], point: Point) -> BumpVec<'a, usize> {
-    let mut result = BumpVec::new_in(temp);
-
+pub(crate) fn hit_test<'a>(layout: &[Layout], point: Point, result: &mut Vec<usize>) {
     for (id, node) in layout.iter().enumerate() {
         if node.position.x < point.x
             && node.position.x + node.size.width > point.x
@@ -74,8 +72,6 @@ pub(crate) fn hit_test<'a>(temp: &'a Bump, layout: &[Layout], point: Point) -> B
             result.push(id);
         }
     }
-
-    result
 }
 
 pub(crate) fn layout<S, H>(temp: &Bump, tree: &[ArrayNode<S, H>], root_size: Size, output: &mut [Layout]) {

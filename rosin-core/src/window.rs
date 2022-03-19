@@ -21,7 +21,8 @@ pub struct RosinWindow<S: 'static, H: Default + Clone + 'static> {
     phase: Phase,
     last_frame: Instant,
     focused_node: Option<Key>,
-    mouse_over_nodes: Vec<usize>,
+    prev_hover_nodes: Vec<usize>,
+    hover_nodes: Vec<usize>,
     anim_tasks: Vec<Box<dyn AnimCallback<S>>>,
     tree_cache: Option<Scope<BumpVec<'static, ArrayNode<S, H>>>>,
     layout_cache: Option<Scope<BumpVec<'static, Layout>>>,
@@ -40,7 +41,8 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
             phase: Phase::Build,
             last_frame: Instant::now(),
             focused_node: None,
-            mouse_over_nodes: Vec::new(),
+            hover_nodes: Vec::new(),
+            prev_hover_nodes: Vec::new(),
             anim_tasks: Vec::new(),
             tree_cache: None,
             layout_cache: None,
@@ -94,51 +96,21 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
         self.anim_tasks.push(Box::new(callback));
     }
 
-    pub fn mouse_down(&mut self, state: &mut S, event: &MouseEvent) {
-        if let (Some(tree), Some(layout)) = (&mut self.tree_cache, &mut self.layout_cache) {
-            let mut ctx = EventCtx::new(
-                EventInfo::Mouse(event.clone()),
-                self.handle.clone(),
-                self.resource_loader.clone(),
-                self.focused_node,
-            );
-
-            let position = Point {
-                x: event.pos.x as f32,
-                y: event.pos.y as f32,
+    pub fn mouse_leave(&mut self, state: &mut S) {
+        if let Some(tree) = &mut self.tree_cache {
+            let mut ctx = EventCtx {
+                event_info: EventInfo::None,
+                window_handle: self.handle.clone(),
+                resource_loader: self.resource_loader.clone(),
+                focus: self.focused_node,
+                anim_tasks: Vec::new(),
             };
 
             let mut phase = Phase::Idle;
-            let ids = layout::hit_test(&self.temp, layout.borrow_mut(), position);
-            for id in ids {
-                phase = phase.max(tree.borrow_mut()[id].trigger(On::MouseDown, state, &mut ctx));
+            for id in &self.prev_hover_nodes {
+                phase = phase.max(tree.borrow_mut()[*id].trigger(On::MouseLeave, state, &mut ctx));
             }
-            self.update_phase(phase);
-
-            self.focused_node = ctx.focus;
-            self.anim_tasks.append(&mut ctx.anim_tasks);
-        }
-    }
-
-    pub fn mouse_up(&mut self, state: &mut S, event: &MouseEvent) {
-        if let (Some(tree), Some(layout)) = (&mut self.tree_cache, &mut self.layout_cache) {
-            let mut ctx = EventCtx::new(
-                EventInfo::Mouse(event.clone()),
-                self.handle.clone(),
-                self.resource_loader.clone(),
-                self.focused_node,
-            );
-
-            let position = Point {
-                x: event.pos.x as f32,
-                y: event.pos.y as f32,
-            };
-
-            let mut phase = Phase::Idle;
-            let ids = layout::hit_test(&self.temp, layout.borrow_mut(), position);
-            for id in ids {
-                phase = phase.max(tree.borrow_mut()[id].trigger(On::MouseUp, state, &mut ctx));
-            }
+            self.prev_hover_nodes.clear();
             self.update_phase(phase);
 
             self.focused_node = ctx.focus;
@@ -147,24 +119,84 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
     }
 
     pub fn mouse_move(&mut self, state: &mut S, event: &MouseEvent) {
+        self.mouse_event(state, event, On::MouseMove)
+    }
+
+    pub fn mouse_down(&mut self, state: &mut S, event: &MouseEvent) {
+        self.mouse_event(state, event, On::MouseDown)
+    }
+
+    pub fn mouse_up(&mut self, state: &mut S, event: &MouseEvent) {
+        self.mouse_event(state, event, On::MouseUp)
+    }
+
+    fn mouse_event(&mut self, state: &mut S, event: &MouseEvent, event_type: On) {
         if let (Some(tree), Some(layout)) = (&mut self.tree_cache, &mut self.layout_cache) {
-            let mut ctx = EventCtx::new(
-                EventInfo::Mouse(event.clone()),
-                self.handle.clone(),
-                self.resource_loader.clone(),
-                self.focused_node,
-            );
+            self.temp.reset();
+
+            let mut ctx = EventCtx {
+                event_info: EventInfo::Mouse(event.clone()),
+                window_handle: self.handle.clone(),
+                resource_loader: self.resource_loader.clone(),
+                focus: self.focused_node,
+                anim_tasks: Vec::new(),
+            };
 
             let position = Point {
                 x: event.pos.x as f32,
                 y: event.pos.y as f32,
             };
 
-            let mut phase = Phase::Idle;
-            let ids = layout::hit_test(&self.temp, layout.borrow_mut(), position);
-            for id in ids {
-                phase = phase.max(tree.borrow_mut()[id].trigger(On::MouseMove, state, &mut ctx));
+            self.hover_nodes.clear();
+            layout::hit_test(layout.borrow_mut(), position, &mut self.hover_nodes);
+
+            let mut mouse_enter_nodes: BumpVec<usize> = BumpVec::new_in(&self.temp);
+            let mut mouse_leave_nodes: BumpVec<usize> = BumpVec::new_in(&self.temp);
+
+            let mut curr: usize = 0;
+            let mut prev: usize = 0;
+
+            // Compare hovered nodes with previous frame in a single pass
+            while curr < self.hover_nodes.len() || prev < self.prev_hover_nodes.len() {
+                if curr >= self.hover_nodes.len() {
+                    while prev < self.prev_hover_nodes.len() {
+                        mouse_leave_nodes.push(self.prev_hover_nodes[prev]);
+                        prev += 1;
+                    }
+                } else if prev >= self.prev_hover_nodes.len() {
+                    while curr < self.hover_nodes.len() {
+                        mouse_enter_nodes.push(self.hover_nodes[curr]);
+                        curr += 1;
+                    }
+                } else {
+                    if self.hover_nodes[curr] == self.prev_hover_nodes[prev] {
+                        curr += 1;
+                        prev += 1;
+                    } else if self.hover_nodes[curr] < self.prev_hover_nodes[prev] {
+                        mouse_enter_nodes.push(self.hover_nodes[curr]);
+                        curr += 1;
+                    } else {
+                        mouse_leave_nodes.push(self.prev_hover_nodes[prev]);
+                        prev += 1;
+                    }
+                }
             }
+
+            let mut phase = Phase::Idle;
+
+            for id in mouse_leave_nodes {
+                phase = phase.max(tree.borrow_mut()[id].trigger(On::MouseLeave, state, &mut ctx));
+            }
+
+            for id in mouse_enter_nodes {
+                phase = phase.max(tree.borrow_mut()[id].trigger(On::MouseEnter, state, &mut ctx));
+            }
+
+            for id in &self.hover_nodes {
+                phase = phase.max(tree.borrow_mut()[*id].trigger(event_type, state, &mut ctx));
+            }
+
+            std::mem::swap(&mut self.hover_nodes, &mut self.prev_hover_nodes);
             self.update_phase(phase);
 
             self.focused_node = ctx.focus;

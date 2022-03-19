@@ -6,7 +6,6 @@ use rosin::prelude::*;
 use rosin::widgets::*;
 
 pub struct State {
-    down: bool,
     lines: Vec<Vec<Point>>,
 }
 
@@ -14,16 +13,15 @@ pub fn main_view(_: &State) -> Node<State, WindowHandle> {
     ui!("root" [{
             .event(On::MouseDown, |s: &mut State, _| {
                 s.lines.push(Vec::new());
-                s.down = true;
                 Phase::Draw
             })
-            .event(On::MouseUp, |s: &mut State, _| {
-                s.down = false;
+            .event(On::MouseLeave, |s: &mut State, _| {
+                s.lines.push(Vec::new());
                 Phase::Draw
             })
             .event(On::MouseMove, |s: &mut State, ctx| {
-                if s.down {
-                    if let EventInfo::Mouse(e) = &mut ctx.event_info {
+                if let EventInfo::Mouse(e) = &mut ctx.event_info {
+                    if e.buttons.has_left() {
                         if let Some(line) = s.lines.last_mut() {
                             line.push(e.pos);
                         }
@@ -65,7 +63,6 @@ fn main() {
     load_css!(rl, "examples/draw.css");
 
     let state = State {
-        down: false,
         lines: Vec::new(),
     };
 

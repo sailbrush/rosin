@@ -11,11 +11,13 @@ use std::time::Duration;
 
 /// A list of events that Nodes can register callbacks for.
 #[non_exhaustive]
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum On {
     MouseDown,
     MouseUp,
     MouseMove,
+    MouseEnter,
+    MouseLeave,
 
     Change, // Can be used by widgets to signal that they have changed
     Focus,
@@ -48,6 +50,7 @@ pub struct DrawCtx<'a, 'b> {
 }
 
 pub enum EventInfo {
+    None,
     Mouse(MouseEvent),
     Key(KeyEvent),
 }
@@ -61,16 +64,6 @@ pub struct EventCtx<S, H> {
 }
 
 impl<S, H> EventCtx<S, H> {
-    pub fn new(event_info: EventInfo, window_handle: H, resource_loader: Arc<Mutex<ResourceLoader>>, focus: Option<Key>) -> Self {
-        Self {
-            event_info,
-            window_handle,
-            resource_loader,
-            focus,
-            anim_tasks: Vec::new(),
-        }
-    }
-
     pub fn blur(&mut self) {
         self.focus = None;
     }

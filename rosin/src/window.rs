@@ -200,7 +200,14 @@ impl<S> WinHandler for Window<S> {
         }
     }
 
-    fn mouse_leave(&mut self) {}
+    fn mouse_leave(&mut self) {
+        let mut state = self.state.borrow_mut();
+        self.rosin.mouse_leave(&mut state);
+        if !self.rosin.is_idle() {
+            self.handle.invalidate();
+            self.handle.request_anim_frame();
+        }
+    }
 
     fn timer(&mut self, token: TimerToken) {}
 
