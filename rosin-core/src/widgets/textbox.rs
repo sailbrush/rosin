@@ -58,7 +58,7 @@ impl TextBox {
         let weak1 = Rc::downgrade(&self.data);
         let weak2 = Rc::downgrade(&self.data);
 
-        ui!("test" [
+        ui!([
             .key(key)
             .event(On::MouseDown, move |_, ctx| {
                 ctx.focus_on(key);
@@ -66,25 +66,25 @@ impl TextBox {
             })
             .event(On::KeyDown, move |_, ctx: &mut EventCtx<S, H>| {
                 if let Some(this) = weak1.upgrade() {
-                    if let EventInfo::Key(e) = &mut ctx.event_info {
-                        match &e.key {
-                            KbKey::Character(c) => {
-                                this.text.borrow_mut().push_str(c);
-                                this.changed.replace(true);
-                                return Phase::Draw;
-                            },
-                            KbKey::Enter => {
-                                this.text.borrow_mut().push_str("\n");
-                                this.changed.replace(true);
-                                return Phase::Draw;
-                            },
-                            KbKey::Backspace => {
-                                this.text.borrow_mut().pop();
-                                this.changed.replace(true);
-                                return Phase::Draw;
-                            },
-                            _ => {},
-                        }
+                    ctx.emit_change();
+                    let event = ctx.event_info.clone().unwrap_key();
+                    match &event.key {
+                        KbKey::Character(c) => {
+                            this.text.borrow_mut().push_str(c);
+                            this.changed.replace(true);
+                            return Phase::Draw;
+                        },
+                        KbKey::Enter => {
+                            this.text.borrow_mut().push_str("\n");
+                            this.changed.replace(true);
+                            return Phase::Draw;
+                        },
+                        KbKey::Backspace => {
+                            this.text.borrow_mut().pop();
+                            this.changed.replace(true);
+                            return Phase::Draw;
+                        },
+                        _ => {},
                     }
                 }
                 Phase::Idle

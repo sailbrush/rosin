@@ -6,7 +6,7 @@ use crate::prelude::*;
 
 // ---------- Static Label ----------
 pub fn label<S, H>(text: &'static str) -> Node<S, H> {
-    ui!("label" [
+    ui!([
         .on_draw(true, move |_: &S, ctx: &mut DrawCtx| {
             let font_color = Color::rgba8(
                 ctx.style.color.red,

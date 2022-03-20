@@ -120,11 +120,16 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
         if let Some(tree) = &mut self.tree_cache {
             let tree = tree.borrow_mut();
 
+            let default_style = Style::default();
+            let default_layout = Layout::default();
+
             let mut ctx = EventCtx {
                 event_info: EventInfo::None,
                 window_handle: self.handle.clone(),
                 resource_loader: self.resource_loader.clone(),
                 focus: self.focused_node,
+                style: default_style,
+                layout: default_layout,
                 change: false,
                 anim_tasks: Vec::new(),
             };
@@ -139,11 +144,16 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
         if let Some(tree) = &mut self.tree_cache {
             let tree = tree.borrow_mut();
 
+            let default_style = Style::default();
+            let default_layout = Layout::default();
+
             let mut ctx = EventCtx {
                 event_info: EventInfo::None,
                 window_handle: self.handle.clone(),
                 resource_loader: self.resource_loader.clone(),
                 focus: self.focused_node,
+                style: default_style,
+                layout: default_layout,
                 change: false,
                 anim_tasks: Vec::new(),
             };
@@ -187,16 +197,21 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
     }
 
     fn mouse_event(&mut self, state: &mut S, event: &MouseEvent, event_type: On) {
-        if let (Some(tree), Some(layout)) = (&mut self.tree_cache, &mut self.layout_cache) {
+        if let (Some(tree), Some(layout)) = (&mut self.tree_cache, &self.layout_cache) {
             let tree = tree.borrow_mut();
             let layout = layout.borrow();
             self.temp.reset();
+
+            let default_style = Style::default();
+            let default_layout = Layout::default();
 
             let mut ctx = EventCtx {
                 event_info: EventInfo::Mouse(event.clone()),
                 window_handle: self.handle.clone(),
                 resource_loader: self.resource_loader.clone(),
                 focus: self.focused_node,
+                style: default_style,
+                layout: default_layout,
                 change: false,
                 anim_tasks: Vec::new(),
             };
@@ -260,14 +275,20 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
             let mut phase = Phase::Idle;
 
             for id in mouse_leave_nodes {
+                ctx.style = tree[id].style.clone();
+                ctx.layout = layout[id].clone();
                 phase.update(Self::dispatch_event(On::MouseLeave, state, &mut ctx, tree, id));
             }
 
             for id in mouse_enter_nodes {
+                ctx.style = tree[id].style.clone();
+                ctx.layout = layout[id].clone();
                 phase.update(Self::dispatch_event(On::MouseEnter, state, &mut ctx, tree, id));
             }
 
             for &id in &self.hover_nodes {
+                ctx.style = tree[id].style.clone();
+                ctx.layout = layout[id].clone();
                 phase.update(Self::dispatch_event(event_type, state, &mut ctx, tree, id));
             }
 
@@ -307,12 +328,17 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
                 0
             };
 
+            let default_style = Style::default();
+            let default_layout = Layout::default();
+            
             if tree[id].has_callback(event_type) {
                 let mut ctx = EventCtx {
                     event_info: EventInfo::Key(event.clone()),
                     window_handle: self.handle.clone(),
                     resource_loader: self.resource_loader.clone(),
                     focus: self.focused_node,
+                    style: default_style,
+                    layout: default_layout,
                     change: false,
                     anim_tasks: Vec::new(),
                 };
@@ -332,23 +358,28 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
 
         // If requested, dispatch a change event
         if ctx.change {
+            let default_style = Style::default();
+            let default_layout = Layout::default();
+
             let mut change_ctx: EventCtx<S, H> = EventCtx {
                 event_info: EventInfo::None,
                 window_handle: ctx.window_handle.clone(),
                 resource_loader: ctx.resource_loader.clone(),
                 focus: ctx.focus,
+                style: default_style,
+                layout: default_layout,
                 change: false,
                 anim_tasks: Vec::new(),
             };
 
             if event_type != On::Change && tree[id].has_callback(On::Change) {
-                phase.update(Self::dispatch_event(On::Change, state, ctx, tree, id));
+                phase.update(Self::dispatch_event(On::Change, state, &mut change_ctx, tree, id));
             } else {
                 // Search up tree for change event handler
                 let mut curr = tree[id].parent;
                 while curr != 0 {
                     if tree[curr].has_callback(On::Change) {
-                        phase.update(Self::dispatch_event(On::Change, state, ctx, tree, curr));
+                        phase.update(Self::dispatch_event(On::Change, state, &mut change_ctx, tree, curr));
                         ctx.anim_tasks.append(&mut change_ctx.anim_tasks);
                         ctx.focus = change_ctx.focus;
                         return phase;
@@ -358,7 +389,7 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
 
                 // Check root node
                 if id != 0 && tree[0].has_callback(On::Change) {
-                    phase.update(Self::dispatch_event(On::Change, state, ctx, tree, 0));
+                    phase.update(Self::dispatch_event(On::Change, state, &mut change_ctx, tree, 0));
                 }
             }
 
@@ -375,11 +406,16 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
         if let Some(tree) = &mut self.tree_cache {
             let tree = tree.borrow_mut();
 
+            let default_style = Style::default();
+            let default_layout = Layout::default();
+
             let mut focus_ctx: EventCtx<S, H> = EventCtx {
                 event_info: EventInfo::None,
                 window_handle: ctx.window_handle.clone(),
                 resource_loader: ctx.resource_loader.clone(),
                 focus: ctx.focus,
+                style: default_style,
+                layout: default_layout,
                 change: false,
                 anim_tasks: Vec::new(),
             };

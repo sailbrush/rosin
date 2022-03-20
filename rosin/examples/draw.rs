@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use druid_shell::KbKey;
 use druid_shell::kurbo::{Line, Point};
 use druid_shell::piet::{Color, RenderContext};
 use rosin::prelude::*;
@@ -15,12 +16,18 @@ pub fn main_view(s: &State) -> Node<State, WindowHandle> {
                 s.lines.push(Vec::new());
                 Phase::Build
             })
+            .event(On::KeyDown, |s: &mut State, ctx| {
+                let event = ctx.event_info.clone().unwrap_key();
+                if event.key == KbKey::Backspace {
+                    s.lines.pop();
+                }
+                Phase::Build
+            })
             .event(On::MouseMove, |s: &mut State, ctx| {
-                if let EventInfo::Mouse(e) = &mut ctx.event_info {
-                    if e.buttons.has_left() {
-                        if let Some(line) = s.lines.last_mut() {
-                            line.push(e.pos);
-                        }
+                let event = ctx.event_info.clone().unwrap_mouse();
+                if event.buttons.has_left() {
+                    if let Some(line) = s.lines.last_mut() {
+                        line.push(event.pos);
                     }
                 }
                 Phase::Draw

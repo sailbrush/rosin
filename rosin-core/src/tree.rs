@@ -136,8 +136,8 @@ impl<S, H> ArrayNode<S, H> {
         phase
     }
 
-    pub fn has_callback(&mut self, event_type: On) -> bool {
-        for (et, _) in &mut self.callbacks {
+    pub fn has_callback(&self, event_type: On) -> bool {
+        for (et, _) in &self.callbacks {
             if *et == event_type {
                 return true;
             }

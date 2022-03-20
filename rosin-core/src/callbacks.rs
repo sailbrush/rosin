@@ -4,6 +4,7 @@ use druid_shell::piet::Piet;
 use druid_shell::{KeyEvent, MouseEvent};
 
 use crate::geometry::Size;
+use crate::layout::Layout;
 use crate::prelude::*;
 
 use std::sync::{Arc, Mutex};
@@ -56,15 +57,34 @@ pub enum ShouldStop {
 pub struct DrawCtx<'a, 'b> {
     pub piet: &'a mut Piet<'b>,
     pub style: &'a Style,
-    pub width: f32,
-    pub height: f32,
+    pub width: f64,
+    pub height: f64,
     pub must_draw: bool,
 }
 
+#[derive(Debug, Clone)]
 pub enum EventInfo {
     None,
     Mouse(MouseEvent),
     Key(KeyEvent),
+}
+
+impl EventInfo {
+    pub fn unwrap_mouse(self) -> MouseEvent {
+        if let EventInfo::Mouse(mouse_event) = self {
+            mouse_event
+        } else {
+            panic!();
+        }
+    }
+
+    pub fn unwrap_key(self) -> KeyEvent {
+        if let EventInfo::Key(key_event) = self {
+            key_event
+        } else {
+            panic!();
+        }
+    }
 }
 
 pub struct EventCtx<S, H> {
@@ -72,6 +92,8 @@ pub struct EventCtx<S, H> {
     pub window_handle: H,
     pub resource_loader: Arc<Mutex<ResourceLoader>>,
     pub focus: Option<Key>,
+    pub style: Style,
+    pub(crate) layout: Layout,
     pub(crate) anim_tasks: Vec<Box<dyn AnimCallback<S>>>,
     pub(crate) change: bool,
 }
@@ -91,6 +113,30 @@ impl<S, H> EventCtx<S, H> {
 
     pub fn emit_change(&mut self) {
         self.change = true;
+    }
+
+    pub fn offset_x(&self) -> Option<f32> {
+        if let EventInfo::Mouse(mouse) = &self.event_info {
+            Some(mouse.pos.x as f32 - self.layout.position.x)
+        } else {
+            None
+        }
+    }
+
+    pub fn offset_y(&self) -> Option<f32> {
+        if let EventInfo::Mouse(mouse) = &self.event_info {
+            Some(mouse.pos.y as f32 - self.layout.position.y)
+        } else {
+            None
+        }
+    }
+
+    pub fn width(&self) -> f32 {
+        self.layout.size.width
+    }
+
+    pub fn height(&self) -> f32 {
+        self.layout.size.height
     }
 }
 

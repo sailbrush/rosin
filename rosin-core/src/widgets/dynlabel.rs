@@ -53,7 +53,7 @@ impl DynLabel {
     pub fn view<S, H>(&self) -> Node<S, H> {
         let weak = Rc::downgrade(&self.data);
 
-        ui!("test" [
+        ui!([
             .key(self.key)
             .on_draw(true, move |_, ctx: &mut DrawCtx| {
                 // If the underlying data is gone, then just return since there's nothing to draw.

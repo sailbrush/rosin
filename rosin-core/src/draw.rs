@@ -58,8 +58,8 @@ fn draw_inner<S, H>(state: &S, tree: &[ArrayNode<S, H>], layout: &[Layout], id: 
             let mut ctx = DrawCtx {
                 piet,
                 style,
-                width: layout[id].size.width,
-                height: layout[id].size.height,
+                width: layout[id].size.width as f64,
+                height: layout[id].size.height as f64,
                 must_draw: true, // TODO - caching system
             };
 

@@ -9,3 +9,6 @@ pub use dynlabel::DynLabel;
 
 mod textbox;
 pub use textbox::TextBox;
+
+mod slider;
+pub use slider::Slider;
