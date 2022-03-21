@@ -245,29 +245,15 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
             // Compare hovered nodes with previous frame in a single pass
             // NOTE: Assumes the vecs are sorted ascending
             while curr < self.hover_nodes.len() || prev < self.prev_hover_nodes.len() {
-                if curr >= self.hover_nodes.len() {
-                    while prev < self.prev_hover_nodes.len() {
-                        mouse_leave_nodes.push(self.prev_hover_nodes[prev]);
-                        prev += 1;
-                    }
-                    break;
-                } else if prev >= self.prev_hover_nodes.len() {
-                    while curr < self.hover_nodes.len() {
-                        mouse_enter_nodes.push(self.hover_nodes[curr]);
-                        curr += 1;
-                    }
-                    break;
+                if self.hover_nodes[curr] < self.prev_hover_nodes[prev] || prev == self.prev_hover_nodes.len() {
+                    mouse_enter_nodes.push(self.hover_nodes[curr]);
+                    curr += 1;
+                } else if self.hover_nodes[curr] > self.prev_hover_nodes[prev] || curr == self.hover_nodes.len(){
+                    mouse_leave_nodes.push(self.prev_hover_nodes[prev]);
+                    prev += 1;
                 } else {
-                    if self.hover_nodes[curr] == self.prev_hover_nodes[prev] {
-                        curr += 1;
-                        prev += 1;
-                    } else if self.hover_nodes[curr] < self.prev_hover_nodes[prev] {
-                        mouse_enter_nodes.push(self.hover_nodes[curr]);
-                        curr += 1;
-                    } else {
-                        mouse_leave_nodes.push(self.prev_hover_nodes[prev]);
-                        prev += 1;
-                    }
+                    curr += 1;
+                    prev += 1;
                 }
             }
 
