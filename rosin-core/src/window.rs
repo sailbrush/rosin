@@ -248,7 +248,7 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
                 if self.hover_nodes[curr] < self.prev_hover_nodes[prev] || prev == self.prev_hover_nodes.len() {
                     mouse_enter_nodes.push(self.hover_nodes[curr]);
                     curr += 1;
-                } else if self.hover_nodes[curr] > self.prev_hover_nodes[prev] || curr == self.hover_nodes.len(){
+                } else if self.hover_nodes[curr] > self.prev_hover_nodes[prev] || curr == self.hover_nodes.len() {
                     mouse_leave_nodes.push(self.prev_hover_nodes[prev]);
                     prev += 1;
                 } else {
@@ -316,7 +316,7 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
 
             let default_style = Style::default();
             let default_layout = Layout::default();
-            
+
             if tree[id].has_callback(event_type) {
                 let mut ctx = EventCtx {
                     event_info: EventInfo::Key(event.clone()),

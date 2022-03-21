@@ -1,8 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use druid_shell::KbKey;
 use druid_shell::kurbo::{Line, Point};
 use druid_shell::piet::{Color, RenderContext};
+use druid_shell::KbKey;
 use rosin::prelude::*;
 use rosin::widgets::*;
 

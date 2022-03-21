@@ -1,12 +1,11 @@
 #![forbid(unsafe_code)]
 
-use std::{
-    cell::Cell,
-    fmt::Debug,
-    rc::Rc,
-};
+use std::{cell::Cell, fmt::Debug, rc::Rc};
 
-use druid_shell::{piet::{Color, RenderContext}, kurbo::{Line, Point, Circle}};
+use druid_shell::{
+    kurbo::{Circle, Line, Point},
+    piet::{Color, RenderContext},
+};
 
 use crate::prelude::*;
 
@@ -54,12 +53,12 @@ impl Slider {
                 let event = ctx.event_info.clone().unwrap_mouse();
                 let offset_x = ctx.offset_x().unwrap();
                 let offset_y = ctx.offset_y().unwrap();
-                
+
                 if event.buttons.has_left() {
                     if this.horizontal.get() {
                         this.value.set((offset_x / ctx.width()).into());
                     }
-                    
+
                     Phase::Draw
                 } else {
                     Phase::Idle
@@ -75,7 +74,7 @@ impl Slider {
                     if this.horizontal.get() {
                         this.value.set((offset_x / ctx.width()).into());
                     }
-                    
+
                     Phase::Draw
                 } else {
                     Phase::Idle
@@ -88,7 +87,7 @@ impl Slider {
                 let this = if let Some(this) = weak3.upgrade() { this } else { return };
                 if !this.changed.get() && !ctx.must_draw { return }
                 this.changed.set(false);
-                
+
                 let track = Line::new(
                     Point { x: 0.0, y: ctx.height/2.0},
                     Point { x: ctx.width as f64, y: ctx.height/2.0},
