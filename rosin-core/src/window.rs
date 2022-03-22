@@ -3,6 +3,7 @@ use crate::geometry::Point;
 use crate::prelude::*;
 use crate::{alloc::Scope, draw, layout, layout::Layout, tree::*};
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::error::Error;
 use std::rc::Rc;
@@ -25,7 +26,7 @@ pub struct RosinWindow<S: 'static, H: Default + Clone + 'static> {
     hover_nodes: Vec<usize>,
     prev_hover_nodes: Vec<usize>,
     prev_hover_keys: Vec<Key>,
-    anim_tasks: Vec<Box<dyn AnimCallback<S>>>,
+    anim_tasks: Rc<RefCell<Vec<Box<dyn AnimCallback<S>>>>>,
     key_map: HashMap<Key, usize>,
     tree_cache: Option<Scope<BumpVec<'static, ArrayNode<S, H>>>>,
     layout_cache: Option<Scope<BumpVec<'static, Layout>>>,
@@ -47,7 +48,7 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
             hover_nodes: Vec::new(),
             prev_hover_nodes: Vec::new(),
             prev_hover_keys: Vec::new(),
-            anim_tasks: Vec::new(),
+            anim_tasks: Rc::new(RefCell::new(Vec::new())),
             key_map: HashMap::new(),
             tree_cache: None,
             layout_cache: None,
@@ -97,11 +98,11 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
     }
 
     pub fn has_anim_tasks(&self) -> bool {
-        self.anim_tasks.len() > 0
+        self.anim_tasks.borrow().len() > 0
     }
 
     pub fn add_anim_task(&mut self, callback: impl Fn(&mut S, Duration) -> (Phase, ShouldStop) + 'static) {
-        self.anim_tasks.push(Box::new(callback));
+        self.anim_tasks.borrow_mut().push(Box::new(callback));
     }
 
     pub fn got_focus(&mut self, state: &mut S) {
@@ -131,7 +132,7 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
                 style: default_style,
                 layout: default_layout,
                 change: false,
-                anim_tasks: Vec::new(),
+                anim_tasks: self.anim_tasks.clone(),
             };
 
             let mut phase = Self::dispatch_event(event_type, state, &mut ctx, tree, 0);
@@ -155,7 +156,7 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
                 style: default_style,
                 layout: default_layout,
                 change: false,
-                anim_tasks: Vec::new(),
+                anim_tasks: self.anim_tasks.clone(),
             };
 
             if self.prev_hover_nodes.is_empty() {
@@ -213,7 +214,7 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
                 style: default_style,
                 layout: default_layout,
                 change: false,
-                anim_tasks: Vec::new(),
+                anim_tasks: self.anim_tasks.clone(),
             };
 
             let position = Point {
@@ -335,7 +336,7 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
                     style: default_style,
                     layout: default_layout,
                     change: false,
-                    anim_tasks: Vec::new(),
+                    anim_tasks: self.anim_tasks.clone(),
                 };
 
                 let mut phase = Self::dispatch_event(event_type, state, &mut ctx, tree, id);
@@ -364,7 +365,7 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
                 style: default_style,
                 layout: default_layout,
                 change: false,
-                anim_tasks: Vec::new(),
+                anim_tasks: ctx.anim_tasks.clone(),
             };
 
             if event_type != On::Change && tree[id].has_callback(On::Change) {
@@ -375,7 +376,6 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
                 while curr != 0 {
                     if tree[curr].has_callback(On::Change) {
                         phase.update(Self::dispatch_event(On::Change, state, &mut change_ctx, tree, curr));
-                        ctx.anim_tasks.append(&mut change_ctx.anim_tasks);
                         ctx.focus = change_ctx.focus;
                         return phase;
                     }
@@ -388,7 +388,6 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
                 }
             }
 
-            ctx.anim_tasks.append(&mut change_ctx.anim_tasks);
             ctx.focus = change_ctx.focus;
         }
 
@@ -412,7 +411,7 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
                 style: default_style,
                 layout: default_layout,
                 change: false,
-                anim_tasks: Vec::new(),
+                anim_tasks: self.anim_tasks.clone(),
             };
 
             // Dispatch focus and blur events
@@ -439,17 +438,14 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
                 }
                 (None, None) => {}
             }
-
-            self.anim_tasks.append(&mut focus_ctx.anim_tasks);
         }
 
         self.focused_node = ctx.focus;
-        self.anim_tasks.append(&mut ctx.anim_tasks);
 
         phase
     }
 
-    pub fn draw(&mut self, state: &mut S, piet: &mut Piet<'_>) -> Result<(), Box<dyn Error>> {
+    pub fn draw(&mut self, state: &mut S, piet: Option<&mut Piet<'_>>) -> Result<(), Box<dyn Error>> {
         // Get time since last frame
         let now = Instant::now();
         let dt = now.duration_since(self.last_frame);
@@ -461,7 +457,7 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
 
         // Run Animation Tasks
         let mut anim_phase = Phase::Idle;
-        self.anim_tasks.retain(|task| {
+        self.anim_tasks.borrow_mut().retain(|task| {
             let (phase, stop) = task(state, dt);
             anim_phase = anim_phase.max(phase);
             stop == ShouldStop::No
@@ -495,6 +491,7 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
         if self.phase != Phase::Idle {
             for (id, node) in tree.iter_mut().enumerate() {
                 // TODO - hit test, apply hover/focus styles
+                //      - set phase to layout if needed
 
                 if let Some(style_callback) = &mut node.style_callback {
                     default_styles.push((id, node.style.clone()));
@@ -534,7 +531,9 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
 
         // ---------- Draw Phase ----------
         // TODO - If phase == Idle, re-issue commands from last frame
-        draw::draw(state, tree, layout, piet);
+        if let Some(piet) = piet {
+            draw::draw(state, tree, layout, piet);
+        }
 
         // ---------- Cleanup ----------
         Alloc::set_thread_local_alloc(None);

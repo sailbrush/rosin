@@ -7,6 +7,8 @@ use crate::geometry::Size;
 use crate::layout::Layout;
 use crate::prelude::*;
 
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -94,7 +96,7 @@ pub struct EventCtx<S, H> {
     pub focus: Option<Key>,
     pub style: Style,
     pub(crate) layout: Layout,
-    pub(crate) anim_tasks: Vec<Box<dyn AnimCallback<S>>>,
+    pub(crate) anim_tasks: Rc<RefCell<Vec<Box<dyn AnimCallback<S>>>>>,
     pub(crate) change: bool,
 }
 
@@ -108,7 +110,7 @@ impl<S, H> EventCtx<S, H> {
     }
 
     pub fn start_animation(&mut self, callback: impl Fn(&mut S, Duration) -> (Phase, ShouldStop) + 'static) {
-        self.anim_tasks.push(Box::new(callback));
+        self.anim_tasks.borrow_mut().push(Box::new(callback));
     }
 
     pub fn emit_change(&mut self) {
