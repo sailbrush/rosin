@@ -243,17 +243,32 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
             let mut prev: usize = 0;
 
             // Compare hovered nodes with previous frame in a single pass
+            // TODO: Perhaps there is a way to simplify this?
             // NOTE: Assumes the vecs are sorted ascending
             while curr < self.hover_nodes.len() || prev < self.prev_hover_nodes.len() {
-                if self.hover_nodes[curr] < self.prev_hover_nodes[prev] || prev == self.prev_hover_nodes.len() {
-                    mouse_enter_nodes.push(self.hover_nodes[curr]);
-                    curr += 1;
-                } else if self.hover_nodes[curr] > self.prev_hover_nodes[prev] || curr == self.hover_nodes.len() {
-                    mouse_leave_nodes.push(self.prev_hover_nodes[prev]);
-                    prev += 1;
+                if curr >= self.hover_nodes.len() {
+                    while prev < self.prev_hover_nodes.len() {
+                        mouse_leave_nodes.push(self.prev_hover_nodes[prev]);
+                        prev += 1;
+                    }
+                    break;
+                } else if prev >= self.prev_hover_nodes.len() {
+                    while curr < self.hover_nodes.len() {
+                        mouse_enter_nodes.push(self.hover_nodes[curr]);
+                        curr += 1;
+                    }
+                    break;
                 } else {
-                    curr += 1;
-                    prev += 1;
+                    if self.hover_nodes[curr] == self.prev_hover_nodes[prev] {
+                        curr += 1;
+                        prev += 1;
+                    } else if self.hover_nodes[curr] < self.prev_hover_nodes[prev] {
+                        mouse_enter_nodes.push(self.hover_nodes[curr]);
+                        curr += 1;
+                    } else {
+                        mouse_leave_nodes.push(self.prev_hover_nodes[prev]);
+                        prev += 1;
+                    }
                 }
             }
 
@@ -291,6 +306,7 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
             self.update_phase(phase);
         }
     }
+
     pub fn key_down(&mut self, state: &mut S, event: KeyEvent) -> bool {
         self.key_event(state, event, On::KeyDown)
     }
@@ -299,7 +315,7 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
         self.key_event(state, event, On::KeyUp);
     }
 
-    pub fn key_event(&mut self, state: &mut S, event: KeyEvent, event_type: On) -> bool {
+    fn key_event(&mut self, state: &mut S, event: KeyEvent, event_type: On) -> bool {
         if let Some(tree) = &mut self.tree_cache {
             let tree = tree.borrow_mut();
 
