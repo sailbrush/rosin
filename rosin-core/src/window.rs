@@ -242,34 +242,27 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
             let mut curr: usize = 0;
             let mut prev: usize = 0;
 
-            // Compare hovered nodes with previous frame in a single pass
-            // TODO: Perhaps there is a way to simplify this?
+            // Compare hovered nodes with previous frame
             // NOTE: Assumes the vecs are sorted ascending
-            while curr < self.hover_nodes.len() || prev < self.prev_hover_nodes.len() {
-                if curr >= self.hover_nodes.len() {
-                    while prev < self.prev_hover_nodes.len() {
-                        mouse_leave_nodes.push(self.prev_hover_nodes[prev]);
-                        prev += 1;
-                    }
-                    break;
-                } else if prev >= self.prev_hover_nodes.len() {
-                    while curr < self.hover_nodes.len() {
-                        mouse_enter_nodes.push(self.hover_nodes[curr]);
-                        curr += 1;
-                    }
-                    break;
+            while curr < self.hover_nodes.len() && prev < self.prev_hover_nodes.len() {
+                if self.hover_nodes[curr] < self.prev_hover_nodes[prev] {
+                    mouse_enter_nodes.push(self.hover_nodes[curr]);
+                    curr += 1;
+                } else if self.hover_nodes[curr] > self.prev_hover_nodes[prev] {
+                    mouse_leave_nodes.push(self.prev_hover_nodes[prev]);
+                    prev += 1;
                 } else {
-                    if self.hover_nodes[curr] == self.prev_hover_nodes[prev] {
-                        curr += 1;
-                        prev += 1;
-                    } else if self.hover_nodes[curr] < self.prev_hover_nodes[prev] {
-                        mouse_enter_nodes.push(self.hover_nodes[curr]);
-                        curr += 1;
-                    } else {
-                        mouse_leave_nodes.push(self.prev_hover_nodes[prev]);
-                        prev += 1;
-                    }
+                    curr += 1;
+                    prev += 1;
                 }
+            }
+            while curr < self.hover_nodes.len() {
+                mouse_enter_nodes.push(self.hover_nodes[curr]);
+                curr += 1;
+            }
+            while prev < self.prev_hover_nodes.len() {
+                mouse_leave_nodes.push(self.prev_hover_nodes[prev]);
+                prev += 1;
             }
 
             // Dispatch events
