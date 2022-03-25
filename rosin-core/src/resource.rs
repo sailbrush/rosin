@@ -11,9 +11,7 @@ macro_rules! load_css {
         if cfg!(debug_assertions) {
             $loader.new_dynamic_css(concat!(env!("CARGO_MANIFEST_DIR"), "/", $path)).unwrap()
         } else {
-            $loader
-                .new_static_css(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", $path)))
-                .unwrap()
+            $loader.new_static_css(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", $path)))
         }
     };
 }
@@ -51,40 +49,34 @@ impl ResourceLoader {
             return Ok(id);
         }
 
+        let id = StyleSheetId(NonZeroUsize::new(self.style_sheets.len() + 1).unwrap());
         let text = fs::read_to_string(path)?;
-        let data = Stylesheet::parse(&text);
-
         let resource = Resource {
             path: Some(path),
             last_modified: Some(fs::metadata(&path)?.modified()?),
-            data,
+            data: Stylesheet::parse(&text),
         };
 
-        let id = StyleSheetId(NonZeroUsize::new(self.style_sheets.len() + 1).unwrap());
         self.style_sheets.push(resource);
         self.style_sheet_map.insert(path, id);
-
         Ok(id)
     }
 
-    pub fn new_static_css(&mut self, text: &'static str) -> Result<StyleSheetId, std::io::Error> {
+    pub fn new_static_css(&mut self, text: &'static str) -> StyleSheetId {
         if let Some(&id) = self.style_sheet_map.get(text) {
-            return Ok(id);
+            return id;
         }
 
-        let data = Stylesheet::parse(text);
-
+        let id = StyleSheetId(NonZeroUsize::new(self.style_sheets.len() + 1).unwrap());
         let resource = Resource {
             path: None,
             last_modified: None,
-            data,
+            data: Stylesheet::parse(text),
         };
 
-        let id = StyleSheetId(NonZeroUsize::new(self.style_sheets.len() + 1).unwrap());
         self.style_sheets.push(resource);
         self.style_sheet_map.insert(text, id);
-
-        Ok(id)
+        id
     }
 
     // Reload resources if they've been modified
