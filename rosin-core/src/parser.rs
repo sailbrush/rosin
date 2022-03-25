@@ -6,6 +6,210 @@ use crate::stylesheet::*;
 
 use cssparser::*;
 
+// ---------- Rules Parser ---------- //
+
+pub struct RulesParser;
+
+impl<'i> AtRuleParser<'i> for RulesParser {
+    type PreludeNoBlock = ();
+    type PreludeBlock = ();
+    type AtRule = Rule;
+    type Error = ();
+}
+
+impl<'i> QualifiedRuleParser<'i> for RulesParser {
+    type Prelude = (u32, Vec<Selector>);
+    type QualifiedRule = Rule;
+    type Error = ();
+
+    fn parse_prelude<'t>(&mut self, parser: &mut Parser<'i, 't>) -> Result<Self::Prelude, ParseError<'i, Self::Error>> {
+        let mut specificity = 0;
+        let mut selector_list: Vec<Selector> = Vec::new();
+
+        let mut first = true; // Is this the first identifier?
+        let mut direct = false; // Has the `>` token been seen since last selector?
+        let mut whitespace = false; // Has whitespace been seen since last selector?
+        let mut colon = false; // Was previous token a colon?
+
+        while !parser.is_exhausted() {
+            match parser.next_including_whitespace()? {
+                Token::Delim(c) => {
+                    match c {
+                        '*' => {
+                            if !first && !direct && whitespace {
+                                selector_list.push(Selector::Children);
+                            }
+
+                            selector_list.push(Selector::Wildcard);
+                            whitespace = false;
+                            direct = false;
+                        }
+                        '>' => {
+                            selector_list.push(Selector::DirectChildren);
+                            direct = true;
+                        }
+                        '.' => {}
+                        _ => return Err(parser.new_error_for_next_token()),
+                    }
+                    colon = false;
+                }
+                Token::Ident(s) => {
+                    if !first && !direct && !colon && whitespace {
+                        selector_list.push(Selector::Children);
+                    }
+
+                    if colon {
+                        match_ignore_ascii_case! { &s,
+                            "focus" => selector_list.push(Selector::Focus),
+                            "hover" => selector_list.push(Selector::Hover),
+                            _ => return Err(parser.new_error_for_next_token()),
+                        }
+                    } else {
+                        selector_list.push(Selector::Class(s.to_string()));
+                    }
+
+                    specificity += 10;
+
+                    whitespace = false;
+                    direct = false;
+                    colon = false;
+                }
+                Token::IDHash(s) | Token::Hash(s) => {
+                    if !first && !direct && whitespace {
+                        selector_list.push(Selector::Children);
+                    }
+
+                    selector_list.push(Selector::Id(s.to_string()));
+                    specificity += 100;
+
+                    whitespace = false;
+                    direct = false;
+                    colon = false;
+                }
+                Token::WhiteSpace(_) => {
+                    whitespace = true;
+                    colon = false;
+                }
+                Token::Colon => {
+                    colon = true;
+                }
+                _ => return Err(parser.new_error_for_next_token()),
+            }
+            first = false;
+        }
+        Ok((specificity, selector_list))
+    }
+
+    fn parse_block<'t>(
+        &mut self,
+        prelude: Self::Prelude,
+        _start: &ParserState,
+        parser: &mut Parser<'i, 't>,
+    ) -> Result<Self::QualifiedRule, ParseError<'i, Self::Error>> {
+        let mut property_list = Vec::new();
+
+        for mut property in DeclarationListParser::new(parser, PropertiesParser).flatten() {
+            property_list.append(&mut property);
+        }
+
+        Ok(Rule {
+            specificity: prelude.0,
+            selectors: prelude.1,
+            properties: property_list,
+        })
+    }
+}
+
+// ---------- Properties Parser ---------- //
+
+pub struct PropertiesParser;
+
+impl<'i> AtRuleParser<'i> for PropertiesParser {
+    type PreludeNoBlock = ();
+    type PreludeBlock = ();
+    type AtRule = Vec<Property>;
+    type Error = ();
+}
+
+impl<'i> DeclarationParser<'i> for PropertiesParser {
+    type Declaration = Vec<Property>;
+    type Error = ();
+
+    fn parse_value<'t>(
+        &mut self,
+        name: CowRcStr<'i>,
+        parser: &mut Parser<'i, 't>,
+    ) -> Result<Self::Declaration, ParseError<'i, Self::Error>> {
+        match_ignore_ascii_case! { &name,
+            "align-content" => parse_align_content(parser),
+            "align-items" => parse_align_items(parser),
+            "align-self" => parse_align_self(parser),
+            "background-color" => Ok(vec![Property::BackgroundColor(PropertyValue::Exact(cssparser::Color::parse(parser)?))]),
+            "background-image" => parse_background_image(parser),
+            "border" => parse_border(parser),
+            "border-bottom" => parse_border_bottom(parser),
+            "border-bottom-color" => Ok(vec![Property::BorderBottomColor(PropertyValue::Exact(cssparser::Color::parse(parser)?))]),
+            "border-bottom-left-radius" => Ok(vec![Property::BorderBottomLeftRadius(parse_length(parser)?)]),
+            "border-bottom-right-radius" => Ok(vec![Property::BorderBottomRightRadius(parse_length(parser)?)]),
+            "border-bottom-width" => Ok(vec![Property::BorderBottomWidth(parse_length(parser)?)]),
+            "border-color" => parse_border_color(parser),
+            "border-left" => parse_border_left(parser),
+            "border-left-color" => Ok(vec![Property::BorderLeftColor(PropertyValue::Exact(cssparser::Color::parse(parser)?))]),
+            "border-left-width" => Ok(vec![Property::BorderLeftWidth(parse_length(parser)?)]),
+            "border-radius" => parse_border_radius(parser),
+            "border-right" => parse_border_right(parser),
+            "border-right-color" => Ok(vec![Property::BorderRightColor(PropertyValue::Exact(cssparser::Color::parse(parser)?))]),
+            "border-right-width" => Ok(vec![Property::BorderRightWidth(parse_length(parser)?)]),
+            "border-top" => parse_border_top(parser),
+            "border-top-color" => Ok(vec![Property::BorderTopColor(PropertyValue::Exact(cssparser::Color::parse(parser)?))]),
+            "border-top-left-radius" => Ok(vec![Property::BorderTopLeftRadius(parse_length(parser)?)]),
+            "border-top-right-radius" => Ok(vec![Property::BorderTopRightRadius(parse_length(parser)?)]),
+            "border-top-width" => Ok(vec![Property::BorderTopWidth(parse_length(parser)?)]),
+            "border-width" => parse_border_width(parser),
+            "bottom" => Ok(vec![Property::Bottom(parse_length(parser)?)]),
+            "box-shadow" => todo!(),
+            "color" => Ok(vec![Property::Color(PropertyValue::Exact(cssparser::Color::parse(parser)?))]),
+            "cursor" => parse_cursor(parser),
+            "flex" => parse_flex(parser),
+            "flex-basis" => Ok(vec![Property::FlexBasis(parse_length(parser)?)]),
+            "flex-direction" => parse_flex_direction(parser),
+            "flex-flow" => parse_flex_flow(parser),
+            "flex-grow" => Ok(vec![Property::FlexGrow(parse_f32(parser)?)]),
+            "flex-shrink" => Ok(vec![Property::FlexShrink(parse_f32(parser)?)]),
+            "flex-wrap" => parse_flex_wrap(parser),
+            "font" => todo!(),
+            "font-family" => parse_font_family(parser),
+            "font-size" => Ok(vec![Property::FontSize(parse_length(parser)?)]),
+            "font-weight" => Ok(vec![Property::FontWeight(parse_u32(parser)?)]),
+            "height" => Ok(vec![Property::Height(parse_length(parser)?)]),
+            "justify-content" => parse_justify_content(parser),
+            "left" => Ok(vec![Property::Left(parse_length(parser)?)]),
+            "margin" => parse_margin(parser),
+            "margin-bottom" => Ok(vec![Property::MarginBottom(parse_length(parser)?)]),
+            "margin-left" => Ok(vec![Property::MarginLeft(parse_length(parser)?)]),
+            "margin-right" => Ok(vec![Property::MarginRight(parse_length(parser)?)]),
+            "margin-top" => Ok(vec![Property::MarginTop(parse_length(parser)?)]),
+            "max-height" => Ok(vec![Property::MaxHeight(parse_length(parser)?)]),
+            "max-width" => Ok(vec![Property::MaxWidth(parse_length(parser)?)]),
+            "min-height" => Ok(vec![Property::MinHeight(parse_length(parser)?)]),
+            "min-width" => Ok(vec![Property::MinWidth(parse_length(parser)?)]),
+            "opacity" => Ok(vec![Property::Opacity(parse_f32(parser)?)]),
+            "order" => Ok(vec![Property::Order(parse_i32(parser)?)]),
+            "padding" => parse_padding(parser),
+            "padding-bottom" => Ok(vec![Property::PaddingBottom(parse_length(parser)?)]),
+            "padding-left" => Ok(vec![Property::PaddingLeft(parse_length(parser)?)]),
+            "padding-right" => Ok(vec![Property::PaddingRight(parse_length(parser)?)]),
+            "padding-top" => Ok(vec![Property::PaddingTop(parse_length(parser)?)]),
+            "position" => parse_position(parser),
+            "right" => Ok(vec![Property::Right(parse_length(parser)?)]),
+            "top" => Ok(vec![Property::Top(parse_length(parser)?)]),
+            "width" => Ok(vec![Property::Width(parse_length(parser)?)]),
+            "z-index" => Ok(vec![Property::ZIndex(parse_i32(parser)?)]),
+            _ => Err(parser.new_error_for_next_token()),
+        }
+    }
+}
+
 // ---------- Parse Helper Funcitons ---------- //
 
 fn parse_i32<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<PropertyValue<i32>, cssparser::ParseError<'i, ()>> {
@@ -758,197 +962,5 @@ fn parse_position<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>, 
             _ => return Err(parser.new_error_for_next_token()),
         })]),
         _ => return Err(parser.new_error_for_next_token()),
-    }
-}
-
-// ---------- Rules Parser ---------- //
-
-pub struct RulesParser;
-
-impl<'i> AtRuleParser<'i> for RulesParser {
-    type PreludeNoBlock = ();
-    type PreludeBlock = ();
-    type AtRule = Rule;
-    type Error = ();
-}
-
-impl<'i> QualifiedRuleParser<'i> for RulesParser {
-    type Prelude = (u32, Vec<Selector>);
-    type QualifiedRule = Rule;
-    type Error = ();
-
-    fn parse_prelude<'t>(&mut self, parser: &mut Parser<'i, 't>) -> Result<Self::Prelude, ParseError<'i, Self::Error>> {
-        let mut specificity = 0;
-        let mut selector_list: Vec<Selector> = Vec::new();
-
-        let mut first = true; // Is this the first identifier?
-        let mut direct = false; // Has the `>` token been seen since last selector?
-        let mut whitespace = false; // Has whitespace been seen since last selector?
-
-        while !parser.is_exhausted() {
-            match parser.next_including_whitespace()? {
-                Token::Delim(c) => {
-                    match c {
-                        '*' => {
-                            if !first && !direct && whitespace {
-                                selector_list.push(Selector::Children);
-                            }
-
-                            selector_list.push(Selector::Wildcard);
-                            whitespace = false;
-                            direct = false;
-                        }
-                        '>' => {
-                            selector_list.push(Selector::DirectChildren);
-                            direct = true;
-                        }
-                        '.' => {}
-                        _ => {
-                            // TODO unexpected delim error? Or just ignore rule...
-                        }
-                    }
-                }
-                Token::Ident(s) => {
-                    if !first && !direct && whitespace {
-                        selector_list.push(Selector::Children);
-                    }
-
-                    selector_list.push(Selector::Class(s.to_string()));
-                    specificity += 10;
-
-                    whitespace = false;
-                    direct = false;
-                }
-                Token::IDHash(s) | Token::Hash(s) => {
-                    if !first && !direct && whitespace {
-                        selector_list.push(Selector::Children);
-                    }
-
-                    selector_list.push(Selector::Id(s.to_string()));
-                    specificity += 100;
-
-                    whitespace = false;
-                    direct = false;
-                }
-                Token::WhiteSpace(_) => {
-                    whitespace = true;
-                }
-                _ => {
-                    // TODO unexpected token error
-                    return Err(parser.new_error_for_next_token());
-                }
-            }
-            first = false;
-        }
-        Ok((specificity, selector_list))
-    }
-
-    fn parse_block<'t>(
-        &mut self,
-        prelude: Self::Prelude,
-        _start: &ParserState,
-        parser: &mut Parser<'i, 't>,
-    ) -> Result<Self::QualifiedRule, ParseError<'i, Self::Error>> {
-        let mut property_list = Vec::new();
-
-        for mut property in DeclarationListParser::new(parser, PropertiesParser).flatten() {
-            property_list.append(&mut property);
-        }
-
-        Ok(Rule {
-            specificity: prelude.0,
-            selectors: prelude.1,
-            properties: property_list,
-        })
-    }
-}
-
-// ---------- Properties Parser ---------- //
-
-pub struct PropertiesParser;
-
-impl<'i> AtRuleParser<'i> for PropertiesParser {
-    type PreludeNoBlock = ();
-    type PreludeBlock = ();
-    type AtRule = Vec<Property>;
-    type Error = ();
-}
-
-impl<'i> DeclarationParser<'i> for PropertiesParser {
-    type Declaration = Vec<Property>;
-    type Error = ();
-
-    fn parse_value<'t>(
-        &mut self,
-        name: CowRcStr<'i>,
-        parser: &mut Parser<'i, 't>,
-    ) -> Result<Self::Declaration, ParseError<'i, Self::Error>> {
-        match_ignore_ascii_case! { &name,
-            "align-content" => parse_align_content(parser),
-            "align-items" => parse_align_items(parser),
-            "align-self" => parse_align_self(parser),
-            "background-color" => Ok(vec![Property::BackgroundColor(PropertyValue::Exact(cssparser::Color::parse(parser)?))]),
-            "background-image" => parse_background_image(parser),
-            "border" => parse_border(parser),
-            "border-bottom" => parse_border_bottom(parser),
-            "border-bottom-color" => Ok(vec![Property::BorderBottomColor(PropertyValue::Exact(cssparser::Color::parse(parser)?))]),
-            "border-bottom-left-radius" => Ok(vec![Property::BorderBottomLeftRadius(parse_length(parser)?)]),
-            "border-bottom-right-radius" => Ok(vec![Property::BorderBottomRightRadius(parse_length(parser)?)]),
-            "border-bottom-width" => Ok(vec![Property::BorderBottomWidth(parse_length(parser)?)]),
-            "border-color" => parse_border_color(parser),
-            "border-left" => parse_border_left(parser),
-            "border-left-color" => Ok(vec![Property::BorderLeftColor(PropertyValue::Exact(cssparser::Color::parse(parser)?))]),
-            "border-left-width" => Ok(vec![Property::BorderLeftWidth(parse_length(parser)?)]),
-            "border-radius" => parse_border_radius(parser),
-            "border-right" => parse_border_right(parser),
-            "border-right-color" => Ok(vec![Property::BorderRightColor(PropertyValue::Exact(cssparser::Color::parse(parser)?))]),
-            "border-right-width" => Ok(vec![Property::BorderRightWidth(parse_length(parser)?)]),
-            "border-top" => parse_border_top(parser),
-            "border-top-color" => Ok(vec![Property::BorderTopColor(PropertyValue::Exact(cssparser::Color::parse(parser)?))]),
-            "border-top-left-radius" => Ok(vec![Property::BorderTopLeftRadius(parse_length(parser)?)]),
-            "border-top-right-radius" => Ok(vec![Property::BorderTopRightRadius(parse_length(parser)?)]),
-            "border-top-width" => Ok(vec![Property::BorderTopWidth(parse_length(parser)?)]),
-            "border-width" => parse_border_width(parser),
-            "bottom" => Ok(vec![Property::Bottom(parse_length(parser)?)]),
-            "box-shadow" => todo!(),
-            "color" => Ok(vec![Property::Color(PropertyValue::Exact(cssparser::Color::parse(parser)?))]),
-            "cursor" => parse_cursor(parser),
-            "flex" => parse_flex(parser),
-            "flex-basis" => Ok(vec![Property::FlexBasis(parse_length(parser)?)]),
-            "flex-direction" => parse_flex_direction(parser),
-            "flex-flow" => parse_flex_flow(parser),
-            "flex-grow" => Ok(vec![Property::FlexGrow(parse_f32(parser)?)]),
-            "flex-shrink" => Ok(vec![Property::FlexShrink(parse_f32(parser)?)]),
-            "flex-wrap" => parse_flex_wrap(parser),
-            "font" => todo!(),
-            "font-family" => parse_font_family(parser),
-            "font-size" => Ok(vec![Property::FontSize(parse_length(parser)?)]),
-            "font-weight" => Ok(vec![Property::FontWeight(parse_u32(parser)?)]),
-            "height" => Ok(vec![Property::Height(parse_length(parser)?)]),
-            "justify-content" => parse_justify_content(parser),
-            "left" => Ok(vec![Property::Left(parse_length(parser)?)]),
-            "margin" => parse_margin(parser),
-            "margin-bottom" => Ok(vec![Property::MarginBottom(parse_length(parser)?)]),
-            "margin-left" => Ok(vec![Property::MarginLeft(parse_length(parser)?)]),
-            "margin-right" => Ok(vec![Property::MarginRight(parse_length(parser)?)]),
-            "margin-top" => Ok(vec![Property::MarginTop(parse_length(parser)?)]),
-            "max-height" => Ok(vec![Property::MaxHeight(parse_length(parser)?)]),
-            "max-width" => Ok(vec![Property::MaxWidth(parse_length(parser)?)]),
-            "min-height" => Ok(vec![Property::MinHeight(parse_length(parser)?)]),
-            "min-width" => Ok(vec![Property::MinWidth(parse_length(parser)?)]),
-            "opacity" => Ok(vec![Property::Opacity(parse_f32(parser)?)]),
-            "order" => Ok(vec![Property::Order(parse_i32(parser)?)]),
-            "padding" => parse_padding(parser),
-            "padding-bottom" => Ok(vec![Property::PaddingBottom(parse_length(parser)?)]),
-            "padding-left" => Ok(vec![Property::PaddingLeft(parse_length(parser)?)]),
-            "padding-right" => Ok(vec![Property::PaddingRight(parse_length(parser)?)]),
-            "padding-top" => Ok(vec![Property::PaddingTop(parse_length(parser)?)]),
-            "position" => parse_position(parser),
-            "right" => Ok(vec![Property::Right(parse_length(parser)?)]),
-            "top" => Ok(vec![Property::Top(parse_length(parser)?)]),
-            "width" => Ok(vec![Property::Width(parse_length(parser)?)]),
-            "z-index" => Ok(vec![Property::ZIndex(parse_i32(parser)?)]),
-            _ => Err(parser.new_error_for_next_token()),
-        }
     }
 }

@@ -31,11 +31,12 @@ pub enum Selector {
 
     // Represents a `>` selector relationship
     DirectChildren,
-    // TODO - Represents a `:hover` selector
-    //Hover,
 
-    // TODO - Represents a `:focus` selector
-    //Focus,
+    // Represents a `:hover` selector
+    Hover,
+
+    // Represents a `:focus` selector
+    Focus,
 }
 
 impl Selector {
@@ -140,7 +141,7 @@ impl Stylesheet {
     }
 }
 
-// Perform selector matching and apply styles to a tree
+// Perform selector matching and apply styles to a tree, ignoring hover/focus
 pub(crate) fn apply_styles<S, H>(temp: &Bump, tree: &mut [ArrayNode<S, H>], rl: Arc<Mutex<ResourceLoader>>) {
     for id in 0..tree.len() {
         // TODO - benchmark hash map
@@ -191,6 +192,10 @@ pub(crate) fn apply_styles<S, H>(temp: &Bump, tree: &mut [ArrayNode<S, H>], rl: 
                                     Selector::Children => {
                                         direct = false;
                                         break; // Next selector
+                                    }
+                                    Selector::Hover | Selector::Focus => {
+                                        // Hover and Focus styles aren't applied in this step
+                                        return false;
                                     }
                                 }
                             }

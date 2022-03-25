@@ -490,7 +490,7 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
         let mut default_styles: BumpVec<(usize, Style)> = BumpVec::new_in(&self.temp);
         if self.phase != Phase::Idle {
             for (id, node) in tree.iter_mut().enumerate() {
-                // TODO - hit test, apply hover/focus styles
+                // TODO - apply hover/focus styles using prev_hover_nodes/keys
                 //      - set phase to layout if needed
 
                 if let Some(style_callback) = &mut node.style_callback {
