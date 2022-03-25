@@ -236,7 +236,7 @@ fn parse_border_bottom<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Proper
                 } else {
                     return Err(parser.new_error_for_next_token());
                 }
-            },
+            }
             Token::Ident(s) => match_ignore_ascii_case! { s,
                 "initial" => result.push(Property::BorderBottomColor(PropertyValue::Initial)),
                 "inherit" => result.push(Property::BorderBottomColor(PropertyValue::Inherit)),
@@ -277,25 +277,25 @@ fn parse_border_color<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Propert
             result.push(Property::BorderRightColor(colors[0]));
             result.push(Property::BorderBottomColor(colors[0]));
             result.push(Property::BorderLeftColor(colors[0]));
-        },
+        }
         2 => {
             result.push(Property::BorderTopColor(colors[0]));
             result.push(Property::BorderRightColor(colors[1]));
             result.push(Property::BorderBottomColor(colors[0]));
             result.push(Property::BorderLeftColor(colors[1]));
-        },
+        }
         3 => {
             result.push(Property::BorderTopColor(colors[0]));
             result.push(Property::BorderRightColor(colors[1]));
             result.push(Property::BorderBottomColor(colors[2]));
             result.push(Property::BorderLeftColor(colors[1]));
-        },
+        }
         4 => {
             result.push(Property::BorderTopColor(colors[0]));
             result.push(Property::BorderRightColor(colors[1]));
             result.push(Property::BorderBottomColor(colors[2]));
             result.push(Property::BorderLeftColor(colors[3]));
-        },
+        }
         _ => return Err(parser.new_error_for_next_token()),
     }
 
@@ -314,7 +314,7 @@ fn parse_border_left<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property
                 } else {
                     return Err(parser.new_error_for_next_token());
                 }
-            },
+            }
             Token::Ident(s) => match_ignore_ascii_case! { s,
                 "initial" => result.push(Property::BorderLeftColor(PropertyValue::Initial)),
                 "inherit" => result.push(Property::BorderLeftColor(PropertyValue::Inherit)),
@@ -342,7 +342,7 @@ fn parse_border_right<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Propert
                 } else {
                     return Err(parser.new_error_for_next_token());
                 }
-            },
+            }
             Token::Ident(s) => match_ignore_ascii_case! { s,
                 "initial" => result.push(Property::BorderRightColor(PropertyValue::Initial)),
                 "inherit" => result.push(Property::BorderRightColor(PropertyValue::Inherit)),
@@ -370,7 +370,7 @@ fn parse_border_top<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>
                 } else {
                     return Err(parser.new_error_for_next_token());
                 }
-            },
+            }
             Token::Ident(s) => match_ignore_ascii_case! { s,
                 "initial" => result.push(Property::BorderTopColor(PropertyValue::Initial)),
                 "inherit" => result.push(Property::BorderTopColor(PropertyValue::Inherit)),
@@ -532,13 +532,11 @@ fn parse_flex<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>, cssp
     while !parser.is_exhausted() {
         let token = parser.next()?;
         match token {
-            Token::Number { value, .. } => {
-                match result.len() {
-                    0 => result.push(Property::FlexGrow(PropertyValue::Exact(*value))),
-                    1 => result.push(Property::FlexShrink(PropertyValue::Exact(*value))),
-                    2 => result.push(Property::FlexBasis(PropertyValue::Exact(Length::Px(*value)))),
-                    _ => return Err(parser.new_error_for_next_token()),
-                }
+            Token::Number { value, .. } => match result.len() {
+                0 => result.push(Property::FlexGrow(PropertyValue::Exact(*value))),
+                1 => result.push(Property::FlexShrink(PropertyValue::Exact(*value))),
+                2 => result.push(Property::FlexBasis(PropertyValue::Exact(Length::Px(*value)))),
+                _ => return Err(parser.new_error_for_next_token()),
             },
             Token::Dimension { unit, value, .. } => {
                 if result.len() == 2 {
@@ -549,7 +547,7 @@ fn parse_flex<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>, cssp
                 } else {
                     return Err(parser.new_error_for_next_token());
                 }
-            },
+            }
             Token::Ident(s) => match_ignore_ascii_case! { s,
                 "auto" => {
                     result.push(Property::FlexGrow(PropertyValue::Exact(1.0)));
