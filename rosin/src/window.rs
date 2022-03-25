@@ -156,11 +156,11 @@ impl<S> WinHandler for Window<S> {
 
     fn rebuild_resources(&mut self) {}
 
-    fn command(&mut self, id: u32) {}
+    fn command(&mut self, _id: u32) {}
 
-    fn save_as(&mut self, token: FileDialogToken, file: Option<FileInfo>) {}
+    fn save_as(&mut self, _token: FileDialogToken, _file: Option<FileInfo>) {}
 
-    fn open_file(&mut self, token: FileDialogToken, file: Option<FileInfo>) {}
+    fn open_file(&mut self, _token: FileDialogToken, _file: Option<FileInfo>) {}
 
     fn key_down(&mut self, event: KeyEvent) -> bool {
         let mut state = self.state.borrow_mut();
@@ -189,7 +189,7 @@ impl<S> WinHandler for Window<S> {
         }
     }
 
-    fn zoom(&mut self, delta: f64) {}
+    fn zoom(&mut self, _delta: f64) {}
 
     fn mouse_move(&mut self, event: &MouseEvent) {
         self.handle.set_cursor(&Cursor::Arrow);
@@ -227,7 +227,7 @@ impl<S> WinHandler for Window<S> {
         }
     }
 
-    fn timer(&mut self, token: TimerToken) {}
+    fn timer(&mut self, _token: TimerToken) {}
 
     fn got_focus(&mut self) {
         let mut state = self.state.borrow_mut();
