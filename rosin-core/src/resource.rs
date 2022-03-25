@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use std::{collections::HashMap, error::Error, fs, num::NonZeroUsize, time::SystemTime};
+use std::{collections::HashMap, fs, num::NonZeroUsize, time::SystemTime};
 
 use crate::stylesheet::Stylesheet;
 
