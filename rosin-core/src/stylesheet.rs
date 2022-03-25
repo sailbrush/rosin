@@ -141,7 +141,7 @@ impl Stylesheet {
 }
 
 // Perform selector matching and apply styles to a tree
-pub(crate) fn apply_style<S, H>(temp: &Bump, tree: &mut [ArrayNode<S, H>], rl: Arc<Mutex<ResourceLoader>>) {
+pub(crate) fn apply_styles<S, H>(temp: &Bump, tree: &mut [ArrayNode<S, H>], rl: Arc<Mutex<ResourceLoader>>) {
     for id in 0..tree.len() {
         // TODO - benchmark hash map
         let rl = rl.lock().unwrap();

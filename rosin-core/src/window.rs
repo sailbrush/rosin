@@ -459,7 +459,7 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
         let mut anim_phase = Phase::Idle;
         self.anim_tasks.borrow_mut().retain(|task| {
             let (phase, stop) = task(state, dt);
-            anim_phase = anim_phase.max(phase);
+            anim_phase.update(phase);
             stop == ShouldStop::No
         });
         self.update_phase(anim_phase);
@@ -480,7 +480,7 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
             // Panic if the view function didn't return the number of nodes we expected
             assert!(alloc.get_counter() == tree.borrow().len(), "[Rosin] Nodes missing");
 
-            stylesheet::apply_style(&self.temp, tree.borrow_mut(), self.resource_loader.clone());
+            stylesheet::apply_styles(&self.temp, tree.borrow_mut(), self.resource_loader.clone());
             self.tree_cache = Some(tree);
         }
 
