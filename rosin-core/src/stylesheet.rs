@@ -82,15 +82,18 @@ pub(crate) struct Stylesheet {
     pub path: Option<&'static str>,
     pub last_modified: Option<SystemTime>,
     pub rules: Vec<Rule>,
+    pub dynamic_rules: Vec<Rule>,
 }
 
 #[doc(hidden)]
 impl Stylesheet {
     pub fn new_static(text: &'static str) -> Self {
+        let (rules, dynamic_rules) = Self::parse(text);
         Self {
             path: None,
             last_modified: None,
-            rules: Self::parse(text),
+            rules,
+            dynamic_rules,
         }
     }
 
@@ -99,21 +102,27 @@ impl Stylesheet {
             path: Some(path),
             last_modified: None,
             rules: Vec::new(),
+            dynamic_rules: Vec::new(),
         };
         new.poll().expect("[Rosin] Failed to load stylesheet.");
         new
     }
 
     // Parse CSS text into rule list
-    pub fn parse(text: &str) -> Vec<Rule> {
+    pub fn parse(text: &str) -> (Vec<Rule>, Vec<Rule>) {
         let mut input = ParserInput::new(text);
         let mut parser = Parser::new(&mut input);
-        let mut rules_list = Vec::new();
+        let mut rules = Vec::new();
+        let mut dynamic_rules = Vec::new();
 
-        for rule in RuleListParser::new_for_stylesheet(&mut parser, RulesParser).flatten() {
-            rules_list.push(rule);
+        for (dynamic, rule) in RuleListParser::new_for_stylesheet(&mut parser, RulesParser).flatten() {
+            if dynamic {
+                dynamic_rules.push(rule);
+            } else {
+                rules.push(rule);
+            }
         }
-        rules_list
+        (rules, dynamic_rules)
     }
 
     // Reload stylesheet if it changed on disk
@@ -131,7 +140,7 @@ impl Stylesheet {
             if reload {
                 self.last_modified = Some(last_modified);
                 let contents = fs::read_to_string(path)?;
-                self.rules = Self::parse(&contents);
+                (self.rules, self.dynamic_rules) = Self::parse(&contents);
             }
 
             Ok(reload)

@@ -13,17 +13,18 @@ pub struct RulesParser;
 impl<'i> AtRuleParser<'i> for RulesParser {
     type PreludeNoBlock = ();
     type PreludeBlock = ();
-    type AtRule = Rule;
+    type AtRule = (bool, Rule);
     type Error = ();
 }
 
 impl<'i> QualifiedRuleParser<'i> for RulesParser {
-    type Prelude = (u32, Vec<Selector>);
-    type QualifiedRule = Rule;
+    type Prelude = (bool, u32, Vec<Selector>);
+    type QualifiedRule = (bool, Rule);
     type Error = ();
 
     fn parse_prelude<'t>(&mut self, parser: &mut Parser<'i, 't>) -> Result<Self::Prelude, ParseError<'i, Self::Error>> {
         let mut specificity = 0;
+        let mut dynamic = false; // Does this prelude include :hover or :focus selectors?
         let mut selector_list: Vec<Selector> = Vec::new();
 
         let mut first = true; // Is this the first identifier?
@@ -92,12 +93,13 @@ impl<'i> QualifiedRuleParser<'i> for RulesParser {
                 }
                 Token::Colon => {
                     colon = true;
+                    dynamic = true;
                 }
                 _ => return Err(parser.new_error_for_next_token()),
             }
             first = false;
         }
-        Ok((specificity, selector_list))
+        Ok((dynamic, specificity, selector_list))
     }
 
     fn parse_block<'t>(
@@ -112,11 +114,14 @@ impl<'i> QualifiedRuleParser<'i> for RulesParser {
             property_list.append(&mut property);
         }
 
-        Ok(Rule {
-            specificity: prelude.0,
-            selectors: prelude.1,
-            properties: property_list,
-        })
+        Ok((
+            prelude.0,
+            Rule {
+                specificity: prelude.1,
+                selectors: prelude.2,
+                properties: property_list,
+            },
+        ))
     }
 }
 
