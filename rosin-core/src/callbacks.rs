@@ -154,7 +154,7 @@ impl<F, S> DrawCallback<S> for F where F: 'static + Fn(&S, &mut DrawCtx) {}
 pub trait EventCallback<S, H>: 'static + Fn(&mut S, &mut EventCtx<S, H>) -> Phase {}
 impl<F, S, H> EventCallback<S, H> for F where F: 'static + Fn(&mut S, &mut EventCtx<S, H>) -> Phase {}
 
-/// `Fn(&S, &mut Style)`
+/// `Fn(&mut S, &mut Style)`
 pub trait LayoutCallback<S>: 'static + Fn(&mut S, Size) {}
 impl<F, S> LayoutCallback<S> for F where F: 'static + Fn(&mut S, Size) {}
 
