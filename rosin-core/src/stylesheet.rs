@@ -2,6 +2,7 @@
 
 use crate::parser::*;
 use crate::properties::*;
+use crate::resource::ParseResource;
 use crate::resource::ResourceLoader;
 use crate::style::*;
 use crate::tree::*;
@@ -11,9 +12,9 @@ use bumpalo::collections::Vec as BumpVec;
 use bumpalo::Bump;
 use cssparser::{Parser, ParserInput, RuleListParser};
 
+use std::cmp::Ordering;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::{cmp::Ordering, error::Error, fs, time::SystemTime};
 
 #[derive(Debug, Clone)]
 pub enum Selector {
@@ -79,37 +80,13 @@ impl PartialOrd for Rule {
 
 #[derive(Debug, Default, Clone)]
 pub(crate) struct Stylesheet {
-    pub path: Option<&'static str>,
-    pub last_modified: Option<SystemTime>,
     pub rules: Vec<Rule>,
     pub dynamic_rules: Vec<Rule>,
 }
 
-#[doc(hidden)]
-impl Stylesheet {
-    pub fn new_static(text: &'static str) -> Self {
-        let (rules, dynamic_rules) = Self::parse(text);
-        Self {
-            path: None,
-            last_modified: None,
-            rules,
-            dynamic_rules,
-        }
-    }
-
-    pub fn new_dynamic(path: &'static str) -> Self {
-        let mut new = Self {
-            path: Some(path),
-            last_modified: None,
-            rules: Vec::new(),
-            dynamic_rules: Vec::new(),
-        };
-        new.poll().expect("[Rosin] Failed to load stylesheet.");
-        new
-    }
-
+impl ParseResource for Stylesheet {
     // Parse CSS text into rule list
-    pub fn parse(text: &str) -> (Vec<Rule>, Vec<Rule>) {
+    fn parse(text: &str) -> Self {
         let mut input = ParserInput::new(text);
         let mut parser = Parser::new(&mut input);
         let mut rules = Vec::new();
@@ -122,31 +99,8 @@ impl Stylesheet {
                 rules.push(rule);
             }
         }
-        (rules, dynamic_rules)
-    }
 
-    // Reload stylesheet if it changed on disk
-    pub(crate) fn poll(&mut self) -> Result<bool, Box<dyn Error>> {
-        if let Some(path) = self.path {
-            let mut reload = true;
-            let last_modified = fs::metadata(&path)?.modified()?;
-
-            if let Some(prev_last_modified) = self.last_modified {
-                if last_modified == prev_last_modified {
-                    reload = false;
-                }
-            }
-
-            if reload {
-                self.last_modified = Some(last_modified);
-                let contents = fs::read_to_string(path)?;
-                (self.rules, self.dynamic_rules) = Self::parse(&contents);
-            }
-
-            Ok(reload)
-        } else {
-            Ok(false)
-        }
+        Self { rules, dynamic_rules }
     }
 }
 
