@@ -6,7 +6,7 @@ use crate::stylesheet::*;
 
 use cssparser::*;
 
-// ---------- Rules Parser ---------- //
+// ---------- Rules Parser ----------
 
 pub struct RulesParser;
 
@@ -125,7 +125,7 @@ impl<'i> QualifiedRuleParser<'i> for RulesParser {
     }
 }
 
-// ---------- Properties Parser ---------- //
+// ---------- Properties Parser ----------
 
 pub struct PropertiesParser;
 
@@ -215,7 +215,7 @@ impl<'i> DeclarationParser<'i> for PropertiesParser {
     }
 }
 
-// ---------- Parse Helper Funcitons ---------- //
+// ---------- Parse Helper Funcitons ----------
 
 fn parse_i32<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<PropertyValue<i32>, cssparser::ParseError<'i, ()>> {
     let token = parser.next()?;
@@ -328,7 +328,7 @@ fn parse_quad<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<PropertyValue<L
     Ok(sizes)
 }
 
-// ---------- Property Parsers ---------- //
+// ---------- Property Parsers ----------
 
 fn parse_align_content<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>, cssparser::ParseError<'i, ()>> {
     let token = parser.next()?;
