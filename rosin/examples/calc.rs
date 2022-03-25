@@ -124,32 +124,32 @@ pub fn main_view(state: &State) -> Node<State, WindowHandle> {
     ui!(state.style, "root" [
         "display" (state.display.view())
         "row" [
-            "btn double" (button("Clear", |state: &mut State, _| { state.press(Btn::Clear) }))
-            "btn"        (button("±", |state: &mut State, _| { state.press(Btn::Sign) }))
-            "btn orange" (button("÷", |state: &mut State, _| { state.press(Btn::Op(Op::Div)) }))
+            "btn double" (button("Clear", |s: &mut State, _| { s.press(Btn::Clear) }))
+            "btn"        (button("±", |s: &mut State, _| { s.press(Btn::Sign) }))
+            "btn orange" (button("÷", |s: &mut State, _| { s.press(Btn::Op(Op::Div)) }))
         ]
         "row" [
-            "btn"        (button("7", |state: &mut State, _| { state.press(Btn::Digit(7)) }))
-            "btn"        (button("8", |state: &mut State, _| { state.press(Btn::Digit(8)) }))
-            "btn"        (button("9", |state: &mut State, _| { state.press(Btn::Digit(9)) }))
-            "btn orange" (button("×", |state: &mut State, _| { state.press(Btn::Op(Op::Mul)) }))
+            "btn"        (button("7", |s: &mut State, _| { s.press(Btn::Digit(7)) }))
+            "btn"        (button("8", |s: &mut State, _| { s.press(Btn::Digit(8)) }))
+            "btn"        (button("9", |s: &mut State, _| { s.press(Btn::Digit(9)) }))
+            "btn orange" (button("×", |s: &mut State, _| { s.press(Btn::Op(Op::Mul)) }))
         ]
         "row" [
-            "btn"        (button("4", |state: &mut State, _| { state.press(Btn::Digit(4)) }))
-            "btn"        (button("5", |state: &mut State, _| { state.press(Btn::Digit(5)) }))
-            "btn"        (button("6", |state: &mut State, _| { state.press(Btn::Digit(6)) }))
-            "btn orange" (button("−", |state: &mut State, _| { state.press(Btn::Op(Op::Sub)) }))
+            "btn"        (button("4", |s: &mut State, _| { s.press(Btn::Digit(4)) }))
+            "btn"        (button("5", |s: &mut State, _| { s.press(Btn::Digit(5)) }))
+            "btn"        (button("6", |s: &mut State, _| { s.press(Btn::Digit(6)) }))
+            "btn orange" (button("−", |s: &mut State, _| { s.press(Btn::Op(Op::Sub)) }))
         ]
         "row" [
-            "btn"        (button("1", |state: &mut State, _| { state.press(Btn::Digit(1)) }))
-            "btn"        (button("2", |state: &mut State, _| { state.press(Btn::Digit(2)) }))
-            "btn"        (button("3", |state: &mut State, _| { state.press(Btn::Digit(3)) }))
-            "btn orange" (button("+", |state: &mut State, _| { state.press(Btn::Op(Op::Add)) }))
+            "btn"        (button("1", |s: &mut State, _| { s.press(Btn::Digit(1)) }))
+            "btn"        (button("2", |s: &mut State, _| { s.press(Btn::Digit(2)) }))
+            "btn"        (button("3", |s: &mut State, _| { s.press(Btn::Digit(3)) }))
+            "btn orange" (button("+", |s: &mut State, _| { s.press(Btn::Op(Op::Add)) }))
         ]
         "row" [
-            "btn double" (button("0", |state: &mut State, _| { state.press(Btn::Digit(0)) }))
-            "btn"        (button(".", |state: &mut State, _| { state.press(Btn::Decimal) }))
-            "btn orange" (button("=", |state: &mut State, _| { state.press(Btn::Equals) }))
+            "btn double" (button("0", |s: &mut State, _| { s.press(Btn::Digit(0)) }))
+            "btn"        (button(".", |s: &mut State, _| { s.press(Btn::Decimal) }))
+            "btn orange" (button("=", |s: &mut State, _| { s.press(Btn::Equals) }))
         ]
     ])
 }

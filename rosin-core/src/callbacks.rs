@@ -72,16 +72,16 @@ pub enum EventInfo {
 }
 
 impl EventInfo {
-    pub fn unwrap_mouse(self) -> MouseEvent {
-        if let EventInfo::Mouse(mouse_event) = self {
+    pub fn unwrap_mouse(&self) -> MouseEvent {
+        if let EventInfo::Mouse(mouse_event) = self.clone() {
             mouse_event
         } else {
             panic!();
         }
     }
 
-    pub fn unwrap_key(self) -> KeyEvent {
-        if let EventInfo::Key(key_event) = self {
+    pub fn unwrap_key(&self) -> KeyEvent {
+        if let EventInfo::Key(key_event) = self.clone() {
             key_event
         } else {
             panic!();

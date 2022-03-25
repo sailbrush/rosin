@@ -18,14 +18,14 @@ pub fn main_view(state: &State) -> Node<State, WindowHandle> {
                 Phase::Build
             })
             .event(On::KeyDown, |s: &mut State, ctx| {
-                let event = ctx.event_info.clone().unwrap_key();
+                let event = ctx.event_info.unwrap_key();
                 if event.key == KbKey::Backspace {
                     s.lines.pop();
                 }
                 Phase::Build
             })
             .event(On::MouseMove, |s: &mut State, ctx| {
-                let event = ctx.event_info.clone().unwrap_mouse();
+                let event = ctx.event_info.unwrap_mouse();
                 if event.buttons.has_left() {
                     if let Some(line) = s.lines.last_mut() {
                         line.push(event.pos);
