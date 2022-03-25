@@ -4,7 +4,7 @@ use rosin::prelude::*;
 use rosin::widgets::*;
 
 pub struct State {
-    root_sheet: StyleSheetId,
+    style: StyleSheetId,
     display: DynLabel,
     accumulator: f64,
     register: f64,
@@ -121,7 +121,7 @@ impl State {
 
 #[no_mangle]
 pub fn main_view(state: &State) -> Node<State, WindowHandle> {
-    ui!(state.root_sheet, "root" [
+    ui!(state.style, "root" [
         "display" (state.display.view())
         "row" [
             "btn double" (button("Clear", |state: &mut State, _| { state.press(Btn::Clear) }))
@@ -165,7 +165,7 @@ fn main() {
     let mut rl = ResourceLoader::new();
 
     let state = State {
-        root_sheet: load_css!(rl, "examples/calc.css"),
+        style: load_css!(rl, "examples/calc.css"),
         display: DynLabel::new("0"),
         accumulator: 0.0,
         register: 0.0,

@@ -603,8 +603,7 @@ fn parse_flex_flow<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>,
     let mut result = Vec::new();
 
     while !parser.is_exhausted() {
-        // TODO
-        /*let token = parser.next()?;
+        let token = parser.next()?;
         match token {
             Token::Ident(s) => match_ignore_ascii_case! { s,
                 "initial" => {
@@ -615,18 +614,19 @@ fn parse_flex_flow<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>,
                     result.push(Property::FlexDirection(PropertyValue::Inherit));
                     result.push(Property::FlexWrap(PropertyValue::Inherit));
                 },
-                _ => {
-                    if let Ok(value) = FlexDirection::from_css_token(s) {
-                        result.push(Property::FlexDirection(PropertyValue::Exact(value)));
-                    } else if let Ok(value) = FlexWrap::from_css_token(s) {
-                        result.push(Property::FlexWrap(PropertyValue::Exact(value)));
-                    } else {
-                        return Err(parser.new_error_for_next_token())
-                    }
-                },
+                // Flex Direction
+                "row" => result.push(Property::FlexDirection(PropertyValue::Exact(FlexDirection::Row))),
+                "row-reverse" => result.push(Property::FlexDirection(PropertyValue::Exact(FlexDirection::RowReverse))),
+                "column" => result.push(Property::FlexDirection(PropertyValue::Exact(FlexDirection::Column))),
+                "column-reverse" => result.push(Property::FlexDirection(PropertyValue::Exact(FlexDirection::ColumnReverse))),
+                // Flex Wrap
+                "no-wrap" => result.push(Property::FlexWrap(PropertyValue::Exact(FlexWrap::NoWrap))),
+                "wrap" => result.push(Property::FlexWrap(PropertyValue::Exact(FlexWrap::Wrap))),
+                "wrap-reverse" => result.push(Property::FlexWrap(PropertyValue::Exact(FlexWrap::WrapReverse))),
+                _ => return Err(parser.new_error_for_next_token()),
             },
             _ => return Err(parser.new_error_for_next_token()),
-        }*/
+        }
     }
 
     Ok(result)

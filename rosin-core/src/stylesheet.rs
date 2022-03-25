@@ -2,11 +2,17 @@
 
 use crate::parser::*;
 use crate::properties::*;
+use crate::resource::ResourceLoader;
 use crate::style::*;
 use crate::tree::*;
 
+use bumpalo::collections::CollectIn;
+use bumpalo::collections::Vec as BumpVec;
+use bumpalo::Bump;
 use cssparser::{Parser, ParserInput, RuleListParser};
 
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::{cmp::Ordering, error::Error, fs, time::SystemTime};
 
 #[derive(Debug, Clone)]
@@ -132,172 +138,173 @@ impl Stylesheet {
             Ok(false)
         }
     }
+}
 
-    // Perform selector matching and apply styles to a tree
-    pub(crate) fn apply_style<S, H>(&self, tree: &mut [ArrayNode<S, H>]) {
-        for id in 0..tree.len() {
-            // TODO - benchmark hash map
-            // TODO - use temp bump alloc instead of Vec
-            let mut relevant_rules = self
-                .rules
-                .iter()
-                .filter(|rule| {
-                    // Find matching rules
-                    // TODO - comment an explanation
-                    let mut direct = false;
-                    let mut cmp_node = Some(id);
-                    for (i, selector) in rule.selectors.iter().rev().enumerate() {
-                        loop {
-                            if let Some(n) = cmp_node {
-                                if i == 0 {
-                                    if !selector.check(&tree[n]) {
-                                        return false;
-                                    } else {
-                                        cmp_node = if n != 0 { Some(tree[n].parent) } else { None };
-                                        break; // Next selector
-                                    }
+// Perform selector matching and apply styles to a tree
+pub(crate) fn apply_style<S, H>(temp: &Bump, tree: &mut [ArrayNode<S, H>], rl: Arc<Mutex<ResourceLoader>>) {
+    for id in 0..tree.len() {
+        // TODO - benchmark hash map
+        let rl = rl.lock().unwrap();
+        let mut relevant_rules = rl
+            .get_sheet(tree[0].style_sheet.unwrap())
+            .rules
+            .iter()
+            .filter(|rule| {
+                // Find matching rules
+                // TODO - comment an explanation
+                let mut direct = false;
+                let mut cmp_node = Some(id);
+                for (i, selector) in rule.selectors.iter().rev().enumerate() {
+                    loop {
+                        if let Some(n) = cmp_node {
+                            if i == 0 {
+                                if !selector.check(&tree[n]) {
+                                    return false;
                                 } else {
-                                    match selector {
-                                        Selector::Wildcard => {
-                                            cmp_node = if n != 0 { Some(tree[n].parent) } else { None };
-                                            direct = false;
-                                            break; // Next selector
-                                        }
-                                        Selector::Id(_) | Selector::Class(_) => {
-                                            cmp_node = if n != 0 { Some(tree[n].parent) } else { None };
-
-                                            if selector.check(&tree[n]) {
-                                                direct = false;
-                                                break; // Next selector
-                                            } else if direct {
-                                                return false; // Must match, but didn't
-                                            }
-
-                                            direct = false;
-                                            continue; // Don't go to the next selector, just move up the tree
-                                        }
-                                        Selector::DirectChildren => {
-                                            direct = true;
-                                            break; // Next selector
-                                        }
-                                        Selector::Children => {
-                                            direct = false;
-                                            break; // Next selector
-                                        }
-                                    }
+                                    cmp_node = if n != 0 { Some(tree[n].parent) } else { None };
+                                    break; // Next selector
                                 }
                             } else {
-                                return false; // Made it to the root unsasitfied
-                            }
-                        }
-                    }
-                    true // All selectors satisfied
-                })
-                .collect::<Vec<&Rule>>();
-
-            let par_style: Option<Style> = if id == 0 { None } else { Some(tree[tree[id].parent].style.clone()) };
-
-            relevant_rules.sort();
-
-            // First find the font size and color (Used for relative lengths and currentColor)
-            let mut font_size_set = false;
-            let mut font_family_set = false;
-            let mut color_set = false;
-            relevant_rules.iter().for_each(|rule| {
-                if font_size_set && font_family_set && color_set {
-                    return;
-                }
-                for property in rule.properties.iter().rev() {
-                    if font_size_set && font_family_set && color_set {
-                        break;
-                    }
-                    match property {
-                        Property::FontSize(value) => {
-                            if font_size_set {
-                                continue;
-                            }
-                            match value {
-                                PropertyValue::Inherit => {
-                                    if let Some(parent) = &par_style {
-                                        tree[id].style.font_size = parent.font_size;
+                                match selector {
+                                    Selector::Wildcard => {
+                                        cmp_node = if n != 0 { Some(tree[n].parent) } else { None };
+                                        direct = false;
+                                        break; // Next selector
                                     }
-                                }
-                                PropertyValue::Exact(size) => match size {
-                                    Length::Px(value) => {
-                                        tree[id].style.font_size = *value;
-                                    }
-                                    Length::Em(value) => {
-                                        if let Some(parent) = &par_style {
-                                            tree[id].style.font_size = parent.font_size * value;
-                                        } else {
-                                            tree[id].style.font_size *= value;
+                                    Selector::Id(_) | Selector::Class(_) => {
+                                        cmp_node = if n != 0 { Some(tree[n].parent) } else { None };
+
+                                        if selector.check(&tree[n]) {
+                                            direct = false;
+                                            break; // Next selector
+                                        } else if direct {
+                                            return false; // Must match, but didn't
                                         }
+
+                                        direct = false;
+                                        continue; // Don't go to the next selector, just move up the tree
                                     }
-                                },
-                                _ => {}
-                            };
-                            font_size_set = true;
+                                    Selector::DirectChildren => {
+                                        direct = true;
+                                        break; // Next selector
+                                    }
+                                    Selector::Children => {
+                                        direct = false;
+                                        break; // Next selector
+                                    }
+                                }
+                            }
+                        } else {
+                            return false; // Made it to the root unsasitfied
                         }
-                        Property::FontFamily(value) => {
-                            if font_family_set {
-                                continue;
-                            }
-                            match value {
-                                PropertyValue::Exact(family) => {
-                                    tree[id].style.font_family = Some(family.clone());
-                                }
-                                _ => {
-                                    // Inherited by default
-                                    if let Some(parent) = &par_style {
-                                        tree[id].style.font_family = parent.font_family.clone();
-                                    }
-                                }
-                            }
-                            font_family_set = true;
-                        }
-                        Property::Color(value) => {
-                            if color_set {
-                                continue;
-                            }
-                            match value {
-                                PropertyValue::Initial => tree[id].style.color = Style::default().color,
-                                PropertyValue::Exact(color) => {
-                                    if let cssparser::Color::RGBA(rgba) = color {
-                                        tree[id].style.color = *rgba;
-                                    }
-                                }
-                                _ => {
-                                    // Inherited by default
-                                    if let Some(parent) = &par_style {
-                                        tree[id].style.color = parent.color;
-                                    }
-                                }
-                            }
-                            color_set = true;
-                        }
-                        _ => {}
                     }
                 }
-            });
-            if !font_size_set {
-                if let Some(parent) = &par_style {
-                    tree[id].style.font_size = parent.font_size;
-                }
-            }
-            if !font_family_set {
-                if let Some(parent) = &par_style {
-                    tree[id].style.font_family = parent.font_family.clone();
-                }
-            }
-            if !color_set {
-                if let Some(parent) = &par_style {
-                    tree[id].style.color = parent.color;
-                }
-            }
+                true // All selectors satisfied
+            })
+            .collect_in::<BumpVec<&Rule>>(temp);
 
-            relevant_rules.iter().for_each(|rule| {
-                apply_properties(&rule.properties, &mut tree[id].style, &par_style);
-            });
+        let par_style: Option<Style> = if id == 0 { None } else { Some(tree[tree[id].parent].style.clone()) };
+
+        relevant_rules.sort();
+
+        // First find the font size and color (Used for relative lengths and currentColor)
+        let mut font_size_set = false;
+        let mut font_family_set = false;
+        let mut color_set = false;
+        relevant_rules.iter().for_each(|rule| {
+            if font_size_set && font_family_set && color_set {
+                return;
+            }
+            for property in rule.properties.iter().rev() {
+                if font_size_set && font_family_set && color_set {
+                    break;
+                }
+                match property {
+                    Property::FontSize(value) => {
+                        if font_size_set {
+                            continue;
+                        }
+                        match value {
+                            PropertyValue::Inherit => {
+                                if let Some(parent) = &par_style {
+                                    tree[id].style.font_size = parent.font_size;
+                                }
+                            }
+                            PropertyValue::Exact(size) => match size {
+                                Length::Px(value) => {
+                                    tree[id].style.font_size = *value;
+                                }
+                                Length::Em(value) => {
+                                    if let Some(parent) = &par_style {
+                                        tree[id].style.font_size = parent.font_size * value;
+                                    } else {
+                                        tree[id].style.font_size *= value;
+                                    }
+                                }
+                            },
+                            _ => {}
+                        };
+                        font_size_set = true;
+                    }
+                    Property::FontFamily(value) => {
+                        if font_family_set {
+                            continue;
+                        }
+                        match value {
+                            PropertyValue::Exact(family) => {
+                                tree[id].style.font_family = Some(family.clone());
+                            }
+                            _ => {
+                                // Inherited by default
+                                if let Some(parent) = &par_style {
+                                    tree[id].style.font_family = parent.font_family.clone();
+                                }
+                            }
+                        }
+                        font_family_set = true;
+                    }
+                    Property::Color(value) => {
+                        if color_set {
+                            continue;
+                        }
+                        match value {
+                            PropertyValue::Initial => tree[id].style.color = Style::default().color,
+                            PropertyValue::Exact(color) => {
+                                if let cssparser::Color::RGBA(rgba) = color {
+                                    tree[id].style.color = *rgba;
+                                }
+                            }
+                            _ => {
+                                // Inherited by default
+                                if let Some(parent) = &par_style {
+                                    tree[id].style.color = parent.color;
+                                }
+                            }
+                        }
+                        color_set = true;
+                    }
+                    _ => {}
+                }
+            }
+        });
+        if !font_size_set {
+            if let Some(parent) = &par_style {
+                tree[id].style.font_size = parent.font_size;
+            }
         }
+        if !font_family_set {
+            if let Some(parent) = &par_style {
+                tree[id].style.font_family = parent.font_family.clone();
+            }
+        }
+        if !color_set {
+            if let Some(parent) = &par_style {
+                tree[id].style.color = parent.color;
+            }
+        }
+
+        relevant_rules.iter().for_each(|rule| {
+            apply_properties(&rule.properties, &mut tree[id].style, &par_style);
+        });
     }
 }

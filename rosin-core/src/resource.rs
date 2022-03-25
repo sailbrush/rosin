@@ -3,7 +3,6 @@
 use std::{error::Error, num::NonZeroUsize};
 
 use crate::stylesheet::Stylesheet;
-use crate::tree::ArrayNode;
 
 /// Load a CSS file. In debug builds, the file will be reloaded when modified.
 #[macro_export]
@@ -55,9 +54,5 @@ impl ResourceLoader {
     pub(crate) fn get_sheet(&self, id: StyleSheetId) -> &Stylesheet {
         let index = usize::from(id.0) - 1;
         &self.style_sheets[index]
-    }
-
-    pub(crate) fn apply_style<S, H>(&self, tree: &mut [ArrayNode<S, H>]) {
-        self.style_sheets[0].apply_style(tree);
     }
 }

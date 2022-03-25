@@ -48,11 +48,11 @@ impl Slider {
 
         ui!([
             .key(self.key)
-            .event(On::MouseDown, move |s: &mut S, ctx: &mut EventCtx<S, H>| {
+            .event(On::MouseDown, move |_, ctx: &mut EventCtx<S, H>| {
                 let this = if let Some(this) = weak1.upgrade() { this } else { return Phase::Idle };
                 let event = ctx.event_info.clone().unwrap_mouse();
                 let offset_x = ctx.offset_x().unwrap();
-                let offset_y = ctx.offset_y().unwrap();
+                let _offset_y = ctx.offset_y().unwrap();
 
                 if event.buttons.has_left() {
                     if this.horizontal.get() {
@@ -64,11 +64,11 @@ impl Slider {
                     Phase::Idle
                 }
             })
-            .event(On::MouseMove, move |s: &mut S, ctx: &mut EventCtx<S, H>| {
+            .event(On::MouseMove, move |_, ctx: &mut EventCtx<S, H>| {
                 let this = if let Some(this) = weak2.upgrade() { this } else { return Phase::Idle };
                 let event = ctx.event_info.clone().unwrap_mouse();
                 let offset_x = ctx.offset_x().unwrap();
-                let offset_y = ctx.offset_y().unwrap();
+                let _offset_y = ctx.offset_y().unwrap();
 
                 if event.buttons.has_left() {
                     if this.horizontal.get() {

@@ -4,11 +4,12 @@ use rosin::prelude::*;
 use rosin::widgets::*;
 
 pub struct State {
-    text: TextBox,
+    style: StyleSheetId,
+    text: Slider,
 }
 
 pub fn main_view(state: &State) -> Node<State, WindowHandle> {
-    ui!("root"["text"(state.text.view())])
+    ui!(state.style, "root"["text"(state.text.view())])
 }
 
 #[rustfmt::skip]
@@ -21,10 +22,9 @@ fn main() {
 
     let mut rl = ResourceLoader::new();
 
-    load_css!(rl, "examples/min.css");
-
     let state = State {
-        text: TextBox::new("Hello World!"),
+        style: load_css!(rl, "examples/min.css"),
+        text: Slider::new(0.0, true),
     };
 
     AppLauncher::new(rl, window)

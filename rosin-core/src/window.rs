@@ -1,7 +1,7 @@
 use crate::alloc::Alloc;
 use crate::geometry::Point;
 use crate::prelude::*;
-use crate::{alloc::Scope, draw, layout, layout::Layout, tree::*};
+use crate::{alloc::Scope, draw, layout, layout::Layout, stylesheet, tree::*};
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -394,7 +394,7 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
         phase
     }
 
-    fn handle_ctx(&mut self, state: &mut S, mut ctx: EventCtx<S, H>) -> Phase {
+    fn handle_ctx(&mut self, state: &mut S, ctx: EventCtx<S, H>) -> Phase {
         let mut phase = Phase::Idle;
 
         if let Some(tree) = &mut self.tree_cache {
@@ -480,7 +480,7 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
             // Panic if the view function didn't return the number of nodes we expected
             assert!(alloc.get_counter() == tree.borrow().len(), "[Rosin] Nodes missing");
 
-            self.resource_loader.lock().unwrap().apply_style(tree.borrow_mut());
+            stylesheet::apply_style(&self.temp, tree.borrow_mut(), self.resource_loader.clone());
             self.tree_cache = Some(tree);
         }
 

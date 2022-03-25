@@ -7,11 +7,12 @@ use rosin::prelude::*;
 use rosin::widgets::*;
 
 pub struct State {
+    style: StyleSheetId,
     lines: Vec<Vec<Point>>,
 }
 
-pub fn main_view(s: &State) -> Node<State, WindowHandle> {
-    ui!("root" [{
+pub fn main_view(state: &State) -> Node<State, WindowHandle> {
+    ui!(state.style, "root" [{
             .event(On::MouseDown, |s: &mut State, _| {
                 s.lines.push(Vec::new());
                 Phase::Build
@@ -46,7 +47,7 @@ pub fn main_view(s: &State) -> Node<State, WindowHandle> {
             })
         }
 
-        if s.lines.len() > 0 {
+        if state.lines.len() > 0 {
             "clear" (button("Clear", |s: &mut State, _| {
                 s.lines = Vec::new();
                 Phase::Draw
@@ -65,9 +66,8 @@ fn main() {
 
     let mut rl = ResourceLoader::new();
 
-    load_css!(rl, "examples/draw.css");
-
     let state = State {
+        style: load_css!(rl, "examples/draw.css"),
         lines: Vec::new(),
     };
 
