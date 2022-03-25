@@ -108,6 +108,11 @@ impl<S, H> Drop for ArrayNode<S, H> {
                 std::ptr::drop_in_place(*cb);
             }
         }
+        if let Some(cb) = &mut self.layout_callback {
+            unsafe {
+                std::ptr::drop_in_place(*cb);
+            }
+        }
         if let Some(cb) = &mut self.draw_callback {
             unsafe {
                 std::ptr::drop_in_place(*cb);
