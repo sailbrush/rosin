@@ -75,7 +75,7 @@ impl TextBox {
                             return Phase::Draw;
                         },
                         KbKey::Enter => {
-                            this.text.borrow_mut().push_str("\n");
+                            this.text.borrow_mut().push('\n');
                             this.changed.replace(true);
                             return Phase::Draw;
                         },

@@ -4,6 +4,7 @@ use crate::prelude::*;
 use crate::{alloc::Scope, draw, layout, layout::Layout, stylesheet, tree::*};
 
 use std::cell::RefCell;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::error::Error;
 use std::rc::Rc;
@@ -234,7 +235,7 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
                         self.prev_hover_nodes.push(id);
                     }
                 }
-                self.prev_hover_nodes.sort();
+                self.prev_hover_nodes.sort_unstable();
             }
 
             let mut mouse_enter_nodes: BumpVec<usize> = BumpVec::new_in(&self.temp);
@@ -246,15 +247,19 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
             // Compare hovered nodes with previous frame
             // NOTE: Assumes the vecs are sorted ascending
             while curr < self.hover_nodes.len() && prev < self.prev_hover_nodes.len() {
-                if self.hover_nodes[curr] < self.prev_hover_nodes[prev] {
-                    mouse_enter_nodes.push(self.hover_nodes[curr]);
-                    curr += 1;
-                } else if self.hover_nodes[curr] > self.prev_hover_nodes[prev] {
-                    mouse_leave_nodes.push(self.prev_hover_nodes[prev]);
-                    prev += 1;
-                } else {
-                    curr += 1;
-                    prev += 1;
+                match self.hover_nodes[curr].cmp(&self.prev_hover_nodes[prev]) {
+                    Ordering::Less => {
+                        mouse_enter_nodes.push(self.hover_nodes[curr]);
+                        curr += 1;
+                    }
+                    Ordering::Greater => {
+                        mouse_leave_nodes.push(self.prev_hover_nodes[prev]);
+                        prev += 1;
+                    }
+                    Ordering::Equal => {
+                        curr += 1;
+                        prev += 1;
+                    }
                 }
             }
             while curr < self.hover_nodes.len() {
@@ -271,19 +276,19 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
 
             for id in mouse_leave_nodes {
                 ctx.style = tree[id].style.clone();
-                ctx.layout = layout[id].clone();
+                ctx.layout = layout[id];
                 phase.update(Self::dispatch_event(On::MouseLeave, state, &mut ctx, tree, id));
             }
 
             for id in mouse_enter_nodes {
                 ctx.style = tree[id].style.clone();
-                ctx.layout = layout[id].clone();
+                ctx.layout = layout[id];
                 phase.update(Self::dispatch_event(On::MouseEnter, state, &mut ctx, tree, id));
             }
 
             for &id in &self.hover_nodes {
                 ctx.style = tree[id].style.clone();
-                ctx.layout = layout[id].clone();
+                ctx.layout = layout[id];
                 phase.update(Self::dispatch_event(event_type, state, &mut ctx, tree, id));
             }
 
@@ -329,7 +334,7 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
 
             if tree[id].has_callback(event_type) {
                 let mut ctx = EventCtx {
-                    event_info: EventInfo::Key(event.clone()),
+                    event_info: EventInfo::Key(event),
                     window_handle: self.handle.clone(),
                     resource_loader: self.resource_loader.clone(),
                     focus: self.focused_node,

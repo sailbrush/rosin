@@ -147,7 +147,7 @@ impl<S, H> ArrayNode<S, H> {
                 return true;
             }
         }
-        return false;
+        false
     }
 }
 

@@ -162,7 +162,7 @@ fn main() {
         .with_title("Rosin Calculator")
         .with_size(400.0, 550.0);
 
-    let mut rl = ResourceLoader::new();
+    let mut rl = ResourceLoader::default();
 
     let state = State {
         style: load_css!(rl, "examples/calc.css"),

@@ -1,5 +1,4 @@
 #![forbid(unsafe_code)]
-#![allow(clippy::cognitive_complexity)]
 
 use crate::geometry::*;
 

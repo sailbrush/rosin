@@ -30,20 +30,13 @@ pub(crate) struct Resource<T: ParseResource> {
     pub data: T,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ResourceLoader {
     style_sheet_map: HashMap<&'static str, StyleSheetId>,
     style_sheets: Vec<Resource<Stylesheet>>,
 }
 
 impl ResourceLoader {
-    pub fn new() -> Self {
-        Self {
-            style_sheet_map: HashMap::new(),
-            style_sheets: Vec::new(),
-        }
-    }
-
     pub fn new_dynamic_css(&mut self, path: &'static str) -> Result<StyleSheetId, std::io::Error> {
         if let Some(&id) = self.style_sheet_map.get(path) {
             return Ok(id);

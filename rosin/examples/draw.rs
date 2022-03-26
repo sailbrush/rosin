@@ -64,7 +64,7 @@ fn main() {
         .with_title("Draw")
         .with_size(500.0, 500.0);
 
-    let mut rl = ResourceLoader::new();
+    let mut rl = ResourceLoader::default();
 
     let state = State {
         style: load_css!(rl, "examples/draw.css"),

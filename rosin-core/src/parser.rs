@@ -60,7 +60,7 @@ impl<'i> QualifiedRuleParser<'i> for RulesParser {
                     }
 
                     if colon {
-                        match_ignore_ascii_case! { &s,
+                        match_ignore_ascii_case! { s,
                             "focus" => selector_list.push(Selector::Focus),
                             "hover" => selector_list.push(Selector::Hover),
                             _ => return Err(parser.new_error_for_next_token()),
@@ -291,7 +291,7 @@ fn parse_length<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<PropertyValue<Len
     }
 }
 
-fn parse_length_token<'i>(token: &Token) -> Option<Length> {
+fn parse_length_token(token: &Token) -> Option<Length> {
     match token {
         Token::Number { value, .. } => Some(Length::Px(*value as f32)),
         Token::Dimension { value, unit, .. } => match unit.as_ref() {

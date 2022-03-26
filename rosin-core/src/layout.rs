@@ -62,7 +62,7 @@ impl Default for Layout {
     }
 }
 
-pub(crate) fn hit_test<'a>(layout: &[Layout], point: Point, result: &mut Vec<usize>) {
+pub(crate) fn hit_test(layout: &[Layout], point: Point, result: &mut Vec<usize>) {
     for (id, node) in layout.iter().enumerate() {
         if node.position.x < point.x
             && node.position.x + node.size.width > point.x
