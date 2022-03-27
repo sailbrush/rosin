@@ -4,7 +4,7 @@ use rosin::prelude::*;
 use rosin::widgets::*;
 
 pub struct State {
-    style: StyleSheetId,
+    style: StylesheetID,
     display: DynLabel,
     accumulator: f64,
     register: f64,

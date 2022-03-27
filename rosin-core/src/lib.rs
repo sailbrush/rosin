@@ -23,7 +23,7 @@ pub mod prelude {
         ViewCallback,
     };
     pub use crate::key::Key;
-    pub use crate::resource::{ResourceLoader, StyleSheetId};
+    pub use crate::resource::{ResourceLoader, StylesheetID};
     pub use crate::style::Style;
     pub use crate::tree::Node;
     pub use crate::window::RosinWindow;

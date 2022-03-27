@@ -21,7 +21,7 @@ pub(crate) trait ParseResource {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct StyleSheetId(NonZeroUsize);
+pub struct StylesheetID(NonZeroUsize);
 
 #[derive(Debug)]
 pub(crate) struct Resource<T: ParseResource> {
@@ -32,17 +32,17 @@ pub(crate) struct Resource<T: ParseResource> {
 
 #[derive(Debug, Default)]
 pub struct ResourceLoader {
-    style_sheet_map: HashMap<&'static str, StyleSheetId>,
+    style_sheet_map: HashMap<&'static str, StylesheetID>,
     style_sheets: Vec<Resource<Stylesheet>>,
 }
 
 impl ResourceLoader {
-    pub fn new_dynamic_css(&mut self, path: &'static str) -> Result<StyleSheetId, std::io::Error> {
+    pub fn new_dynamic_css(&mut self, path: &'static str) -> Result<StylesheetID, std::io::Error> {
         if let Some(&id) = self.style_sheet_map.get(path) {
             return Ok(id);
         }
 
-        let id = StyleSheetId(NonZeroUsize::new(self.style_sheets.len() + 1).unwrap());
+        let id = StylesheetID(NonZeroUsize::new(self.style_sheets.len() + 1).unwrap());
         let text = fs::read_to_string(path)?;
         let resource = Resource {
             path: Some(path),
@@ -55,12 +55,12 @@ impl ResourceLoader {
         Ok(id)
     }
 
-    pub fn new_static_css(&mut self, text: &'static str) -> StyleSheetId {
+    pub fn new_static_css(&mut self, text: &'static str) -> StylesheetID {
         if let Some(&id) = self.style_sheet_map.get(text) {
             return id;
         }
 
-        let id = StyleSheetId(NonZeroUsize::new(self.style_sheets.len() + 1).unwrap());
+        let id = StylesheetID(NonZeroUsize::new(self.style_sheets.len() + 1).unwrap());
         let resource = Resource {
             path: None,
             last_modified: None,
@@ -99,7 +99,7 @@ impl ResourceLoader {
         Ok(reloaded)
     }
 
-    pub(crate) fn get_sheet(&self, id: StyleSheetId) -> &Stylesheet {
+    pub(crate) fn get_sheet(&self, id: StylesheetID) -> &Stylesheet {
         let index = usize::from(id.0) - 1;
         &self.style_sheets[index].data
     }

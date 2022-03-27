@@ -7,7 +7,7 @@ use rosin::prelude::*;
 use rosin::widgets::*;
 
 pub struct State {
-    style: StyleSheetId,
+    style: StylesheetID,
     lines: Vec<Vec<Point>>,
 }
 
