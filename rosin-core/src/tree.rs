@@ -80,7 +80,7 @@ macro_rules! ui {
 }
 
 pub(crate) struct ArrayNode<S: 'static, H: 'static> {
-    pub key: Option<Key>, // TODO
+    pub key: Option<Key>,
     pub classes: BumpVec<'static, &'static str>,
     pub callbacks: BumpVec<'static, (On, &'static mut dyn EventCallback<S, H>)>,
     pub style_sheet: Option<StyleSheetId>,
