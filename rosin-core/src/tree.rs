@@ -18,7 +18,7 @@ macro_rules! ui {
         ui!(Node::default() $(.add_classes($classes))*; $($children)* )
     };
     ($sheet:expr, $($classes:literal)? [ $($children:tt)* ]) => {
-        ui!(Node::default().use_style_sheet($sheet) $(.add_classes($classes))*; $($children)* )
+        ui!(Node::default().use_style_sheet(Some($sheet)) $(.add_classes($classes))*; $($children)* )
     };
     ($tree:expr; $($classes:literal)? [ $($children:tt)* ] $($tail:tt)*) => {
         ui!($tree.add_child(ui!(Node::default() $(.add_classes($classes))*; $($children)* )); $($tail)* )
@@ -243,8 +243,8 @@ impl<S, H> Node<S, H> {
         self
     }
 
-    pub fn use_style_sheet(mut self, id: StyleSheetId) -> Self {
-        self.style_sheet = Some(id);
+    pub fn use_style_sheet(mut self, id: Option<StyleSheetId>) -> Self {
+        self.style_sheet = id;
         self
     }
 
