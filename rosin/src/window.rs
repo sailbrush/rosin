@@ -79,14 +79,15 @@ impl<S> Window<S> {
         libloader: Option<Arc<Mutex<LibLoader>>>,
         anim_tasks: Vec<Box<dyn AnimCallback<S>>>,
     ) -> Self {
+        let handle = WindowHandle::default();
         let mut rosin = if let Some(libloader) = libloader.clone() {
             let view_func = *libloader.lock().unwrap().get(view.name).unwrap();
-            let rosin = RosinWindow::new(resource_loader, view_func, size);
+            let rosin = RosinWindow::new(resource_loader, view_func, size, handle.clone());
             let func: fn(Option<Rc<Alloc>>) = *libloader.lock().unwrap().get(b"set_thread_local_alloc").unwrap();
             func(Some(rosin.get_alloc()));
             rosin
         } else {
-            RosinWindow::new(resource_loader, view.func, size)
+            RosinWindow::new(resource_loader, view.func, size, handle.clone())
         };
 
         for anim in anim_tasks {
@@ -94,7 +95,7 @@ impl<S> Window<S> {
         }
 
         Self {
-            handle: WindowHandle::default(),
+            handle,
             rosin,
             view,
             state,

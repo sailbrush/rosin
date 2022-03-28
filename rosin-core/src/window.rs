@@ -15,7 +15,7 @@ use bumpalo::{collections::Vec as BumpVec, Bump};
 use druid_shell::piet::Piet;
 use druid_shell::{KeyEvent, MouseEvent};
 
-pub struct RosinWindow<S: 'static, H: Default + Clone + 'static> {
+pub struct RosinWindow<S: 'static, H: Clone + 'static> {
     resource_loader: Arc<Mutex<ResourceLoader>>,
     view: ViewCallback<S, H>,
     size: (f32, f32),
@@ -36,13 +36,13 @@ pub struct RosinWindow<S: 'static, H: Default + Clone + 'static> {
 }
 
 impl<S, H: Default + Clone> RosinWindow<S, H> {
-    pub fn new(resource_loader: Arc<Mutex<ResourceLoader>>, view: ViewCallback<S, H>, size: (f32, f32)) -> Self {
+    pub fn new(resource_loader: Arc<Mutex<ResourceLoader>>, view: ViewCallback<S, H>, size: (f32, f32), handle: H) -> Self {
         Self {
             resource_loader,
             view,
             size,
             scale: (1.0, 1.0),
-            handle: H::default(),
+            handle,
             phase: Phase::Build,
             last_frame: Instant::now(),
             focused_node: None,
