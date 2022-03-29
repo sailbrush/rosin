@@ -1,12 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::sync::Arc;
-
 use rosin::prelude::*;
 use rosin::widgets::*;
 
 pub struct State {
-    style: Arc<Stylesheet>,
+    style: Stylesheet,
     text: Slider,
 }
 

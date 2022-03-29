@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use std::{collections::HashMap, fs, sync::Arc, time::SystemTime};
+use std::{collections::HashMap, fs, time::SystemTime};
 
 use crate::stylesheet::Stylesheet;
 
@@ -27,17 +27,17 @@ pub(crate) struct Resource<T> {
 
 #[derive(Debug, Default)]
 pub struct ResourceLoader {
-    style_sheets: HashMap<&'static str, Resource<Arc<Stylesheet>>>,
+    style_sheets: HashMap<&'static str, Resource<Stylesheet>>,
 }
 
 impl ResourceLoader {
-    pub fn new_dynamic_css(&mut self, path: &'static str) -> Result<Arc<Stylesheet>, std::io::Error> {
+    pub fn new_dynamic_css(&mut self, path: &'static str) -> Result<Stylesheet, std::io::Error> {
         if let Some(stylesheet) = self.style_sheets.get(path) {
             return Ok(stylesheet.data.clone());
         }
 
         let text = fs::read_to_string(path)?;
-        let stylesheet = Arc::new(Stylesheet::parse(&text));
+        let stylesheet = Stylesheet::parse(&text);
         let resource = Resource {
             last_modified: Some(fs::metadata(&path)?.modified()?),
             data: stylesheet.clone(),
@@ -47,12 +47,12 @@ impl ResourceLoader {
         Ok(stylesheet)
     }
 
-    pub fn new_static_css(&mut self, path: &'static str, text: &'static str) -> Arc<Stylesheet> {
+    pub fn new_static_css(&mut self, path: &'static str, text: &'static str) -> Stylesheet {
         if let Some(stylesheet) = self.style_sheets.get(path) {
             return stylesheet.data.clone();
         }
 
-        let stylesheet = Arc::new(Stylesheet::parse(text));
+        let stylesheet = Stylesheet::parse(text);
         let resource = Resource {
             last_modified: None,
             data: stylesheet.clone(),
@@ -72,7 +72,7 @@ impl ResourceLoader {
                 if prev_last_modified != last_modified {
                     let contents = fs::read_to_string(path)?;
                     style_sheet.last_modified = Some(last_modified);
-                    style_sheet.data = Arc::new(Stylesheet::parse(&contents));
+                    style_sheet.data.reparse(&contents);
                     reloaded = true;
                 }
             }

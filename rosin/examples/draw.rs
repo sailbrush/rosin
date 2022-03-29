@@ -1,7 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::sync::Arc;
-
 use druid_shell::kurbo::{Line, Point};
 use druid_shell::piet::{Color, RenderContext};
 use druid_shell::KbKey;
@@ -9,7 +7,7 @@ use rosin::prelude::*;
 use rosin::widgets::*;
 
 pub struct State {
-    style: Arc<Stylesheet>,
+    style: Stylesheet,
     lines: Vec<Vec<Point>>,
 }
 

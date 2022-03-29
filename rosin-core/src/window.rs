@@ -35,7 +35,7 @@ pub struct RosinWindow<S: 'static, H: Clone + 'static> {
     temp: Bump,
 }
 
-impl<S, H: Default + Clone> RosinWindow<S, H> {
+impl<S, H: Clone> RosinWindow<S, H> {
     pub fn new(resource_loader: Arc<Mutex<ResourceLoader>>, view: ViewCallback<S, H>, size: (f32, f32), handle: H) -> Self {
         Self {
             resource_loader,
@@ -500,7 +500,6 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
             for (id, node) in tree.iter_mut().enumerate() {
                 // TODO - apply hover/focus styles using prev_hover_nodes/keys
                 //      - set phase to layout if needed
-
                 if let Some(style_callback) = &mut node.style_callback {
                     default_styles.push((id, node.style.clone()));
                     style_callback(state, &mut node.style);

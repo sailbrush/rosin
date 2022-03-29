@@ -11,6 +11,8 @@ use bumpalo::Bump;
 use cssparser::{Parser, ParserInput, RuleListParser};
 
 use std::cmp::Ordering;
+use std::sync::Arc;
+use std::sync::RwLock;
 
 #[derive(Debug, Clone)]
 pub enum Selector {
@@ -75,9 +77,14 @@ impl PartialOrd for Rule {
 }
 
 #[derive(Debug, Default, Clone)]
+struct StylesheetData {
+    static_rules: Vec<Rule>,
+    dynamic_rules: Vec<Rule>,
+}
+
+#[derive(Debug, Default, Clone)]
 pub struct Stylesheet {
-    pub(crate) rules: Vec<Rule>,
-    pub(crate) dynamic_rules: Vec<Rule>,
+    data: Arc<RwLock<StylesheetData>>,
 }
 
 impl Stylesheet {
@@ -85,27 +92,51 @@ impl Stylesheet {
     pub(crate) fn parse(text: &str) -> Self {
         let mut input = ParserInput::new(text);
         let mut parser = Parser::new(&mut input);
-        let mut rules = Vec::new();
+        let mut static_rules = Vec::new();
         let mut dynamic_rules = Vec::new();
 
         for (dynamic, rule) in RuleListParser::new_for_stylesheet(&mut parser, RulesParser).flatten() {
             if dynamic {
                 dynamic_rules.push(rule);
             } else {
-                rules.push(rule);
+                static_rules.push(rule);
             }
         }
 
-        Self { rules, dynamic_rules }
+        Self {
+            data: Arc::new(RwLock::new(StylesheetData {
+                static_rules,
+                dynamic_rules,
+            })),
+        }
+    }
+
+    pub(crate) fn reparse(&mut self, text: &str) {
+        if let Ok(mut data) = self.data.try_write() {
+            let mut input = ParserInput::new(text);
+            let mut parser = Parser::new(&mut input);
+
+            data.static_rules.clear();
+            data.dynamic_rules.clear();
+
+            for (dynamic, rule) in RuleListParser::new_for_stylesheet(&mut parser, RulesParser).flatten() {
+                if dynamic {
+                    data.dynamic_rules.push(rule);
+                } else {
+                    data.static_rules.push(rule);
+                }
+            }
+        }
     }
 }
 
 // Perform selector matching and apply styles to a tree, ignoring hover/focus
 pub(crate) fn apply_styles<S, H>(temp: &Bump, tree: &mut [ArrayNode<S, H>]) {
     for id in 0..tree.len() {
-        let stylesheet = tree[0].style_sheet.as_ref().unwrap().clone();
+        let stylesheet = tree[0].style_sheet.as_ref().unwrap().data.clone();
+        let stylesheet = stylesheet.read().unwrap();
         let mut relevant_rules = stylesheet
-            .rules
+            .static_rules
             .iter()
             .filter(|rule| {
                 // Find matching rules

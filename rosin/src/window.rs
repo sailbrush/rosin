@@ -137,7 +137,7 @@ impl<S> WinHandler for Window<S> {
         }
 
         self.rosin.animation_frame(&mut self.state.borrow_mut());
-        self.rosin.draw(&mut self.state.borrow_mut(), Some(piet)).unwrap();
+        self.rosin.draw(&self.state.borrow(), Some(piet)).unwrap();
 
         if self.rosin.has_anim_tasks() {
             self.handle.request_anim_frame();
