@@ -1,15 +1,17 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::sync::Arc;
+
 use rosin::prelude::*;
 use rosin::widgets::*;
 
 pub struct State {
-    style: StylesheetID,
+    style: Arc<Stylesheet>,
     text: Slider,
 }
 
 pub fn main_view(state: &State) -> Node<State, WindowHandle> {
-    ui!(state.style, "root"["text"(state.text.view())])
+    ui!(state.style.clone(), "root"["text"(state.text.view())])
 }
 
 #[rustfmt::skip]

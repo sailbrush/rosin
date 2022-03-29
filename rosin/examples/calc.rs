@@ -1,10 +1,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::sync::Arc;
+
 use rosin::prelude::*;
 use rosin::widgets::*;
 
 pub struct State {
-    style: StylesheetID,
+    style: Arc<Stylesheet>,
     display: DynLabel,
     accumulator: f64,
     register: f64,
@@ -121,7 +123,7 @@ impl State {
 
 #[no_mangle]
 pub fn main_view(state: &State) -> Node<State, WindowHandle> {
-    ui!(state.style, "root" [
+    ui!(state.style.clone(), "root" [
         "display" (state.display.view())
         "row" [
             "btn double" (button("Clear", |s: &mut State, _| { s.press(Btn::Clear) }))

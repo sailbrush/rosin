@@ -1,9 +1,11 @@
 use crate::alloc::Alloc;
 use crate::geometry::Size;
 use crate::prelude::*;
+use crate::stylesheet::Stylesheet;
 
 use std::collections::HashMap;
 use std::num::NonZeroUsize;
+use std::sync::Arc;
 
 use bumpalo::collections::Vec as BumpVec;
 
@@ -83,7 +85,7 @@ pub(crate) struct ArrayNode<S: 'static, H: 'static> {
     pub key: Option<Key>,
     pub classes: BumpVec<'static, &'static str>,
     pub callbacks: BumpVec<'static, (On, &'static mut dyn EventCallback<S, H>)>,
-    pub style_sheet: Option<StylesheetID>,
+    pub style_sheet: Option<Arc<Stylesheet>>,
     pub style_callback: Option<&'static mut dyn StyleCallback<S>>,
     pub layout_callback: Option<&'static mut dyn LayoutCallback<S>>,
     pub draw_callback: Option<&'static mut dyn DrawCallback<S>>,
@@ -156,7 +158,7 @@ pub struct Node<S: 'static, H: 'static> {
     key: Option<Key>,
     classes: Option<BumpVec<'static, &'static str>>,
     callbacks: Option<BumpVec<'static, (On, &'static mut dyn EventCallback<S, H>)>>,
-    style_sheet: Option<StylesheetID>,
+    style_sheet: Option<Arc<Stylesheet>>,
     style_callback: Option<&'static mut dyn StyleCallback<S>>,
     layout_callback: Option<&'static mut dyn LayoutCallback<S>>,
     draw_callback: Option<&'static mut dyn DrawCallback<S>>,
@@ -243,8 +245,8 @@ impl<S, H> Node<S, H> {
         self
     }
 
-    pub fn use_style_sheet(mut self, id: Option<StylesheetID>) -> Self {
-        self.style_sheet = id;
+    pub fn use_style_sheet(mut self, style_sheet: Option<Arc<Stylesheet>>) -> Self {
+        self.style_sheet = style_sheet;
         self
     }
 

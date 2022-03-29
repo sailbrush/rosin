@@ -1,5 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::sync::Arc;
+
 use druid_shell::kurbo::{Line, Point};
 use druid_shell::piet::{Color, RenderContext};
 use druid_shell::KbKey;
@@ -7,12 +9,12 @@ use rosin::prelude::*;
 use rosin::widgets::*;
 
 pub struct State {
-    style: StylesheetID,
+    style: Arc<Stylesheet>,
     lines: Vec<Vec<Point>>,
 }
 
 pub fn main_view(state: &State) -> Node<State, WindowHandle> {
-    ui!(state.style, "root" [{
+    ui!(state.style.clone(), "root" [{
             .event(On::MouseDown, |s: &mut State, _| {
                 s.lines.push(Vec::new());
                 Phase::Build

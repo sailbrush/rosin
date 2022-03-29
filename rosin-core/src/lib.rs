@@ -3,13 +3,13 @@ mod geometry;
 mod layout;
 mod parser;
 mod properties;
-mod stylesheet;
 
 pub mod alloc;
 pub mod callbacks;
 pub mod key;
 pub mod resource;
 pub mod style;
+pub mod stylesheet;
 pub mod tree;
 pub mod window;
 
@@ -23,8 +23,9 @@ pub mod prelude {
         ViewCallback,
     };
     pub use crate::key::Key;
-    pub use crate::resource::{ResourceLoader, StylesheetID};
+    pub use crate::resource::ResourceLoader;
     pub use crate::style::Style;
+    pub use crate::stylesheet::Stylesheet;
     pub use crate::tree::Node;
     pub use crate::window::RosinWindow;
     pub use crate::{load_css, ui};

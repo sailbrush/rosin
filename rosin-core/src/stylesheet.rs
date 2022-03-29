@@ -2,8 +2,6 @@
 
 use crate::parser::*;
 use crate::properties::*;
-use crate::resource::ParseResource;
-use crate::resource::ResourceLoader;
 use crate::style::*;
 use crate::tree::*;
 
@@ -13,8 +11,6 @@ use bumpalo::Bump;
 use cssparser::{Parser, ParserInput, RuleListParser};
 
 use std::cmp::Ordering;
-use std::sync::Arc;
-use std::sync::Mutex;
 
 #[derive(Debug, Clone)]
 pub enum Selector {
@@ -79,14 +75,14 @@ impl PartialOrd for Rule {
 }
 
 #[derive(Debug, Default, Clone)]
-pub(crate) struct Stylesheet {
-    pub rules: Vec<Rule>,
-    pub dynamic_rules: Vec<Rule>,
+pub struct Stylesheet {
+    pub(crate) rules: Vec<Rule>,
+    pub(crate) dynamic_rules: Vec<Rule>,
 }
 
-impl ParseResource for Stylesheet {
+impl Stylesheet {
     // Parse CSS text into rule list
-    fn parse(text: &str) -> Self {
+    pub(crate) fn parse(text: &str) -> Self {
         let mut input = ParserInput::new(text);
         let mut parser = Parser::new(&mut input);
         let mut rules = Vec::new();
@@ -105,12 +101,10 @@ impl ParseResource for Stylesheet {
 }
 
 // Perform selector matching and apply styles to a tree, ignoring hover/focus
-pub(crate) fn apply_styles<S, H>(temp: &Bump, tree: &mut [ArrayNode<S, H>], rl: Arc<Mutex<ResourceLoader>>) {
+pub(crate) fn apply_styles<S, H>(temp: &Bump, tree: &mut [ArrayNode<S, H>]) {
     for id in 0..tree.len() {
-        // TODO - benchmark hash map
-        let rl = rl.lock().unwrap();
-        let mut relevant_rules = rl
-            .get_sheet(tree[0].style_sheet.unwrap())
+        let stylesheet = tree[0].style_sheet.as_ref().unwrap().clone();
+        let mut relevant_rules = stylesheet
             .rules
             .iter()
             .filter(|rule| {

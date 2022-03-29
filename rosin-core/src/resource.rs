@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use std::{collections::HashMap, fs, num::NonZeroUsize, time::SystemTime};
+use std::{collections::HashMap, fs, sync::Arc, time::SystemTime};
 
 use crate::stylesheet::Stylesheet;
 
@@ -11,96 +11,73 @@ macro_rules! load_css {
         if cfg!(debug_assertions) {
             $loader.new_dynamic_css(concat!(env!("CARGO_MANIFEST_DIR"), "/", $path)).unwrap()
         } else {
-            $loader.new_static_css(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", $path)))
+            $loader.new_static_css(
+                concat!(env!("CARGO_MANIFEST_DIR"), "/", $path),
+                include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", $path)),
+            )
         }
     };
 }
 
-pub(crate) trait ParseResource {
-    fn parse(text: &str) -> Self;
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct StylesheetID(NonZeroUsize);
-
 #[derive(Debug)]
-pub(crate) struct Resource<T: ParseResource> {
-    pub path: Option<&'static str>,
+pub(crate) struct Resource<T> {
     pub last_modified: Option<SystemTime>,
     pub data: T,
 }
 
 #[derive(Debug, Default)]
 pub struct ResourceLoader {
-    style_sheet_map: HashMap<&'static str, StylesheetID>,
-    style_sheets: Vec<Resource<Stylesheet>>,
+    style_sheets: HashMap<&'static str, Resource<Arc<Stylesheet>>>,
 }
 
 impl ResourceLoader {
-    pub fn new_dynamic_css(&mut self, path: &'static str) -> Result<StylesheetID, std::io::Error> {
-        if let Some(&id) = self.style_sheet_map.get(path) {
-            return Ok(id);
+    pub fn new_dynamic_css(&mut self, path: &'static str) -> Result<Arc<Stylesheet>, std::io::Error> {
+        if let Some(stylesheet) = self.style_sheets.get(path) {
+            return Ok(stylesheet.data.clone());
         }
 
-        let id = StylesheetID(NonZeroUsize::new(self.style_sheets.len() + 1).unwrap());
         let text = fs::read_to_string(path)?;
+        let stylesheet = Arc::new(Stylesheet::parse(&text));
         let resource = Resource {
-            path: Some(path),
             last_modified: Some(fs::metadata(&path)?.modified()?),
-            data: Stylesheet::parse(&text),
+            data: stylesheet.clone(),
         };
 
-        self.style_sheets.push(resource);
-        self.style_sheet_map.insert(path, id);
-        Ok(id)
+        self.style_sheets.insert(path, resource);
+        Ok(stylesheet)
     }
 
-    pub fn new_static_css(&mut self, text: &'static str) -> StylesheetID {
-        if let Some(&id) = self.style_sheet_map.get(text) {
-            return id;
+    pub fn new_static_css(&mut self, path: &'static str, text: &'static str) -> Arc<Stylesheet> {
+        if let Some(stylesheet) = self.style_sheets.get(path) {
+            return stylesheet.data.clone();
         }
 
-        let id = StylesheetID(NonZeroUsize::new(self.style_sheets.len() + 1).unwrap());
+        let stylesheet = Arc::new(Stylesheet::parse(text));
         let resource = Resource {
-            path: None,
             last_modified: None,
-            data: Stylesheet::parse(text),
+            data: stylesheet.clone(),
         };
 
-        self.style_sheets.push(resource);
-        self.style_sheet_map.insert(text, id);
-        id
+        self.style_sheets.insert(path, resource);
+        stylesheet
     }
 
     // Reload resources if they've been modified
     pub fn poll(&mut self) -> Result<bool, std::io::Error> {
         let mut reloaded = false;
 
-        for style_sheet in &mut self.style_sheets {
-            if let Some(path) = style_sheet.path {
-                let mut should_reload = true;
+        for (&path, style_sheet) in &mut self.style_sheets {
+            if let Some(prev_last_modified) = style_sheet.last_modified {
                 let last_modified = fs::metadata(&path)?.modified()?;
-
-                if let Some(prev_last_modified) = style_sheet.last_modified {
-                    if last_modified == prev_last_modified {
-                        should_reload = false;
-                    }
-                }
-
-                if should_reload {
-                    style_sheet.last_modified = Some(last_modified);
+                if prev_last_modified != last_modified {
                     let contents = fs::read_to_string(path)?;
-                    style_sheet.data = Stylesheet::parse(&contents);
+                    style_sheet.last_modified = Some(last_modified);
+                    style_sheet.data = Arc::new(Stylesheet::parse(&contents));
                     reloaded = true;
                 }
             }
         }
 
         Ok(reloaded)
-    }
-
-    pub(crate) fn get_sheet(&self, id: StylesheetID) -> &Stylesheet {
-        let index = usize::from(id.0) - 1;
-        &self.style_sheets[index].data
     }
 }
