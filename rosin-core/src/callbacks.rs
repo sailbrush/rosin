@@ -155,8 +155,8 @@ pub trait EventCallback<S, H>: 'static + Fn(&mut S, &mut EventCtx<S, H>) -> Phas
 impl<F, S, H> EventCallback<S, H> for F where F: 'static + Fn(&mut S, &mut EventCtx<S, H>) -> Phase {}
 
 /// `Fn(&mut S, &mut Style)`
-pub trait LayoutCallback<S>: 'static + Fn(&mut S, Size) {}
-impl<F, S> LayoutCallback<S> for F where F: 'static + Fn(&mut S, Size) {}
+pub trait LayoutCallback<S>: 'static + Fn(&S, Size) {}
+impl<F, S> LayoutCallback<S> for F where F: 'static + Fn(&S, Size) {}
 
 /// `Fn(&S, &mut Style)`
 pub trait StyleCallback<S>: 'static + Fn(&S, &mut Style) {}

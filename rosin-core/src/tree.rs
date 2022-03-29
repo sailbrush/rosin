@@ -215,7 +215,7 @@ impl<S, H> Node<S, H> {
     }
 
     /// Register a funciton to layout the contents of this node.
-    pub fn on_layout(mut self, func: impl Fn(&mut S, Size) + 'static) -> Self {
+    pub fn on_layout(mut self, func: impl Fn(&S, Size) + 'static) -> Self {
         let alloc = Alloc::get_thread_local_alloc().unwrap();
         self.layout_callback = Some(alloc.alloc(func));
         self

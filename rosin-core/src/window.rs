@@ -450,15 +450,11 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
         phase
     }
 
-    pub fn draw(&mut self, state: &mut S, piet: Option<&mut Piet<'_>>) -> Result<(), Box<dyn Error>> {
+    pub fn animation_frame(&mut self, state: &mut S) {
         // Get time since last frame
         let now = Instant::now();
         let dt = now.duration_since(self.last_frame);
-
-        // Set up allocators
-        Alloc::set_thread_local_alloc(Some(self.alloc.clone()));
-        let alloc = self.alloc.clone();
-        self.temp.reset();
+        self.last_frame = now;
 
         // Run Animation Tasks
         let mut anim_phase = Phase::Idle;
@@ -468,6 +464,13 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
             stop == ShouldStop::No
         });
         self.update_phase(anim_phase);
+    }
+
+    pub fn draw(&mut self, state: &S, piet: Option<&mut Piet<'_>>) -> Result<(), Box<dyn Error>> {
+        // Set up allocators
+        Alloc::set_thread_local_alloc(Some(self.alloc.clone()));
+        let alloc = self.alloc.clone();
+        self.temp.reset();
 
         // ---------- Build Phase ----------
         if self.phase == Phase::Build || self.tree_cache.is_none() {
@@ -543,7 +546,6 @@ impl<S, H: Default + Clone> RosinWindow<S, H> {
         // ---------- Cleanup ----------
         Alloc::set_thread_local_alloc(None);
         self.phase = Phase::Idle;
-        self.last_frame = now;
 
         // Restore default styles
         for (id, style) in default_styles {
