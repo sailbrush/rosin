@@ -77,14 +77,14 @@ impl PartialOrd for Rule {
 }
 
 #[derive(Debug, Default, Clone)]
-struct StylesheetData {
+struct StylesheetInner {
     static_rules: Vec<Rule>,
     dynamic_rules: Vec<Rule>,
 }
 
 #[derive(Debug, Default, Clone)]
 pub struct Stylesheet {
-    data: Arc<RwLock<StylesheetData>>,
+    inner: Arc<RwLock<StylesheetInner>>,
 }
 
 impl Stylesheet {
@@ -104,7 +104,7 @@ impl Stylesheet {
         }
 
         Self {
-            data: Arc::new(RwLock::new(StylesheetData {
+            inner: Arc::new(RwLock::new(StylesheetInner {
                 static_rules,
                 dynamic_rules,
             })),
@@ -112,7 +112,7 @@ impl Stylesheet {
     }
 
     pub(crate) fn reparse(&mut self, text: &str) {
-        if let Ok(mut data) = self.data.try_write() {
+        if let Ok(mut data) = self.inner.try_write() {
             let mut input = ParserInput::new(text);
             let mut parser = Parser::new(&mut input);
 
@@ -133,7 +133,7 @@ impl Stylesheet {
 // Perform selector matching and apply styles to a tree, ignoring hover/focus
 pub(crate) fn apply_styles<S, H>(temp: &Bump, tree: &mut [ArrayNode<S, H>]) {
     for id in 0..tree.len() {
-        let stylesheet = tree[0].style_sheet.as_ref().unwrap().data.clone();
+        let stylesheet = tree[0].style_sheet.as_ref().unwrap().inner.clone();
         let stylesheet = stylesheet.read().unwrap();
         let mut relevant_rules = stylesheet
             .static_rules
