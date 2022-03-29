@@ -11,10 +11,7 @@ macro_rules! load_css {
         if cfg!(debug_assertions) {
             $loader.new_dynamic_css(concat!(env!("CARGO_MANIFEST_DIR"), "/", $path)).unwrap()
         } else {
-            $loader.new_static_css(
-                concat!(env!("CARGO_MANIFEST_DIR"), "/", $path),
-                include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", $path)),
-            )
+            $loader.new_static_css($path, include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", $path)))
         }
     };
 }
