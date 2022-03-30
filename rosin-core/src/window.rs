@@ -30,6 +30,7 @@ pub struct RosinWindow<S: 'static, H: Clone + 'static> {
     anim_tasks: Rc<RefCell<Vec<Box<dyn AnimCallback<S>>>>>,
     key_map: HashMap<Key, usize>,
     tree_cache: Option<Scope<BumpVec<'static, ArrayNode<S, H>>>>,
+    style_cache: Option<Scope<BumpVec<'static, Style>>>,
     layout_cache: Option<Scope<BumpVec<'static, Layout>>>,
     alloc: Rc<Alloc>,
     temp: Bump,
@@ -52,6 +53,7 @@ impl<S, H: Clone> RosinWindow<S, H> {
             anim_tasks: Rc::new(RefCell::new(Vec::new())),
             key_map: HashMap::new(),
             tree_cache: None,
+            style_cache: None,
             layout_cache: None,
             alloc: Rc::new(Alloc::default()),
             temp: Bump::new(),
@@ -64,6 +66,7 @@ impl<S, H: Clone> RosinWindow<S, H> {
 
     pub fn reset_cache(&mut self) {
         self.layout_cache = None;
+        self.style_cache = None;
         self.tree_cache = None;
         self.alloc.reset().expect("[Rosin] Failed to reset cache");
 
@@ -199,8 +202,9 @@ impl<S, H: Clone> RosinWindow<S, H> {
     }
 
     fn mouse_event(&mut self, state: &mut S, event: &MouseEvent, event_type: On) {
-        if let (Some(tree), Some(layout)) = (&mut self.tree_cache, &self.layout_cache) {
+        if let (Some(tree), Some(styles), Some(layout)) = (&mut self.tree_cache, &self.style_cache, &self.layout_cache) {
             let tree = tree.borrow_mut();
+            let styles = styles.borrow();
             let layout = layout.borrow();
             self.temp.reset();
 
@@ -275,19 +279,19 @@ impl<S, H: Clone> RosinWindow<S, H> {
             let mut phase = Phase::Idle;
 
             for id in mouse_leave_nodes {
-                ctx.style = tree[id].style.clone();
+                ctx.style = styles[id].clone();
                 ctx.layout = layout[id];
                 phase.update(Self::dispatch_event(On::MouseLeave, state, &mut ctx, tree, id));
             }
 
             for id in mouse_enter_nodes {
-                ctx.style = tree[id].style.clone();
+                ctx.style = styles[id].clone();
                 ctx.layout = layout[id];
                 phase.update(Self::dispatch_event(On::MouseEnter, state, &mut ctx, tree, id));
             }
 
             for &id in &self.hover_nodes {
-                ctx.style = tree[id].style.clone();
+                ctx.style = styles[id].clone();
                 ctx.layout = layout[id];
                 phase.update(Self::dispatch_event(event_type, state, &mut ctx, tree, id));
             }
@@ -480,19 +484,34 @@ impl<S, H: Clone> RosinWindow<S, H> {
             alloc.reset_counter();
 
             // SAFETY: This is safe because we panic if client code breaks scope()'s contract
-            let mut tree = unsafe {
+            let tree = unsafe {
                 // Run the view function
                 alloc.scope(|| (self.view)(state).finish(&mut self.key_map).unwrap())
             };
 
-            // Panic if the view function didn't return the number of nodes we expected
-            assert!(alloc.get_counter() == tree.borrow().len(), "[Rosin] Nodes missing");
+            let len = tree.borrow().len();
 
-            stylesheet::apply_styles(&self.temp, tree.borrow_mut());
+            // Panic if the view function didn't return the number of nodes we expected
+            assert!(alloc.get_counter() == len, "[Rosin] Nodes missing");
+
+            // Allocate style cache
+            let mut styles = unsafe {
+                // SAFETY: This is safe because we meet scope()'s requirements
+                alloc.scope(|| alloc.vec_capacity(len))
+            };
+
+            // TODO - create styles in a single pass instead of two
+            for _ in 0..len {
+                styles.borrow_mut().push(Style::default());
+            }
+
+            stylesheet::apply_styles(&self.temp, tree.borrow(), styles.borrow_mut());
             self.tree_cache = Some(tree);
+            self.style_cache = Some(styles);
         }
 
         let tree: &mut BumpVec<ArrayNode<S, H>> = self.tree_cache.as_mut().unwrap().borrow_mut();
+        let styles: &mut BumpVec<Style> = self.style_cache.as_mut().unwrap().borrow_mut();
 
         // Stash default styles, apply hover/focus styles, and run style callbacks
         let mut default_styles: BumpVec<(usize, Style)> = BumpVec::new_in(&self.temp);
@@ -501,8 +520,8 @@ impl<S, H: Clone> RosinWindow<S, H> {
                 // TODO - apply hover/focus styles using prev_hover_nodes/keys
                 //      - set phase to layout if needed
                 if let Some(style_callback) = &mut node.style_callback {
-                    default_styles.push((id, node.style.clone()));
-                    style_callback(state, &mut node.style);
+                    default_styles.push((id, styles[id].clone()));
+                    style_callback(state, &mut styles[id]);
                 }
             }
         }
@@ -525,7 +544,7 @@ impl<S, H: Clone> RosinWindow<S, H> {
                 layout.push(Layout::default());
             }
 
-            layout::layout(&self.temp, tree, self.size.into(), layout);
+            layout::layout(&self.temp, tree, styles, self.size.into(), layout);
 
             for (id, node) in tree.iter_mut().enumerate() {
                 if let Some(layout_callback) = &mut node.layout_callback {
@@ -539,7 +558,7 @@ impl<S, H: Clone> RosinWindow<S, H> {
         // ---------- Draw Phase ----------
         // TODO - If phase == Idle, re-issue commands from last frame
         if let Some(piet) = piet {
-            draw::draw(state, tree, layout, piet);
+            draw::draw(state, tree, styles, layout, piet);
         }
 
         // ---------- Cleanup ----------
@@ -548,7 +567,7 @@ impl<S, H: Clone> RosinWindow<S, H> {
 
         // Restore default styles
         for (id, style) in default_styles {
-            tree[id].style = style;
+            styles[id] = style;
         }
 
         Ok(())

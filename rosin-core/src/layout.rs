@@ -74,8 +74,8 @@ pub(crate) fn hit_test(layout: &[Layout], point: Point, result: &mut Vec<usize>)
     }
 }
 
-pub(crate) fn layout<S, H>(temp: &Bump, tree: &[ArrayNode<S, H>], root_size: Size, output: &mut [Layout]) {
-    layout_inner(temp, tree, 0, root_size, output, Point::default());
+pub(crate) fn layout<S, H>(temp: &Bump, tree: &[ArrayNode<S, H>], styles: &[Style], root_size: Size, output: &mut [Layout]) {
+    layout_inner(temp, tree, styles, 0, root_size, output, Point::default());
     output[0] = Layout {
         size: root_size,
         position: Point::zero(),
@@ -99,24 +99,32 @@ fn round_layout<S, H>(tree: &[ArrayNode<S, H>], layout: &mut [Layout], id: usize
     }
 }
 
-fn layout_inner<S, H>(temp: &Bump, tree: &[ArrayNode<S, H>], id: usize, size: Size, output: &mut [Layout], position_offset: Point) {
+fn layout_inner<S, H>(
+    temp: &Bump,
+    tree: &[ArrayNode<S, H>],
+    styles: &[Style],
+    id: usize,
+    size: Size,
+    output: &mut [Layout],
+    position_offset: Point,
+) {
     // leaf nodes don't need to do anything
     if tree[id].num_children == 0 {
         return;
     }
 
     // Define some useful constants
-    let dir = tree[id].style.flex_direction;
-    let align_content = tree[id].style.align_content;
-    let justify_content = tree[id].style.justify_content;
-    let flex_wrap = tree[id].style.flex_wrap;
-    let border_padding = tree[id].style.border() + tree[id].style.padding();
+    let dir = styles[id].flex_direction;
+    let align_content = styles[id].align_content;
+    let justify_content = styles[id].justify_content;
+    let flex_wrap = styles[id].flex_wrap;
+    let border_padding = styles[id].border() + styles[id].padding();
 
     // 1 - Generate anonymous flex items
     let flex_items_iter = tree[id]
         .child_ids()
         .rev()
-        .map(|id| (id, &tree[id].style))
+        .map(|id| (id, &styles[id]))
         .filter(|(_, style)| style.position != Position::Fixed)
         .map(|(id, style)| {
             let min_size = style.min_size();
@@ -164,7 +172,7 @@ fn layout_inner<S, H>(temp: &Bump, tree: &[ArrayNode<S, H>], id: usize, size: Si
     // 5 - Collect flex items into flex lines
     let mut flex_lines: BumpVec<FlexLine> = BumpVec::new_in(temp);
 
-    if tree[id].style.flex_wrap == FlexWrap::NoWrap {
+    if styles[id].flex_wrap == FlexWrap::NoWrap {
         flex_lines.push(FlexLine {
             items: &mut flex_items,
             cross_size: 0.0,
@@ -207,7 +215,7 @@ fn layout_inner<S, H>(temp: &Bump, tree: &[ArrayNode<S, H>], id: usize, size: Si
 
         // 9.7.2 - Size inflexible items
         for item in line.items.iter_mut() {
-            if tree[item.id].style.flex_grow == 0.0
+            if styles[item.id].flex_grow == 0.0
                 || (growing && item.flex_basis > item.hypo_inner_size.main(dir))
                 || (!growing && item.flex_basis < item.hypo_inner_size.main(dir))
             {
@@ -553,7 +561,7 @@ fn layout_inner<S, H>(temp: &Bump, tree: &[ArrayNode<S, H>], id: usize, size: Si
                 };
 
             // Now that we know the final size and position of an item, layout its children
-            layout_inner(temp, tree, item.id, item.target_size, output, position);
+            layout_inner(temp, tree, styles, item.id, item.target_size, output, position);
 
             output[item.id] = Layout {
                 size: item.target_size + item.border_padding.size(),

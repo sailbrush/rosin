@@ -131,7 +131,7 @@ impl Stylesheet {
 }
 
 // Perform selector matching and apply styles to a tree, ignoring hover/focus
-pub(crate) fn apply_styles<S, H>(temp: &Bump, tree: &mut [ArrayNode<S, H>]) {
+pub(crate) fn apply_styles<S, H>(temp: &Bump, tree: &[ArrayNode<S, H>], styles: &mut BumpVec<'static, Style>) {
     for id in 0..tree.len() {
         let stylesheet = tree[0].style_sheet.as_ref().unwrap().inner.clone();
         let stylesheet = stylesheet.read().unwrap();
@@ -196,7 +196,7 @@ pub(crate) fn apply_styles<S, H>(temp: &Bump, tree: &mut [ArrayNode<S, H>]) {
             })
             .collect_in::<BumpVec<&Rule>>(temp);
 
-        let par_style: Option<Style> = if id == 0 { None } else { Some(tree[tree[id].parent].style.clone()) };
+        let par_style: Option<Style> = if id == 0 { None } else { Some(styles[tree[id].parent].clone()) };
 
         relevant_rules.sort();
 
@@ -220,18 +220,18 @@ pub(crate) fn apply_styles<S, H>(temp: &Bump, tree: &mut [ArrayNode<S, H>]) {
                         match value {
                             PropertyValue::Inherit => {
                                 if let Some(parent) = &par_style {
-                                    tree[id].style.font_size = parent.font_size;
+                                    styles[id].font_size = parent.font_size;
                                 }
                             }
                             PropertyValue::Exact(size) => match size {
                                 Length::Px(value) => {
-                                    tree[id].style.font_size = *value;
+                                    styles[id].font_size = *value;
                                 }
                                 Length::Em(value) => {
                                     if let Some(parent) = &par_style {
-                                        tree[id].style.font_size = parent.font_size * value;
+                                        styles[id].font_size = parent.font_size * value;
                                     } else {
-                                        tree[id].style.font_size *= value;
+                                        styles[id].font_size *= value;
                                     }
                                 }
                             },
@@ -245,12 +245,12 @@ pub(crate) fn apply_styles<S, H>(temp: &Bump, tree: &mut [ArrayNode<S, H>]) {
                         }
                         match value {
                             PropertyValue::Exact(family) => {
-                                tree[id].style.font_family = Some(family.clone());
+                                styles[id].font_family = Some(family.clone());
                             }
                             _ => {
                                 // Inherited by default
                                 if let Some(parent) = &par_style {
-                                    tree[id].style.font_family = parent.font_family.clone();
+                                    styles[id].font_family = parent.font_family.clone();
                                 }
                             }
                         }
@@ -261,16 +261,16 @@ pub(crate) fn apply_styles<S, H>(temp: &Bump, tree: &mut [ArrayNode<S, H>]) {
                             continue;
                         }
                         match value {
-                            PropertyValue::Initial => tree[id].style.color = Style::default().color,
+                            PropertyValue::Initial => styles[id].color = Style::default().color,
                             PropertyValue::Exact(color) => {
                                 if let cssparser::Color::RGBA(rgba) = color {
-                                    tree[id].style.color = *rgba;
+                                    styles[id].color = *rgba;
                                 }
                             }
                             _ => {
                                 // Inherited by default
                                 if let Some(parent) = &par_style {
-                                    tree[id].style.color = parent.color;
+                                    styles[id].color = parent.color;
                                 }
                             }
                         }
@@ -282,22 +282,22 @@ pub(crate) fn apply_styles<S, H>(temp: &Bump, tree: &mut [ArrayNode<S, H>]) {
         });
         if !font_size_set {
             if let Some(parent) = &par_style {
-                tree[id].style.font_size = parent.font_size;
+                styles[id].font_size = parent.font_size;
             }
         }
         if !font_family_set {
             if let Some(parent) = &par_style {
-                tree[id].style.font_family = parent.font_family.clone();
+                styles[id].font_family = parent.font_family.clone();
             }
         }
         if !color_set {
             if let Some(parent) = &par_style {
-                tree[id].style.color = parent.color;
+                styles[id].color = parent.color;
             }
         }
 
         relevant_rules.iter().for_each(|rule| {
-            apply_properties(&rule.properties, &mut tree[id].style, &par_style);
+            apply_properties(&rule.properties, &mut styles[id], &par_style);
         });
     }
 }

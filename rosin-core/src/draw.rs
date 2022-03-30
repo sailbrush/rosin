@@ -9,13 +9,13 @@ use druid_shell::{
     piet::{Color, Piet, RenderContext},
 };
 
-pub(crate) fn draw<S, H>(state: &S, tree: &[ArrayNode<S, H>], layout: &[Layout], piet: &mut Piet<'_>) {
-    draw_inner(state, tree, layout, 0, piet);
+pub(crate) fn draw<S, H>(state: &S, tree: &[ArrayNode<S, H>], styles: &[Style], layout: &[Layout], piet: &mut Piet<'_>) {
+    draw_inner(state, tree, styles, layout, 0, piet);
 }
 
-fn draw_inner<S, H>(state: &S, tree: &[ArrayNode<S, H>], layout: &[Layout], id: usize, piet: &mut Piet<'_>) {
+fn draw_inner<S, H>(state: &S, tree: &[ArrayNode<S, H>], styles: &[Style], layout: &[Layout], id: usize, piet: &mut Piet<'_>) {
     if layout[id].size.width != 0.0 && layout[id].size.height != 0.0 {
-        let style = &tree[id].style;
+        let style = &styles[id];
 
         // ---------- Draw the box ----------
         let bg_color = Color::rgba8(
@@ -72,6 +72,6 @@ fn draw_inner<S, H>(state: &S, tree: &[ArrayNode<S, H>], layout: &[Layout], id: 
     }
 
     for i in tree[id].child_ids() {
-        draw_inner(state, tree, layout, i, piet);
+        draw_inner(state, tree, styles, layout, i, piet);
     }
 }

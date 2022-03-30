@@ -92,9 +92,6 @@ pub(crate) struct ArrayNode<S: 'static, H: 'static> {
     pub parent: usize,
     pub num_children: usize,
     pub last_child: Option<NonZeroUsize>,
-
-    // The only field that should ever be mutated after creation
-    pub style: Style,
 }
 
 impl<S, H> Drop for ArrayNode<S, H> {
@@ -280,7 +277,6 @@ impl<S, H> Node<S, H> {
                 classes: curr_node.classes.take()?,
                 callbacks: curr_node.callbacks.take()?,
                 style_sheet: curr_node.style_sheet.take(),
-                style: Style::default(),
                 style_callback: curr_node.style_callback.take(),
                 layout_callback: curr_node.layout_callback.take(),
                 draw_callback: curr_node.draw_callback.take(),
