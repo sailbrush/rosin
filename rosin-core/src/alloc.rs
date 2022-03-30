@@ -5,7 +5,7 @@ use std::{
 
 use bumpalo::{collections::Vec as BumpVec, Bump};
 
-thread_local!(static ALLOC: RefCell<Option<Rc<Alloc>>> = RefCell::new(Some(Rc::new(Alloc::default()))));
+thread_local!(static ALLOC: RefCell<Option<Rc<Alloc>>> = RefCell::new(None));
 
 #[derive(Clone)]
 pub(crate) struct Scope<T> {
@@ -88,8 +88,8 @@ impl Alloc {
     pub(crate) unsafe fn scope<T>(&self, func: impl FnOnce() -> T) -> Scope<T> {
         self.enabled.set(true);
         let scope = Scope {
-            _token: self._token.clone(),
             value: func(),
+            _token: self._token.clone(),
         };
         self.enabled.set(false);
         scope
