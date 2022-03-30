@@ -16,7 +16,7 @@ use druid_shell::piet::Piet;
 use druid_shell::{KeyEvent, MouseEvent};
 
 pub struct RosinWindow<S: 'static, H: Clone + 'static> {
-    resource_loader: Arc<Mutex<ResourceLoader>>,
+    resource_loader: Arc<Mutex<ResourceLoader>>, // TODO - does this need to be here?
     view: ViewCallback<S, H>,
     size: (f32, f32),
     scale: (f32, f32),
@@ -486,7 +486,7 @@ impl<S, H: Clone> RosinWindow<S, H> {
             // SAFETY: This is safe because we panic if client code breaks scope()'s contract
             let tree = unsafe {
                 // Run the view function
-                alloc.scope(|| (self.view)(state).finish(&mut self.key_map).unwrap())
+                alloc.scope(|| (self.view)(state).finish(&self.temp, &mut self.key_map).unwrap())
             };
 
             let len = tree.borrow().len();

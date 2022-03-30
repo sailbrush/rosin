@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::num::NonZeroUsize;
 
 use bumpalo::collections::Vec as BumpVec;
+use bumpalo::Bump;
 
 /// Macro for describing the structure and style of a UI.
 ///
@@ -83,7 +84,7 @@ macro_rules! ui {
 pub(crate) struct ArrayNode<S: 'static, H: 'static> {
     pub key: Option<Key>,
     pub classes: BumpVec<'static, &'static str>,
-    pub callbacks: BumpVec<'static, (On, &'static mut dyn EventCallback<S, H>)>,
+    pub event_callbacks: BumpVec<'static, (On, &'static mut dyn EventCallback<S, H>)>,
     pub style_sheet: Option<Stylesheet>,
     pub style_callback: Option<&'static mut dyn StyleCallback<S>>,
     pub layout_callback: Option<&'static mut dyn LayoutCallback<S>>,
@@ -96,7 +97,7 @@ pub(crate) struct ArrayNode<S: 'static, H: 'static> {
 
 impl<S, H> Drop for ArrayNode<S, H> {
     fn drop(&mut self) {
-        for cb in &mut self.callbacks {
+        for cb in &mut self.event_callbacks {
             unsafe {
                 std::ptr::drop_in_place(cb.1);
             }
@@ -131,7 +132,7 @@ impl<S, H> ArrayNode<S, H> {
 
     pub fn run_callbacks(&mut self, event_type: On, state: &mut S, ctx: &mut EventCtx<S, H>) -> Phase {
         let mut phase = Phase::Idle;
-        for (et, callback) in &mut self.callbacks {
+        for (et, callback) in &mut self.event_callbacks {
             if *et == event_type {
                 phase.update((callback)(state, ctx));
             }
@@ -140,7 +141,7 @@ impl<S, H> ArrayNode<S, H> {
     }
 
     pub fn has_callback(&self, event_type: On) -> bool {
-        for (et, _) in &self.callbacks {
+        for (et, _) in &self.event_callbacks {
             if *et == event_type {
                 return true;
             }
@@ -153,13 +154,13 @@ impl<S, H> ArrayNode<S, H> {
 pub struct Node<S: 'static, H: 'static> {
     key: Option<Key>,
     classes: Option<BumpVec<'static, &'static str>>,
-    callbacks: Option<BumpVec<'static, (On, &'static mut dyn EventCallback<S, H>)>>,
     style_sheet: Option<Stylesheet>,
+    event_callbacks: Option<BumpVec<'static, (On, &'static mut dyn EventCallback<S, H>)>>,
     style_callback: Option<&'static mut dyn StyleCallback<S>>,
     layout_callback: Option<&'static mut dyn LayoutCallback<S>>,
     draw_callback: Option<&'static mut dyn DrawCallback<S>>,
     draw_cache_enable: bool,
-    size: usize,
+    tree_size: usize,
     num_children: usize,
     prev_sibling: Option<&'static mut Node<S, H>>,
     last_child: Option<&'static mut Node<S, H>>,
@@ -173,13 +174,13 @@ impl<S, H> Default for Node<S, H> {
         Self {
             key: None,
             classes: Some(alloc.vec()),
-            callbacks: Some(alloc.vec()),
             style_sheet: None,
+            event_callbacks: Some(alloc.vec()),
             style_callback: None,
             layout_callback: None,
             draw_callback: None,
             draw_cache_enable: false,
-            size: 1,
+            tree_size: 1,
             num_children: 0,
             prev_sibling: None,
             last_child: None,
@@ -196,7 +197,7 @@ impl<S, H> Node<S, H> {
 
     /// Register an event callback.
     pub fn event(mut self, event_type: On, callback: impl Fn(&mut S, &mut EventCtx<S, H>) -> Phase + 'static) -> Self {
-        if let Some(callbacks) = &mut self.callbacks {
+        if let Some(callbacks) = &mut self.event_callbacks {
             let alloc = Alloc::get_thread_local_alloc().unwrap();
             callbacks.push((event_type, alloc.alloc(callback)));
         }
@@ -229,11 +230,11 @@ impl<S, H> Node<S, H> {
     pub fn add_child(mut self, mut new_child: Self) -> Self {
         let alloc = Alloc::get_thread_local_alloc().unwrap();
 
-        self.size += new_child.size;
+        self.tree_size += new_child.tree_size;
         self.num_children += 1;
 
         if let Some(last_child) = self.last_child {
-            new_child.size += last_child.size;
+            new_child.tree_size += last_child.tree_size;
             new_child.prev_sibling = Some(last_child);
         }
 
@@ -255,11 +256,11 @@ impl<S, H> Node<S, H> {
         self
     }
 
-    pub(crate) fn finish(mut self, key_map: &mut HashMap<Key, usize>) -> Option<BumpVec<'static, ArrayNode<S, H>>> {
+    pub(crate) fn finish(mut self, temp: &Bump, key_map: &mut HashMap<Key, usize>) -> Option<BumpVec<'static, ArrayNode<S, H>>> {
         let alloc = Alloc::get_thread_local_alloc().unwrap();
 
-        let mut tree: BumpVec<ArrayNode<S, H>> = alloc.vec_capacity(self.size);
-        let mut stack: BumpVec<(bool, usize, &mut Node<S, H>)> = alloc.vec();
+        let mut tree: BumpVec<ArrayNode<S, H>> = alloc.vec_capacity(self.tree_size);
+        let mut stack: BumpVec<(bool, usize, &mut Node<S, H>)> = BumpVec::new_in(temp);
 
         stack.push((false, 0, &mut self));
         while let Some((is_last_child, parent, curr_node)) = stack.pop() {
@@ -275,8 +276,8 @@ impl<S, H> Node<S, H> {
             tree.push(ArrayNode {
                 key: curr_node.key,
                 classes: curr_node.classes.take()?,
-                callbacks: curr_node.callbacks.take()?,
                 style_sheet: curr_node.style_sheet.take(),
+                event_callbacks: curr_node.event_callbacks.take()?,
                 style_callback: curr_node.style_callback.take(),
                 layout_callback: curr_node.layout_callback.take(),
                 draw_callback: curr_node.draw_callback.take(),
