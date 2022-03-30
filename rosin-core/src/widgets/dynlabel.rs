@@ -35,7 +35,7 @@ impl DynLabel {
         }
     }
 
-    pub fn set_text(&self, new_text: &str) -> Phase {
+    pub fn set_text(&mut self, new_text: &str) -> Phase {
         let mut text = self.data.text.borrow_mut();
         text.clear();
         text.push_str(new_text);
@@ -43,7 +43,7 @@ impl DynLabel {
         Phase::Draw
     }
 
-    pub fn append_text(&self, new_text: &str) -> Phase {
+    pub fn append_text(&mut self, new_text: &str) -> Phase {
         let mut text = self.data.text.borrow_mut();
         text.push_str(new_text);
         self.data.changed.replace(true);
