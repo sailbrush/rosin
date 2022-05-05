@@ -156,15 +156,8 @@ pub(crate) fn apply_styles<S, H>(temp: &Bump, tree: &[ArrayNode<S, H>], styles: 
             parent_id = tree[id].parent;
         }
 
-        let parent_style: Option<Style> = if id == 0 { None } else { Some(styles[tree[id].parent].clone()) };
-
-        // Find the font size, family, and color (Used for relative lengths and currentColor)
-        let mut font_size_set = false;
-        let mut font_family_set = false;
-        let mut color_set = false;
-
+        // Find matching rules
         let rule_filter = |rule: &&Rule| {
-            // Find matching rules
             let mut direct = false;
             let mut cmp_node = id;
             for (i, selector) in rule.selectors.iter().rev().enumerate() {
@@ -215,11 +208,22 @@ pub(crate) fn apply_styles<S, H>(temp: &Bump, tree: &[ArrayNode<S, H>], styles: 
             true // All selectors satisfied
         };
 
-        tree[id].style_sheet.as_ref().iter().chain(sheets.iter()).for_each(|sheet| {
+        let parent_style: Option<Style> = if id == 0 { None } else { Some(styles[tree[id].parent].clone()) };
+
+        // Find the font size, family, and color (Used for relative lengths and currentColor)
+        let mut font_size_set = false;
+        let mut font_family_set = false;
+        let mut color_set = false;
+
+        tree[id].style_sheet.as_ref().iter().chain(sheets.iter()).rev().for_each(|sheet| {
+            if font_size_set && font_family_set && color_set {
+                return;
+            }
+
             let rule_action = |rule: &Rule| {
                 for property in rule.properties.iter().rev() {
                     if font_size_set && font_family_set && color_set {
-                        break;
+                        return;
                     }
                     match property {
                         Property::FontSize(value) => {
