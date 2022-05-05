@@ -166,53 +166,49 @@ pub(crate) fn apply_styles<S, H>(temp: &Bump, tree: &[ArrayNode<S, H>], styles: 
         let rule_filter = |rule: &&Rule| {
             // Find matching rules
             let mut direct = false;
-            let mut cmp_node = Some(id);
+            let mut cmp_node = id;
             for (i, selector) in rule.selectors.iter().rev().enumerate() {
-                loop {
-                    if let Some(n) = cmp_node {
-                        if i == 0 {
-                            if !selector.check(&tree[n]) {
-                                return false;
-                            } else {
-                                cmp_node = if n != 0 { Some(tree[n].parent) } else { None };
-                                break; // Next selector
-                            }
+                while cmp_node != usize::MAX {
+                    if i == 0 {
+                        if !selector.check(&tree[cmp_node]) {
+                            return false;
                         } else {
-                            match selector {
-                                Selector::Wildcard => {
-                                    cmp_node = if n != 0 { Some(tree[n].parent) } else { None };
-                                    direct = false;
-                                    break; // Next selector
-                                }
-                                Selector::Id(_) | Selector::Class(_) => {
-                                    cmp_node = if n != 0 { Some(tree[n].parent) } else { None };
-
-                                    if selector.check(&tree[n]) {
-                                        direct = false;
-                                        break; // Next selector
-                                    } else if direct {
-                                        return false; // Must match, but didn't
-                                    }
-
-                                    direct = false;
-                                    continue; // Don't go to the next selector, just move up the tree
-                                }
-                                Selector::DirectChildren => {
-                                    direct = true;
-                                    break; // Next selector
-                                }
-                                Selector::Children => {
-                                    direct = false;
-                                    break; // Next selector
-                                }
-                                Selector::Hover | Selector::Focus => {
-                                    // Hover and Focus styles aren't applied in this step
-                                    return false;
-                                }
-                            }
+                            cmp_node = tree[cmp_node].parent;
+                            break; // Next selector
                         }
                     } else {
-                        return false; // Made it to the root unsasitfied
+                        match selector {
+                            Selector::Wildcard => {
+                                cmp_node = tree[cmp_node].parent;
+                                direct = false;
+                                break; // Next selector
+                            }
+                            Selector::Id(_) | Selector::Class(_) => {
+                                cmp_node = tree[cmp_node].parent;
+
+                                if selector.check(&tree[cmp_node]) {
+                                    direct = false;
+                                    break; // Next selector
+                                } else if direct {
+                                    return false; // Must match, but didn't
+                                }
+
+                                direct = false;
+                                continue; // Don't go to the next selector, just move up the tree
+                            }
+                            Selector::DirectChildren => {
+                                direct = true;
+                                break; // Next selector
+                            }
+                            Selector::Children => {
+                                direct = false;
+                                break; // Next selector
+                            }
+                            Selector::Hover | Selector::Focus => {
+                                // Hover and Focus styles aren't applied in this step
+                                return false;
+                            }
+                        }
                     }
                 }
             }
