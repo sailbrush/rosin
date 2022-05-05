@@ -100,6 +100,22 @@ macro_rules! apply {
             _ => debug_assert!(false),
         }
     };
+    (@font_family, $value:expr, $style:expr, $parent_style:ident, $attr:ident) => {
+        match $value {
+            PropertyValue::Initial => {
+                $style.$attr = Style::default().$attr;
+            }
+            PropertyValue::Inherit => {
+                if let Some(parent) = &$parent_style {
+                    $style.$attr = parent.$attr.clone();
+                }
+            }
+            PropertyValue::Exact(value) => {
+                $style.$attr = Some(value.clone());
+            }
+            _ => debug_assert!(false),
+        }
+    };
     (@generic, $value:expr, $style:expr, $parent_style:ident, $attr:ident) => {
         match $value {
             PropertyValue::Initial => {
@@ -231,12 +247,9 @@ macro_rules! apply {
     };
 }
 
-pub fn apply_properties(properties: &[Property], style: &mut Style, parent_style: &Option<Style>) {
-    for property in properties {
-        match property {
-            Property::FontSize(_) => { /* already handled */ }
-            Property::Color(_) => { /* already handled */ }
-            Property::FontFamily(_) => { /* already handled */ }
+impl Property {
+    pub fn apply(&self, style: &mut Style, parent_style: &Option<Style>) {
+        match self {
             Property::AlignContent(value) => apply!(@generic, value, style, parent_style, align_content),
             Property::AlignItems(value) => apply!(@generic, value, style, parent_style, align_items),
             Property::AlignSelf(value) => apply!(@generic, value, style, parent_style, align_self),
@@ -262,11 +275,14 @@ pub fn apply_properties(properties: &[Property], style: &mut Style, parent_style
             Property::BoxShadowColor(value) => apply!(@color, value, style, parent_style, box_shadow_color),
             Property::BoxShadowInset(value) => apply!(@generic_opt, value, style, parent_style, box_shadow_inset),
             Property::Cursor(value) => apply!(@generic, value, style, parent_style, cursor),
+            Property::Color(value) => apply!(@color, value, style, parent_style, color),
             Property::FlexBasis(value) => apply!(@length_opt, value, style, parent_style, flex_basis),
             Property::FlexDirection(value) => apply!(@generic, value, style, parent_style, flex_direction),
             Property::FlexGrow(value) => apply!(@generic, value, style, parent_style, flex_grow),
             Property::FlexShrink(value) => apply!(@generic, value, style, parent_style, flex_shrink),
             Property::FlexWrap(value) => apply!(@generic, value, style, parent_style, flex_wrap),
+            Property::FontFamily(value) => apply!(@font_family, value, style, parent_style, font_family),
+            Property::FontSize(value) => apply!(@length, value, style, parent_style, font_size),
             Property::FontWeight(value) => apply!(@generic, value, style, parent_style, font_weight),
             Property::Height(value) => apply!(@length_opt, value, style, parent_style, height),
             Property::JustifyContent(value) => apply!(@generic, value, style, parent_style, justify_content),

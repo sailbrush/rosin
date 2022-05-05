@@ -34,3 +34,7 @@
 .orange {
     background-color: rgb(255, 150, 0);
 }
+
+.btn :hover {
+    background-color: blue;
+}

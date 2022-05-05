@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 use crate::parser::*;
+use crate::prelude::Key;
 use crate::properties::*;
 use crate::style::*;
 use crate::tree::*;
@@ -136,7 +137,7 @@ impl Stylesheet {
 }
 
 // Perform selector matching and apply styles to a tree
-pub(crate) fn apply_styles<S, H>(temp: &Bump, tree: &[ArrayNode<S, H>], styles: &mut BumpVec<'static, Style>) {
+pub(crate) fn apply_static_styles<S, H>(temp: &Bump, tree: &[ArrayNode<S, H>], styles: &mut BumpVec<'static, Style>) {
     let mut sheets = BumpVec::new_in(temp);
     let mut parent_id = usize::MAX;
 
@@ -177,8 +178,6 @@ pub(crate) fn apply_styles<S, H>(temp: &Bump, tree: &[ArrayNode<S, H>], styles: 
                                 break; // Next selector
                             }
                             Selector::Id(_) | Selector::Class(_) => {
-                                cmp_node = tree[cmp_node].parent;
-
                                 if selector.check(&tree[cmp_node]) {
                                     direct = false;
                                     break; // Next selector
@@ -186,6 +185,7 @@ pub(crate) fn apply_styles<S, H>(temp: &Bump, tree: &[ArrayNode<S, H>], styles: 
                                     return false; // Must match, but didn't
                                 }
 
+                                cmp_node = tree[cmp_node].parent;
                                 direct = false;
                                 continue; // Don't go to the next selector, just move up the tree
                             }
@@ -329,7 +329,144 @@ pub(crate) fn apply_styles<S, H>(temp: &Bump, tree: &[ArrayNode<S, H>], styles: 
                 .iter()
                 .filter(rule_filter)
                 .for_each(|rule| {
-                    apply_properties(&rule.properties, &mut styles[id], &parent_style);
+                    for property in &rule.properties {
+                        match property {
+                            Property::FontSize(_) | Property::Color(_) | Property::FontFamily(_) => continue,
+                            _ => {}
+                        }
+                        property.apply(&mut styles[id], &parent_style);
+                    }
+                });
+        });
+    }
+}
+
+// Perform selector matching and apply dynamic styles to a tree
+pub(crate) fn apply_dynamic_styles<S, H>(
+    temp: &Bump,
+    tree: &[ArrayNode<S, H>],
+    focused_node: Option<Key>,
+    hot_nodes: &[usize],
+    styles: &mut [Style],
+) {
+    let mut sheets = BumpVec::new_in(temp);
+    let mut parent_id = usize::MAX;
+
+    for id in 0..tree.len() {
+        // Re-use ancestor sheets from siblings to reduce walks up the tree
+        if parent_id != tree[id].parent {
+            sheets.clear();
+            let mut ancestor = tree[id].parent;
+            while ancestor != usize::MAX {
+                if let Some(stylesheet) = &tree[ancestor].style_sheet {
+                    sheets.push(stylesheet);
+                }
+                ancestor = tree[ancestor].parent;
+            }
+            parent_id = tree[id].parent;
+        }
+
+        // Find matching rules
+        let rule_filter = |rule: &&Rule| {
+            let mut direct = false;
+            let mut cmp_node = id;
+
+            for (i, selector) in rule.selectors.iter().rev().enumerate() {
+                while cmp_node != usize::MAX {
+                    if i == 0 {
+                        match selector {
+                            Selector::Hover => {
+                                if hot_nodes.contains(&cmp_node) {
+                                    break; // Next selector
+                                } else {
+                                    return false;
+                                }
+                            }
+                            Selector::Focus => {
+                                if let (Some(cmp_key), Some(focus_key)) = (tree[cmp_node].key, focused_node) {
+                                    if cmp_key == focus_key {
+                                        break; // Next selector
+                                    } else {
+                                        return false;
+                                    }
+                                } else {
+                                    return false;
+                                }
+                            }
+                            _ => {}
+                        }
+                        if !selector.check(&tree[cmp_node]) {
+                            return false;
+                        } else {
+                            cmp_node = tree[cmp_node].parent;
+                            break; // Next selector
+                        }
+                    } else {
+                        match selector {
+                            Selector::Wildcard => {
+                                cmp_node = tree[cmp_node].parent;
+                                direct = false;
+                                break; // Next selector
+                            }
+                            Selector::Id(_) | Selector::Class(_) => {
+                                if selector.check(&tree[cmp_node]) {
+                                    direct = false;
+                                    break; // Next selector
+                                } else if direct {
+                                    return false; // Must match, but didn't
+                                }
+
+                                cmp_node = tree[cmp_node].parent;
+                                direct = false;
+                                continue; // Don't go to the next selector, just move up the tree
+                            }
+                            Selector::DirectChildren => {
+                                direct = true;
+                                break; // Next selector
+                            }
+                            Selector::Children => {
+                                direct = false;
+                                break; // Next selector
+                            }
+                            Selector::Hover => {
+                                if hot_nodes.contains(&cmp_node) {
+                                    break; // Next selector
+                                } else {
+                                    return false;
+                                }
+                            }
+                            Selector::Focus => {
+                                if let (Some(cmp_key), Some(focus_key)) = (tree[cmp_node].key, focused_node) {
+                                    if cmp_key == focus_key {
+                                        break; // Next selector
+                                    } else {
+                                        return false;
+                                    }
+                                } else {
+                                    return false;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            true // All selectors satisfied
+        };
+
+        let parent_style: Option<Style> = if id == 0 { None } else { Some(styles[tree[id].parent].clone()) };
+
+        tree[id].style_sheet.as_ref().iter().chain(sheets.iter()).for_each(|sheet| {
+            sheet
+                .inner
+                .read()
+                .unwrap()
+                .dynamic_rules
+                .iter()
+                .filter(rule_filter)
+                .for_each(|rule| {
+                    for property in &rule.properties {
+                        property.apply(&mut styles[id], &parent_style);
+                    }
                 });
         });
     }

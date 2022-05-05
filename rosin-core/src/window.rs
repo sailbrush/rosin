@@ -297,9 +297,10 @@ impl<S, H: Clone> RosinWindow<S, H> {
             }
 
             // Store the keys from hovered nodes in case the tree gets rebuilt
-            std::mem::swap(&mut self.hot_nodes, &mut self.prev_hot_nodes);
+            self.prev_hot_nodes.clear();
             self.prev_hot_keys.clear();
-            for &id in &self.prev_hot_nodes {
+            for &id in &self.hot_nodes {
+                self.prev_hot_nodes.push(id);
                 if let Some(key) = tree[id].key {
                     self.prev_hot_keys.push(key);
                 }
@@ -492,7 +493,7 @@ impl<S, H: Clone> RosinWindow<S, H> {
                 alloc.scope(|| alloc.vec_capacity(len))
             };
 
-            stylesheet::apply_styles(&self.temp, tree.borrow(), styles.borrow_mut());
+            stylesheet::apply_static_styles(&self.temp, tree.borrow(), styles.borrow_mut());
             self.tree_cache = Some(tree);
             self.style_cache = Some(styles);
         }
@@ -503,15 +504,19 @@ impl<S, H: Clone> RosinWindow<S, H> {
         // Stash default styles, apply hover/focus styles, and run style callbacks
         let mut default_styles: BumpVec<(usize, Style)> = BumpVec::new_in(&self.temp);
         if self.phase != Phase::Idle {
+            // TODO - apply hover/focus styles using prev_hot_nodes/keys
+            //      - set phase to layout if needed
+            
+
             for (id, node) in tree.iter_mut().enumerate() {
-                // TODO - apply hover/focus styles using prev_hot_nodes/keys
-                //      - set phase to layout if needed
                 if let Some(style_callback) = &mut node.style_callback {
                     default_styles.push((id, styles[id].clone()));
                     style_callback(state, &mut styles[id]);
                 }
             }
         }
+
+        stylesheet::apply_dynamic_styles(&self.temp, tree, self.focused_node, &self.hot_nodes, styles);
 
         // ---------- Layout Phase ----------
         if self.phase >= Phase::Layout || self.layout_cache.is_none() {
