@@ -35,6 +35,10 @@
     background-color: rgb(255, 150, 0);
 }
 
-.btn :hover {
-    background-color: blue;
+.btn:hover {
+    background-color: rgb(115, 115, 115);
+}
+
+.orange:hover {
+    background-color: rgb(255, 161, 30);
 }

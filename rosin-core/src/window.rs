@@ -504,10 +504,6 @@ impl<S, H: Clone> RosinWindow<S, H> {
         // Stash default styles, apply hover/focus styles, and run style callbacks
         let mut default_styles: BumpVec<(usize, Style)> = BumpVec::new_in(&self.temp);
         if self.phase != Phase::Idle {
-            // TODO - apply hover/focus styles using prev_hot_nodes/keys
-            //      - set phase to layout if needed
-            
-
             for (id, node) in tree.iter_mut().enumerate() {
                 if let Some(style_callback) = &mut node.style_callback {
                     default_styles.push((id, styles[id].clone()));
@@ -516,7 +512,8 @@ impl<S, H: Clone> RosinWindow<S, H> {
             }
         }
 
-        stylesheet::apply_dynamic_styles(&self.temp, tree, self.focused_node, &self.hot_nodes, styles);
+        // TODO - set phase to layout if needed
+        stylesheet::apply_dynamic_styles(&self.temp, tree, self.focused_node, &self.hot_nodes, styles, &mut default_styles);
 
         // ---------- Layout Phase ----------
         if self.phase >= Phase::Layout || self.layout_cache.is_none() {

@@ -161,46 +161,40 @@ pub(crate) fn apply_static_styles<S, H>(temp: &Bump, tree: &[ArrayNode<S, H>], s
         let rule_filter = |rule: &&Rule| {
             let mut direct = false;
             let mut cmp_node = id;
-            for (i, selector) in rule.selectors.iter().rev().enumerate() {
+            let mut first = false;
+            for selector in rule.selectors.iter().rev() {
                 while cmp_node != usize::MAX {
-                    if i == 0 {
-                        if !selector.check(&tree[cmp_node]) {
-                            return false;
-                        } else {
+                    match selector {
+                        Selector::Wildcard => {
                             cmp_node = tree[cmp_node].parent;
+                            direct = false;
                             break; // Next selector
                         }
-                    } else {
-                        match selector {
-                            Selector::Wildcard => {
+                        Selector::Id(_) | Selector::Class(_) => {
+                            if selector.check(&tree[cmp_node]) {
                                 cmp_node = tree[cmp_node].parent;
                                 direct = false;
                                 break; // Next selector
+                            } else if direct || !first {
+                                return false; // Must match, but didn't
                             }
-                            Selector::Id(_) | Selector::Class(_) => {
-                                if selector.check(&tree[cmp_node]) {
-                                    direct = false;
-                                    break; // Next selector
-                                } else if direct {
-                                    return false; // Must match, but didn't
-                                }
 
-                                cmp_node = tree[cmp_node].parent;
-                                direct = false;
-                                continue; // Don't go to the next selector, just move up the tree
-                            }
-                            Selector::DirectChildren => {
-                                direct = true;
-                                break; // Next selector
-                            }
-                            Selector::Children => {
-                                direct = false;
-                                break; // Next selector
-                            }
-                            Selector::Hover | Selector::Focus => {
-                                // Hover and Focus styles aren't applied in this step
-                                return false;
-                            }
+                            cmp_node = tree[cmp_node].parent;
+                            direct = false;
+                            first = true;
+                            continue; // Don't go to the next selector, just move up the tree
+                        }
+                        Selector::DirectChildren => {
+                            direct = true;
+                            break; // Next selector
+                        }
+                        Selector::Children => {
+                            direct = false;
+                            break; // Next selector
+                        }
+                        Selector::Hover | Selector::Focus => {
+                            // Hover and Focus styles aren't applied in this step
+                            return false;
                         }
                     }
                 }
@@ -348,6 +342,7 @@ pub(crate) fn apply_dynamic_styles<S, H>(
     focused_node: Option<Key>,
     hot_nodes: &[usize],
     styles: &mut [Style],
+    default_styles: &mut BumpVec<'_, (usize, Style)>,
 ) {
     let mut sheets = BumpVec::new_in(temp);
     let mut parent_id = usize::MAX;
@@ -370,81 +365,53 @@ pub(crate) fn apply_dynamic_styles<S, H>(
         let rule_filter = |rule: &&Rule| {
             let mut direct = false;
             let mut cmp_node = id;
-
-            for (i, selector) in rule.selectors.iter().rev().enumerate() {
+            let mut first = false;
+            for selector in rule.selectors.iter().rev() {
                 while cmp_node != usize::MAX {
-                    if i == 0 {
-                        match selector {
-                            Selector::Hover => {
-                                if hot_nodes.contains(&cmp_node) {
-                                    break; // Next selector
-                                } else {
-                                    return false;
-                                }
-                            }
-                            Selector::Focus => {
-                                if let (Some(cmp_key), Some(focus_key)) = (tree[cmp_node].key, focused_node) {
-                                    if cmp_key == focus_key {
-                                        break; // Next selector
-                                    } else {
-                                        return false;
-                                    }
-                                } else {
-                                    return false;
-                                }
-                            }
-                            _ => {}
-                        }
-                        if !selector.check(&tree[cmp_node]) {
-                            return false;
-                        } else {
+                    match selector {
+                        Selector::Wildcard => {
                             cmp_node = tree[cmp_node].parent;
+                            direct = false;
                             break; // Next selector
                         }
-                    } else {
-                        match selector {
-                            Selector::Wildcard => {
+                        Selector::Id(_) | Selector::Class(_) => {
+                            if selector.check(&tree[cmp_node]) {
                                 cmp_node = tree[cmp_node].parent;
                                 direct = false;
                                 break; // Next selector
+                            } else if direct || !first {
+                                return false; // Must match, but didn't
                             }
-                            Selector::Id(_) | Selector::Class(_) => {
-                                if selector.check(&tree[cmp_node]) {
-                                    direct = false;
-                                    break; // Next selector
-                                } else if direct {
-                                    return false; // Must match, but didn't
-                                }
 
-                                cmp_node = tree[cmp_node].parent;
-                                direct = false;
-                                continue; // Don't go to the next selector, just move up the tree
-                            }
-                            Selector::DirectChildren => {
-                                direct = true;
+                            cmp_node = tree[cmp_node].parent;
+                            direct = false;
+                            first = true;
+                            continue; // Don't go to the next selector, just move up the tree
+                        }
+                        Selector::DirectChildren => {
+                            direct = true;
+                            break; // Next selector
+                        }
+                        Selector::Children => {
+                            direct = false;
+                            break; // Next selector
+                        }
+                        Selector::Hover => {
+                            if hot_nodes.contains(&cmp_node) {
                                 break; // Next selector
+                            } else {
+                                return false;
                             }
-                            Selector::Children => {
-                                direct = false;
-                                break; // Next selector
-                            }
-                            Selector::Hover => {
-                                if hot_nodes.contains(&cmp_node) {
+                        }
+                        Selector::Focus => {
+                            if let (Some(cmp_key), Some(focus_key)) = (tree[cmp_node].key, focused_node) {
+                                if cmp_key == focus_key {
                                     break; // Next selector
                                 } else {
                                     return false;
                                 }
-                            }
-                            Selector::Focus => {
-                                if let (Some(cmp_key), Some(focus_key)) = (tree[cmp_node].key, focused_node) {
-                                    if cmp_key == focus_key {
-                                        break; // Next selector
-                                    } else {
-                                        return false;
-                                    }
-                                } else {
-                                    return false;
-                                }
+                            } else {
+                                return false;
                             }
                         }
                     }
@@ -464,6 +431,14 @@ pub(crate) fn apply_dynamic_styles<S, H>(
                 .iter()
                 .filter(rule_filter)
                 .for_each(|rule| {
+                    if let Some((default_id, _)) = &default_styles.last() {
+                        if *default_id != id {
+                            default_styles.push((id, styles[id].clone()));
+                        }
+                    } else {
+                        default_styles.push((id, styles[id].clone()));
+                    }
+
                     for property in &rule.properties {
                         property.apply(&mut styles[id], &parent_style);
                     }

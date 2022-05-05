@@ -131,7 +131,6 @@ impl<S> WinHandler for Window<S> {
                 }
             }
 
-            self.rosin.update_phase(Phase::Build);
             self.handle.invalidate();
             self.handle.request_anim_frame();
         }
