@@ -247,12 +247,12 @@ impl Style {
         Size::new(self.max_width, self.max_height)
     }
 
-    pub fn position(&self) -> Rect {
+    pub fn trbl(&self) -> Rect {
         Rect::new(
-            self.top.unwrap_or(0.0),
-            self.right.unwrap_or(0.0),
-            self.bottom.unwrap_or(0.0),
-            self.left.unwrap_or(0.0),
+            self.top.unwrap_or(f32::NAN),
+            self.right.unwrap_or(f32::NAN),
+            self.bottom.unwrap_or(f32::NAN),
+            self.left.unwrap_or(f32::NAN),
         )
     }
 

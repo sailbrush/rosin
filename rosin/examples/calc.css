@@ -42,3 +42,8 @@
 .orange:hover {
     background-color: rgb(255, 161, 30);
 }
+
+.fixed {
+    position: fixed;
+    top: 10px;
+}

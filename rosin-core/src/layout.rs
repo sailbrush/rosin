@@ -15,7 +15,8 @@ struct FlexItem {
     min_size: Size,
     max_size: Size,
 
-    position: Rect,
+    trbl: Rect,
+    position: Position,
     margin: Rect,
     border_padding: Rect,
 
@@ -125,7 +126,7 @@ fn layout_inner<S, H>(
         .child_ids()
         .rev()
         .map(|id| (id, &styles[id]))
-        .filter(|(_, style)| style.position != Position::Fixed)
+        .filter(|(_, style)| style.position != Position::Fixed) // TODO: Handle Absolute and Fixed positioning
         .map(|(id, style)| {
             let min_size = style.min_size();
             let max_size = style.max_size();
@@ -142,7 +143,8 @@ fn layout_inner<S, H>(
                 min_size,
                 max_size,
 
-                position: style.position(),
+                trbl: style.trbl(),
+                position: style.position,
                 margin: style.margin(),
                 border_padding,
 
@@ -549,16 +551,28 @@ fn layout_inner<S, H>(
         let mut total_offset_main = border_padding.main_start(dir);
         let line_offset_cross = line.offset_cross;
 
-        // TODO - support CSS position
         let layout_item = |item: &mut FlexItem| {
             let offset_main = total_offset_main + item.offset_main + item.margin.main_start(dir);
             let offset_cross = total_offset_cross + item.offset_cross + line_offset_cross + item.margin.cross_start(dir);
 
-            let position = position_offset
+            let mut position = position_offset
                 + Point {
                     x: if dir.is_row() { offset_main } else { offset_cross },
                     y: if !dir.is_row() { offset_main } else { offset_cross },
                 };
+
+            if item.position == Position::Relative {
+                if !item.trbl.top.is_nan() {
+                    position.y += item.trbl.top;
+                } else if !item.trbl.bottom.is_nan() {
+                    position.y -= item.trbl.bottom;
+                }
+                if !item.trbl.left.is_nan() {
+                    position.x += item.trbl.left;
+                } else if !item.trbl.right.is_nan() {
+                    position.x -= item.trbl.right;
+                }
+            }
 
             // Now that we know the final size and position of an item, layout its children
             layout_inner(temp, tree, styles, item.id, item.target_size, output, position);

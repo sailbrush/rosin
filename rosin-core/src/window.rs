@@ -512,8 +512,9 @@ impl<S, H: Clone> RosinWindow<S, H> {
             }
         }
 
-        // TODO - set phase to layout if needed
+        // TODO - set phase to layout only if needed
         stylesheet::apply_dynamic_styles(&self.temp, tree, self.focused_node, &self.hot_nodes, styles, &mut default_styles);
+        self.phase = Phase::Layout;
 
         // ---------- Layout Phase ----------
         if self.phase >= Phase::Layout || self.layout_cache.is_none() {
