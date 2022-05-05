@@ -262,7 +262,8 @@ impl<S, H> Node<S, H> {
         let mut tree: BumpVec<ArrayNode<S, H>> = alloc.vec_capacity(self.tree_size);
         let mut stack: BumpVec<(bool, usize, &mut Node<S, H>)> = BumpVec::new_in(temp);
 
-        stack.push((false, 0, &mut self));
+        // Root's parent is usize::MAX, since it would be impossible for the node at the end of the largest possible aray to have children
+        stack.push((false, usize::MAX, &mut self));
         while let Some((is_last_child, parent, curr_node)) = stack.pop() {
             let index = tree.len();
             if is_last_child {

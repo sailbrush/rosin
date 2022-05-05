@@ -65,13 +65,13 @@ impl PartialEq for Rule {
 
 impl Ord for Rule {
     fn cmp(&self, other: &Self) -> Ordering {
-        other.specificity.cmp(&self.specificity)
+        self.specificity.cmp(&other.specificity)
     }
 }
 
 impl PartialOrd for Rule {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(other.cmp(self))
+        Some(self.cmp(other))
     }
 }
 
@@ -136,9 +136,32 @@ impl Stylesheet {
 }
 
 // Perform selector matching and apply styles to a tree
-pub(crate) fn apply_styles<S, H>(dynamic: bool, temp: &Bump, tree: &[ArrayNode<S, H>], styles: &mut BumpVec<'static, Style>) {
+pub(crate) fn apply_styles<S, H>(temp: &Bump, tree: &[ArrayNode<S, H>], styles: &mut BumpVec<'static, Style>) {
+    let mut sheets = BumpVec::new_in(temp);
+    let mut parent_id = usize::MAX;
+
     for id in 0..tree.len() {
         styles.push(Style::default());
+
+        // Re-use ancestor sheets from siblings to reduce walks up the tree
+        if parent_id != tree[id].parent {
+            sheets.clear();
+            let mut ancestor = tree[id].parent;
+            while ancestor != usize::MAX {
+                if let Some(stylesheet) = &tree[ancestor].style_sheet {
+                    sheets.push(stylesheet);
+                }
+                ancestor = tree[ancestor].parent;
+            }
+            parent_id = tree[id].parent;
+        }
+
+        let parent_style: Option<Style> = if id == 0 { None } else { Some(styles[tree[id].parent].clone()) };
+
+        // Find the font size, family, and color (Used for relative lengths and currentColor)
+        let mut font_size_set = false;
+        let mut font_family_set = false;
+        let mut color_set = false;
 
         let rule_filter = |rule: &&Rule| {
             // Find matching rules
@@ -196,115 +219,89 @@ pub(crate) fn apply_styles<S, H>(dynamic: bool, temp: &Bump, tree: &[ArrayNode<S
             true // All selectors satisfied
         };
 
-        // TODO: should be able to reduce the number of walks up the tree by re-using data from siblings
-        let mut sheets = BumpVec::new_in(temp);
-        let mut ancestor = id;
-        let mut saw_root = false;
-        while ancestor != 0 || !saw_root {
-            if ancestor == 0 {
-                saw_root = true;
-            }
-
-            if let Some(stylesheet) = &tree[ancestor].style_sheet {
-                sheets.push(stylesheet);
-            }
-
-            ancestor = tree[ancestor].parent;
-        }
-
-        let parent_style: Option<Style> = if id == 0 { None } else { Some(styles[tree[id].parent].clone()) };
-
-        // First find the font size and color (Used for relative lengths and currentColor)
-        let mut font_size_set = false;
-        let mut font_family_set = false;
-        let mut color_set = false;
-        sheets.iter().for_each(|sheet| {
-            let guard = sheet.inner.read().unwrap();
-            let list = if dynamic {
-                &guard.dynamic_rules
-            } else {
-                &guard.static_rules
+        tree[id].style_sheet.as_ref().iter().chain(sheets.iter()).for_each(|sheet| {
+            let rule_action = |rule: &Rule| {
+                for property in rule.properties.iter().rev() {
+                    if font_size_set && font_family_set && color_set {
+                        break;
+                    }
+                    match property {
+                        Property::FontSize(value) => {
+                            if font_size_set {
+                                continue;
+                            }
+                            match value {
+                                PropertyValue::Inherit => {
+                                    if let Some(parent) = &parent_style {
+                                        styles[id].font_size = parent.font_size;
+                                    }
+                                }
+                                PropertyValue::Exact(size) => match size {
+                                    Length::Px(value) => {
+                                        styles[id].font_size = *value;
+                                    }
+                                    Length::Em(value) => {
+                                        if let Some(parent) = &parent_style {
+                                            styles[id].font_size = parent.font_size * value;
+                                        } else {
+                                            styles[id].font_size *= value;
+                                        }
+                                    }
+                                },
+                                _ => {}
+                            };
+                            font_size_set = true;
+                        }
+                        Property::FontFamily(value) => {
+                            if font_family_set {
+                                continue;
+                            }
+                            match value {
+                                PropertyValue::Exact(family) => {
+                                    styles[id].font_family = Some(family.clone());
+                                }
+                                _ => {
+                                    // Inherited by default
+                                    if let Some(parent) = &parent_style {
+                                        styles[id].font_family = parent.font_family.clone();
+                                    }
+                                }
+                            }
+                            font_family_set = true;
+                        }
+                        Property::Color(value) => {
+                            if color_set {
+                                continue;
+                            }
+                            match value {
+                                PropertyValue::Initial => styles[id].color = Style::default().color,
+                                PropertyValue::Exact(color) => {
+                                    if let cssparser::Color::RGBA(rgba) = color {
+                                        styles[id].color = *rgba;
+                                    }
+                                }
+                                _ => {
+                                    // Inherited by default
+                                    if let Some(parent) = &parent_style {
+                                        styles[id].color = parent.color;
+                                    }
+                                }
+                            }
+                            color_set = true;
+                        }
+                        _ => {}
+                    }
+                }
             };
 
-            list
+            sheet
+                .inner
+                .read()
+                .unwrap()
+                .static_rules
                 .iter()
                 .filter(rule_filter)
-                .for_each(|rule| {
-                    if font_size_set && font_family_set && color_set {
-                        return;
-                    }
-                    for property in rule.properties.iter().rev() {
-                        if font_size_set && font_family_set && color_set {
-                            break;
-                        }
-                        match property {
-                            Property::FontSize(value) => {
-                                if font_size_set {
-                                    continue;
-                                }
-                                match value {
-                                    PropertyValue::Inherit => {
-                                        if let Some(parent) = &parent_style {
-                                            styles[id].font_size = parent.font_size;
-                                        }
-                                    }
-                                    PropertyValue::Exact(size) => match size {
-                                        Length::Px(value) => {
-                                            styles[id].font_size = *value;
-                                        }
-                                        Length::Em(value) => {
-                                            if let Some(parent) = &parent_style {
-                                                styles[id].font_size = parent.font_size * value;
-                                            } else {
-                                                styles[id].font_size *= value;
-                                            }
-                                        }
-                                    },
-                                    _ => {}
-                                };
-                                font_size_set = true;
-                            }
-                            Property::FontFamily(value) => {
-                                if font_family_set {
-                                    continue;
-                                }
-                                match value {
-                                    PropertyValue::Exact(family) => {
-                                        styles[id].font_family = Some(family.clone());
-                                    }
-                                    _ => {
-                                        // Inherited by default
-                                        if let Some(parent) = &parent_style {
-                                            styles[id].font_family = parent.font_family.clone();
-                                        }
-                                    }
-                                }
-                                font_family_set = true;
-                            }
-                            Property::Color(value) => {
-                                if color_set {
-                                    continue;
-                                }
-                                match value {
-                                    PropertyValue::Initial => styles[id].color = Style::default().color,
-                                    PropertyValue::Exact(color) => {
-                                        if let cssparser::Color::RGBA(rgba) = color {
-                                            styles[id].color = *rgba;
-                                        }
-                                    }
-                                    _ => {
-                                        // Inherited by default
-                                        if let Some(parent) = &parent_style {
-                                            styles[id].color = parent.color;
-                                        }
-                                    }
-                                }
-                                color_set = true;
-                            }
-                            _ => {}
-                        }
-                    }
-                })
+                .for_each(rule_action);
         });
 
         if !font_size_set {
@@ -323,16 +320,12 @@ pub(crate) fn apply_styles<S, H>(dynamic: bool, temp: &Bump, tree: &[ArrayNode<S
             }
         }
 
-        // TODO: Should be able to run the filter over the rules only once
-        sheets.iter().for_each(|sheet| {
-            let guard = sheet.inner.read().unwrap();
-            let list = if dynamic {
-                &guard.dynamic_rules
-            } else {
-                &guard.static_rules
-            };
-
-            list
+        tree[id].style_sheet.as_ref().iter().chain(sheets.iter()).for_each(|sheet| {
+            sheet
+                .inner
+                .read()
+                .unwrap()
+                .static_rules
                 .iter()
                 .filter(rule_filter)
                 .for_each(|rule| {

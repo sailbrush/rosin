@@ -492,7 +492,7 @@ impl<S, H: Clone> RosinWindow<S, H> {
                 alloc.scope(|| alloc.vec_capacity(len))
             };
 
-            stylesheet::apply_styles(false, &self.temp, tree.borrow(), styles.borrow_mut());
+            stylesheet::apply_styles(&self.temp, tree.borrow(), styles.borrow_mut());
             self.tree_cache = Some(tree);
             self.style_cache = Some(styles);
         }
