@@ -212,7 +212,7 @@ impl<S, H: Clone> RosinWindow<S, H> {
             let default_layout = Layout::default();
 
             let mut ctx = EventCtx {
-                event_info: EventInfo::Pointer(event.clone()),
+                event_info: EventInfo::Pointer(event),
                 window_handle: self.handle.clone(),
                 resource_loader: self.resource_loader.clone(),
                 focus: self.focused_node,

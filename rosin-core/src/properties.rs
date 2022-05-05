@@ -248,6 +248,7 @@ macro_rules! apply {
 }
 
 impl Property {
+    #[allow(clippy::assign_op_pattern)]
     pub fn apply(&self, style: &mut Style, parent_style: &Option<Style>) {
         match self {
             Property::AlignContent(value) => apply!(@generic, value, style, parent_style, align_content),

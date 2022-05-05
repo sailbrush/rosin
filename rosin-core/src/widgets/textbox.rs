@@ -70,7 +70,7 @@ impl TextBox {
                     let event = ctx.event_info.clone().unwrap_key();
                     match &event.key {
                         KbKey::Character(c) => {
-                            this.text.borrow_mut().push_str(&c);
+                            this.text.borrow_mut().push_str(c);
                             this.changed.replace(true);
                             return Phase::Draw;
                         },

@@ -383,9 +383,9 @@ fn parse_align_self<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>
     }
 }
 
-fn parse_background_image<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>, cssparser::ParseError<'i, ()>> {
+fn parse_background_image<'i, 't>(_parser: &mut Parser<'i, 't>) -> Result<Vec<Property>, cssparser::ParseError<'i, ()>> {
     // Parse gradient function
-    todo!()
+    todo!();
 }
 
 fn parse_border<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>, cssparser::ParseError<'i, ()>> {

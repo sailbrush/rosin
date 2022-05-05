@@ -151,6 +151,7 @@ impl<S, H> ArrayNode<S, H> {
 }
 
 /// A node in the view tree. Panics if created outside of a `ViewCallback`.
+#[allow(clippy::type_complexity)]
 pub struct Node<S: 'static, H: 'static> {
     key: Option<Key>,
     classes: Option<BumpVec<'static, &'static str>>,
