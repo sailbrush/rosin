@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 
 use bumpalo::{collections::Vec as BumpVec, Bump};
 use druid_shell::piet::Piet;
-use druid_shell::{KeyEvent, MouseEvent};
+use druid_shell::KeyEvent;
 
 pub struct RosinWindow<S: 'static, H: Clone + 'static> {
     resource_loader: Arc<Mutex<ResourceLoader>>, // TODO - does this need to be here?
@@ -24,9 +24,9 @@ pub struct RosinWindow<S: 'static, H: Clone + 'static> {
     phase: Phase,
     last_frame: Instant,
     focused_node: Option<Key>,
-    hover_nodes: Vec<usize>,
-    prev_hover_nodes: Vec<usize>,
-    prev_hover_keys: Vec<Key>,
+    hot_nodes: Vec<usize>,
+    prev_hot_nodes: Vec<usize>,
+    prev_hot_keys: Vec<Key>,
     anim_tasks: Rc<RefCell<Vec<Box<dyn AnimCallback<S>>>>>,
     key_map: HashMap<Key, usize>,
     tree_cache: Option<Scope<BumpVec<'static, ArrayNode<S, H>>>>,
@@ -47,9 +47,9 @@ impl<S, H: Clone> RosinWindow<S, H> {
             phase: Phase::Build,
             last_frame: Instant::now(),
             focused_node: None,
-            hover_nodes: Vec::new(),
-            prev_hover_nodes: Vec::new(),
-            prev_hover_keys: Vec::new(),
+            hot_nodes: Vec::new(),
+            prev_hot_nodes: Vec::new(),
+            prev_hot_keys: Vec::new(),
             anim_tasks: Rc::new(RefCell::new(Vec::new())),
             key_map: HashMap::new(),
             tree_cache: None,
@@ -70,7 +70,7 @@ impl<S, H: Clone> RosinWindow<S, H> {
         self.tree_cache = None;
         self.alloc.reset().expect("[Rosin] Failed to reset cache");
 
-        self.prev_hover_nodes.clear();
+        self.prev_hot_nodes.clear();
         self.key_map.clear();
     }
 
@@ -163,45 +163,45 @@ impl<S, H: Clone> RosinWindow<S, H> {
                 anim_tasks: self.anim_tasks.clone(),
             };
 
-            if self.prev_hover_nodes.is_empty() {
-                for key in &self.prev_hover_keys {
+            if self.prev_hot_nodes.is_empty() {
+                for key in &self.prev_hot_keys {
                     if let Some(&id) = self.key_map.get(key) {
-                        self.prev_hover_nodes.push(id);
+                        self.prev_hot_nodes.push(id);
                     }
                 }
             }
 
             // Dispatch MouseLeave event to all previously hovered nodes
             let mut phase = Phase::Idle;
-            for &id in &self.prev_hover_nodes {
-                phase.update(Self::dispatch_event(On::MouseLeave, state, &mut ctx, tree, id));
+            for &id in &self.prev_hot_nodes {
+                phase.update(Self::dispatch_event(On::PointerLeave, state, &mut ctx, tree, id));
             }
             phase.update(self.handle_ctx(state, ctx));
             self.update_phase(phase);
 
             // The mouse has left the window, so it's not hovering over anything this frame
-            self.prev_hover_nodes.clear();
-            self.prev_hover_keys.clear();
+            self.prev_hot_nodes.clear();
+            self.prev_hot_keys.clear();
         }
     }
 
-    pub fn mouse_wheel(&mut self, state: &mut S, event: &MouseEvent) {
-        self.mouse_event(state, event, On::MouseWheel)
+    pub fn wheel(&mut self, state: &mut S, event: PointerEvent) {
+        self.pointer_event(state, event, On::Wheel)
     }
 
-    pub fn mouse_move(&mut self, state: &mut S, event: &MouseEvent) {
-        self.mouse_event(state, event, On::MouseMove)
+    pub fn pointer_move(&mut self, state: &mut S, event: PointerEvent) {
+        self.pointer_event(state, event, On::PointerMove)
     }
 
-    pub fn mouse_down(&mut self, state: &mut S, event: &MouseEvent) {
-        self.mouse_event(state, event, On::MouseDown)
+    pub fn pointer_down(&mut self, state: &mut S, event: PointerEvent) {
+        self.pointer_event(state, event, On::PointerDown)
     }
 
-    pub fn mouse_up(&mut self, state: &mut S, event: &MouseEvent) {
-        self.mouse_event(state, event, On::MouseUp)
+    pub fn pointer_up(&mut self, state: &mut S, event: PointerEvent) {
+        self.pointer_event(state, event, On::PointerUp)
     }
 
-    fn mouse_event(&mut self, state: &mut S, event: &MouseEvent, event_type: On) {
+    fn pointer_event(&mut self, state: &mut S, event: PointerEvent, event_type: On) {
         if let (Some(tree), Some(styles), Some(layout)) = (&mut self.tree_cache, &self.style_cache, &self.layout_cache) {
             let tree = tree.borrow_mut();
             let styles = styles.borrow();
@@ -212,7 +212,7 @@ impl<S, H: Clone> RosinWindow<S, H> {
             let default_layout = Layout::default();
 
             let mut ctx = EventCtx {
-                event_info: EventInfo::Mouse(event.clone()),
+                event_info: EventInfo::Pointer(event.clone()),
                 window_handle: self.handle.clone(),
                 resource_loader: self.resource_loader.clone(),
                 focus: self.focused_node,
@@ -223,23 +223,23 @@ impl<S, H: Clone> RosinWindow<S, H> {
             };
 
             let position = Point {
-                x: event.pos.x as f32,
-                y: event.pos.y as f32,
+                x: event.window_pos_x as f32,
+                y: event.window_pos_y as f32,
             };
 
             // Get ids of nodes the mouse is over
-            self.hover_nodes.clear();
-            layout::hit_test(layout, position, &mut self.hover_nodes);
+            self.hot_nodes.clear();
+            layout::hit_test(layout, position, &mut self.hot_nodes);
 
             // If there are no hovered ids from the previous frame, the tree might have been rebuilt
             // So, use keys to get the ids of previously hovered nodes
-            if self.prev_hover_nodes.is_empty() {
-                for key in &self.prev_hover_keys {
+            if self.prev_hot_nodes.is_empty() {
+                for key in &self.prev_hot_keys {
                     if let Some(&id) = self.key_map.get(key) {
-                        self.prev_hover_nodes.push(id);
+                        self.prev_hot_nodes.push(id);
                     }
                 }
-                self.prev_hover_nodes.sort_unstable();
+                self.prev_hot_nodes.sort_unstable();
             }
 
             let mut mouse_enter_nodes: BumpVec<usize> = BumpVec::new_in(&self.temp);
@@ -250,14 +250,14 @@ impl<S, H: Clone> RosinWindow<S, H> {
 
             // Compare hovered nodes with previous frame
             // NOTE: Assumes the vecs are sorted ascending
-            while curr < self.hover_nodes.len() && prev < self.prev_hover_nodes.len() {
-                match self.hover_nodes[curr].cmp(&self.prev_hover_nodes[prev]) {
+            while curr < self.hot_nodes.len() && prev < self.prev_hot_nodes.len() {
+                match self.hot_nodes[curr].cmp(&self.prev_hot_nodes[prev]) {
                     Ordering::Less => {
-                        mouse_enter_nodes.push(self.hover_nodes[curr]);
+                        mouse_enter_nodes.push(self.hot_nodes[curr]);
                         curr += 1;
                     }
                     Ordering::Greater => {
-                        mouse_leave_nodes.push(self.prev_hover_nodes[prev]);
+                        mouse_leave_nodes.push(self.prev_hot_nodes[prev]);
                         prev += 1;
                     }
                     Ordering::Equal => {
@@ -266,12 +266,12 @@ impl<S, H: Clone> RosinWindow<S, H> {
                     }
                 }
             }
-            while curr < self.hover_nodes.len() {
-                mouse_enter_nodes.push(self.hover_nodes[curr]);
+            while curr < self.hot_nodes.len() {
+                mouse_enter_nodes.push(self.hot_nodes[curr]);
                 curr += 1;
             }
-            while prev < self.prev_hover_nodes.len() {
-                mouse_leave_nodes.push(self.prev_hover_nodes[prev]);
+            while prev < self.prev_hot_nodes.len() {
+                mouse_leave_nodes.push(self.prev_hot_nodes[prev]);
                 prev += 1;
             }
 
@@ -281,27 +281,27 @@ impl<S, H: Clone> RosinWindow<S, H> {
             for id in mouse_leave_nodes {
                 ctx.style = styles[id].clone();
                 ctx.layout = layout[id];
-                phase.update(Self::dispatch_event(On::MouseLeave, state, &mut ctx, tree, id));
+                phase.update(Self::dispatch_event(On::PointerLeave, state, &mut ctx, tree, id));
             }
 
             for id in mouse_enter_nodes {
                 ctx.style = styles[id].clone();
                 ctx.layout = layout[id];
-                phase.update(Self::dispatch_event(On::MouseEnter, state, &mut ctx, tree, id));
+                phase.update(Self::dispatch_event(On::PointerEnter, state, &mut ctx, tree, id));
             }
 
-            for &id in &self.hover_nodes {
+            for &id in &self.hot_nodes {
                 ctx.style = styles[id].clone();
                 ctx.layout = layout[id];
                 phase.update(Self::dispatch_event(event_type, state, &mut ctx, tree, id));
             }
 
             // Store the keys from hovered nodes in case the tree gets rebuilt
-            std::mem::swap(&mut self.hover_nodes, &mut self.prev_hover_nodes);
-            self.prev_hover_keys.clear();
-            for &id in &self.prev_hover_nodes {
+            std::mem::swap(&mut self.hot_nodes, &mut self.prev_hot_nodes);
+            self.prev_hot_keys.clear();
+            for &id in &self.prev_hot_nodes {
                 if let Some(key) = tree[id].key {
-                    self.prev_hover_keys.push(key);
+                    self.prev_hot_keys.push(key);
                 }
             }
 
@@ -310,15 +310,7 @@ impl<S, H: Clone> RosinWindow<S, H> {
         }
     }
 
-    pub fn key_down(&mut self, state: &mut S, event: KeyEvent) -> bool {
-        self.key_event(state, event, On::KeyDown)
-    }
-
-    pub fn key_up(&mut self, state: &mut S, event: KeyEvent) {
-        self.key_event(state, event, On::KeyUp);
-    }
-
-    fn key_event(&mut self, state: &mut S, event: KeyEvent, event_type: On) -> bool {
+    pub fn key_event(&mut self, state: &mut S, event: KeyEvent) -> bool {
         if let Some(tree) = &mut self.tree_cache {
             let tree = tree.borrow_mut();
 
@@ -336,7 +328,7 @@ impl<S, H: Clone> RosinWindow<S, H> {
             let default_style = Style::default();
             let default_layout = Layout::default();
 
-            if tree[id].has_callback(event_type) {
+            if tree[id].has_callback(On::Keyboard) {
                 let mut ctx = EventCtx {
                     event_info: EventInfo::Key(event),
                     window_handle: self.handle.clone(),
@@ -348,7 +340,7 @@ impl<S, H: Clone> RosinWindow<S, H> {
                     anim_tasks: self.anim_tasks.clone(),
                 };
 
-                let mut phase = Self::dispatch_event(event_type, state, &mut ctx, tree, id);
+                let mut phase = Self::dispatch_event(On::Keyboard, state, &mut ctx, tree, id);
                 phase.update(self.handle_ctx(state, ctx));
                 self.update_phase(phase);
                 return true;
@@ -517,7 +509,7 @@ impl<S, H: Clone> RosinWindow<S, H> {
         let mut default_styles: BumpVec<(usize, Style)> = BumpVec::new_in(&self.temp);
         if self.phase != Phase::Idle {
             for (id, node) in tree.iter_mut().enumerate() {
-                // TODO - apply hover/focus styles using prev_hover_nodes/keys
+                // TODO - apply hover/focus styles using prev_hot_nodes/keys
                 //      - set phase to layout if needed
                 if let Some(style_callback) = &mut node.style_callback {
                     default_styles.push((id, styles[id].clone()));

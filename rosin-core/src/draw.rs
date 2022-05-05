@@ -34,12 +34,7 @@ fn draw_inner<S, H>(state: &S, tree: &[ArrayNode<S, H>], styles: &[Style], layou
             layout[id].position.y as f64,
             layout[id].position.x as f64 + layout[id].size.width as f64,
             layout[id].position.y as f64 + layout[id].size.height as f64,
-            (
-                style.border_top_left_radius.into(),
-                style.border_top_right_radius.into(),
-                style.border_bottom_right_radius.into(),
-                style.border_bottom_left_radius.into(),
-            ),
+            style.border_top_left_radius.into(),
         );
 
         piet.fill(path, &bg_color);

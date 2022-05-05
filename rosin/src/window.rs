@@ -9,8 +9,8 @@ use std::{
 };
 
 use druid_shell::{
-    kurbo, piet::Piet, Application, Cursor, FileDialogToken, FileInfo, IdleToken, KeyEvent, MouseEvent, Region, Scale, TimerToken,
-    WinHandler, WindowHandle,
+    kurbo, piet::Piet, Application, Cursor, FileDialogToken, FileInfo, IdleToken, KeyEvent, MouseButtons, MouseEvent, Region, Scale,
+    TimerToken, WinHandler, WindowHandle,
 };
 use rosin_core::alloc::Alloc;
 
@@ -166,7 +166,7 @@ impl<S> WinHandler for Window<S> {
 
     fn key_down(&mut self, event: KeyEvent) -> bool {
         let mut state = self.state.borrow_mut();
-        let result = self.rosin.key_down(&mut state, event);
+        let result = self.rosin.key_event(&mut state, event);
         if !self.rosin.is_idle() {
             self.handle.invalidate();
             self.handle.request_anim_frame();
@@ -176,7 +176,7 @@ impl<S> WinHandler for Window<S> {
 
     fn key_up(&mut self, event: KeyEvent) {
         let mut state = self.state.borrow_mut();
-        self.rosin.key_up(&mut state, event);
+        self.rosin.key_event(&mut state, event);
         if !self.rosin.is_idle() {
             self.handle.invalidate();
             self.handle.request_anim_frame();
@@ -184,7 +184,8 @@ impl<S> WinHandler for Window<S> {
     }
 
     fn wheel(&mut self, event: &MouseEvent) {
-        self.rosin.mouse_wheel(&mut self.state.borrow_mut(), event);
+        let pointer_event = convert_event(event);
+        self.rosin.wheel(&mut self.state.borrow_mut(), pointer_event);
         if !self.rosin.is_idle() {
             self.handle.invalidate();
             self.handle.request_anim_frame();
@@ -194,8 +195,9 @@ impl<S> WinHandler for Window<S> {
     fn zoom(&mut self, _delta: f64) {}
 
     fn mouse_move(&mut self, event: &MouseEvent) {
+        let pointer_event = convert_event(event);
         self.handle.set_cursor(&Cursor::Arrow);
-        self.rosin.mouse_move(&mut self.state.borrow_mut(), event);
+        self.rosin.pointer_move(&mut self.state.borrow_mut(), pointer_event);
         if !self.rosin.is_idle() {
             self.handle.invalidate();
             self.handle.request_anim_frame();
@@ -203,8 +205,9 @@ impl<S> WinHandler for Window<S> {
     }
 
     fn mouse_down(&mut self, event: &MouseEvent) {
+        let pointer_event = convert_event(event);
         let mut state = self.state.borrow_mut();
-        self.rosin.mouse_down(&mut state, event);
+        self.rosin.pointer_down(&mut state, pointer_event);
         if !self.rosin.is_idle() {
             self.handle.invalidate();
             self.handle.request_anim_frame();
@@ -212,8 +215,9 @@ impl<S> WinHandler for Window<S> {
     }
 
     fn mouse_up(&mut self, event: &MouseEvent) {
+        let pointer_event = convert_event(event);
         let mut state = self.state.borrow_mut();
-        self.rosin.mouse_up(&mut state, event);
+        self.rosin.pointer_up(&mut state, pointer_event);
         if !self.rosin.is_idle() {
             self.handle.invalidate();
             self.handle.request_anim_frame();
@@ -260,4 +264,36 @@ impl<S> WinHandler for Window<S> {
     }
 
     fn idle(&mut self, _token: IdleToken) {}
+}
+
+fn convert_event(event: &MouseEvent) -> PointerEvent {
+    PointerEvent {
+        pos_x: 0.0,
+        pos_y: 0.0,
+        window_pos_x: event.pos.x as f32,
+        window_pos_y: event.pos.y as f32,
+        buttons: convert_buttons(event.buttons),
+    }
+}
+
+fn convert_buttons(buttons: MouseButtons) -> PointerButtons {
+    let mut result = PointerButtons::new();
+
+    if buttons.has_left() {
+        result.insert(PointerButton::Left);
+    }
+    if buttons.has_right() {
+        result.insert(PointerButton::Right);
+    }
+    if buttons.has_middle() {
+        result.insert(PointerButton::Middle);
+    }
+    if buttons.has_x1() {
+        result.insert(PointerButton::X1);
+    }
+    if buttons.has_x2() {
+        result.insert(PointerButton::X2);
+    }
+
+    result
 }

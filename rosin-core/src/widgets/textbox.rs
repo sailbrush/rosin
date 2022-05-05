@@ -60,17 +60,17 @@ impl TextBox {
 
         ui!([
             .key(key)
-            .event(On::MouseDown, move |_, ctx| {
+            .event(On::PointerDown, move |_, ctx| {
                 ctx.focus_on(key);
                 Phase::Draw
             })
-            .event(On::KeyDown, move |_, ctx: &mut EventCtx<S, H>| {
+            .event(On::Keyboard, move |_, ctx: &mut EventCtx<S, H>| {
                 if let Some(this) = weak1.upgrade() {
                     ctx.emit_change();
                     let event = ctx.event_info.clone().unwrap_key();
                     match &event.key {
                         KbKey::Character(c) => {
-                            this.text.borrow_mut().push_str(c);
+                            this.text.borrow_mut().push_str(&c);
                             this.changed.replace(true);
                             return Phase::Draw;
                         },

@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
 use druid_shell::piet::Piet;
-use druid_shell::{KeyEvent, MouseEvent};
+use druid_shell::KeyEvent;
 
 use crate::geometry::Size;
 use crate::layout::Layout;
@@ -18,14 +18,13 @@ use std::time::Duration;
 pub enum On {
     // Can be used by widgets to signal that they have changed
     Change,
-    MouseDown,
-    MouseUp,
-    MouseMove,
-    MouseEnter,
-    MouseLeave,
-    MouseWheel,
-    KeyDown,
-    KeyUp,
+    PointerDown,
+    PointerUp,
+    PointerMove,
+    PointerEnter,
+    PointerLeave,
+    Wheel,
+    Keyboard,
     Focus,
     Blur,
     WindowFocus,
@@ -64,25 +63,186 @@ pub struct DrawCtx<'a, 'b> {
     pub must_draw: bool,
 }
 
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+pub enum PointerButton {
+    None,
+    Left,
+    Right,
+    Middle,
+    X1,
+    X2,
+}
+
+impl PointerButton {
+    /// Returns `true` if this is `PointerButton::Left`.
+    #[inline]
+    pub fn is_left(self) -> bool {
+        self == PointerButton::Left
+    }
+
+    /// Returns `true` if this is `PointerButton::Right`.
+    #[inline]
+    pub fn is_right(self) -> bool {
+        self == PointerButton::Right
+    }
+
+    /// Returns `true` if this is `PointerButton::Middle`.
+    #[inline]
+    pub fn is_middle(self) -> bool {
+        self == PointerButton::Middle
+    }
+
+    /// Returns `true` if this is `PointerButton::X1`.
+    #[inline]
+    pub fn is_x1(self) -> bool {
+        self == PointerButton::X1
+    }
+
+    /// Returns `true` if this is `PointerButton::X2`.
+    #[inline]
+    pub fn is_x2(self) -> bool {
+        self == PointerButton::X2
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Copy, Default)]
+pub struct PointerButtons(u8);
+
+impl PointerButtons {
+    /// Create a new empty set.
+    #[inline]
+    pub fn new() -> PointerButtons {
+        PointerButtons(0)
+    }
+
+    /// Add the `button` to the set.
+    #[inline]
+    pub fn insert(&mut self, button: PointerButton) {
+        self.0 |= 1.min(button as u8) << button as u8;
+    }
+
+    /// Remove the `button` from the set.
+    #[inline]
+    pub fn remove(&mut self, button: PointerButton) {
+        self.0 &= !(1.min(button as u8) << button as u8);
+    }
+
+    /// Builder-style method for adding the `button` to the set.
+    #[inline]
+    pub fn with(mut self, button: PointerButton) -> PointerButtons {
+        self.0 |= 1.min(button as u8) << button as u8;
+        self
+    }
+
+    /// Builder-style method for removing the `button` from the set.
+    #[inline]
+    pub fn without(mut self, button: PointerButton) -> PointerButtons {
+        self.0 &= !(1.min(button as u8) << button as u8);
+        self
+    }
+
+    /// Returns `true` if the `button` is in the set.
+    #[inline]
+    pub fn contains(self, button: PointerButton) -> bool {
+        (self.0 & (1.min(button as u8) << button as u8)) != 0
+    }
+
+    /// Returns `true` if the set is empty.
+    #[inline]
+    pub fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+
+    /// Returns `true` if all the `buttons` are in the set.
+    #[inline]
+    pub fn is_superset(self, buttons: PointerButtons) -> bool {
+        self.0 & buttons.0 == buttons.0
+    }
+
+    /// Returns `true` if `PointerButton::Left` is in the set.
+    #[inline]
+    pub fn has_left(self) -> bool {
+        self.contains(PointerButton::Left)
+    }
+
+    /// Returns `true` if `PointerButton::Right` is in the set.
+    #[inline]
+    pub fn has_right(self) -> bool {
+        self.contains(PointerButton::Right)
+    }
+
+    /// Returns `true` if `PointerButton::Middle` is in the set.
+    #[inline]
+    pub fn has_middle(self) -> bool {
+        self.contains(PointerButton::Middle)
+    }
+
+    /// Returns `true` if `PointerButton::X1` is in the set.
+    #[inline]
+    pub fn has_x1(self) -> bool {
+        self.contains(PointerButton::X1)
+    }
+
+    /// Returns `true` if `PointerButton::X2` is in the set.
+    #[inline]
+    pub fn has_x2(self) -> bool {
+        self.contains(PointerButton::X2)
+    }
+
+    /// Adds all the `buttons` to the set.
+    #[inline]
+    pub fn extend(&mut self, buttons: PointerButtons) {
+        self.0 |= buttons.0;
+    }
+
+    /// Returns a union of the values in `self` and `other`.
+    #[inline]
+    pub fn union(mut self, other: PointerButtons) -> PointerButtons {
+        self.0 |= other.0;
+        self
+    }
+
+    /// Clear the set.
+    #[inline]
+    pub fn clear(&mut self) {
+        self.0 = 0;
+    }
+}
+
+impl std::fmt::Debug for PointerButtons {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "PointerButtons({:05b})", self.0 >> 1)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct PointerEvent {
+    pub pos_x: f32,
+    pub pos_y: f32,
+    pub window_pos_x: f32,
+    pub window_pos_y: f32,
+    pub buttons: PointerButtons,
+}
+
 #[derive(Debug, Clone)]
 pub enum EventInfo {
     None,
-    Mouse(MouseEvent),
+    Pointer(PointerEvent),
     Key(KeyEvent),
 }
 
 impl EventInfo {
-    pub fn unwrap_mouse(&self) -> MouseEvent {
-        if let EventInfo::Mouse(mouse_event) = self.clone() {
-            mouse_event
+    pub fn unwrap_pointer(&self) -> PointerEvent {
+        if let EventInfo::Pointer(event) = self.clone() {
+            event
         } else {
             panic!();
         }
     }
 
     pub fn unwrap_key(&self) -> KeyEvent {
-        if let EventInfo::Key(key_event) = self.clone() {
-            key_event
+        if let EventInfo::Key(event) = self.clone() {
+            event
         } else {
             panic!();
         }
@@ -118,16 +278,16 @@ impl<S, H> EventCtx<S, H> {
     }
 
     pub fn offset_x(&self) -> Option<f32> {
-        if let EventInfo::Mouse(mouse) = &self.event_info {
-            Some(mouse.pos.x as f32 - self.layout.position.x)
+        if let EventInfo::Pointer(event) = &self.event_info {
+            Some(event.pos_x as f32 - self.layout.position.x)
         } else {
             None
         }
     }
 
     pub fn offset_y(&self) -> Option<f32> {
-        if let EventInfo::Mouse(mouse) = &self.event_info {
-            Some(mouse.pos.y as f32 - self.layout.position.y)
+        if let EventInfo::Pointer(event) = &self.event_info {
+            Some(event.pos_y as f32 - self.layout.position.y)
         } else {
             None
         }
@@ -154,7 +314,7 @@ impl<F, S> DrawCallback<S> for F where F: 'static + Fn(&S, &mut DrawCtx) {}
 pub trait EventCallback<S, H>: 'static + Fn(&mut S, &mut EventCtx<S, H>) -> Phase {}
 impl<F, S, H> EventCallback<S, H> for F where F: 'static + Fn(&mut S, &mut EventCtx<S, H>) -> Phase {}
 
-/// `Fn(&mut S, &mut Style)`
+/// `Fn(&S, Size)`
 pub trait LayoutCallback<S>: 'static + Fn(&S, Size) {}
 impl<F, S> LayoutCallback<S> for F where F: 'static + Fn(&S, Size) {}
 

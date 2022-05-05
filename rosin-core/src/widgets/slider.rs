@@ -48,9 +48,9 @@ impl Slider {
 
         ui!([
             .key(self.key)
-            .event(On::MouseDown, move |_, ctx: &mut EventCtx<S, H>| {
+            .event(On::PointerDown, move |_, ctx: &mut EventCtx<S, H>| {
                 let this = if let Some(this) = weak1.upgrade() { this } else { return Phase::Idle };
-                let event = ctx.event_info.clone().unwrap_mouse();
+                let event = ctx.event_info.clone().unwrap_pointer();
                 let offset_x = ctx.offset_x().unwrap();
                 let _offset_y = ctx.offset_y().unwrap();
 
@@ -64,9 +64,9 @@ impl Slider {
                     Phase::Idle
                 }
             })
-            .event(On::MouseMove, move |_, ctx: &mut EventCtx<S, H>| {
+            .event(On::PointerMove, move |_, ctx: &mut EventCtx<S, H>| {
                 let this = if let Some(this) = weak2.upgrade() { this } else { return Phase::Idle };
-                let event = ctx.event_info.clone().unwrap_mouse();
+                let event = ctx.event_info.clone().unwrap_pointer();
                 let offset_x = ctx.offset_x().unwrap();
                 let _offset_y = ctx.offset_y().unwrap();
 

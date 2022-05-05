@@ -14,5 +14,6 @@ pub mod prelude {
     pub use crate::new_view;
     pub use crate::view::*;
     pub use crate::window::*;
+    pub use druid_shell::WindowHandle;
     pub use rosin_core::prelude::*;
 }

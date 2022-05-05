@@ -10,7 +10,7 @@ use std::{
 
 use crate::{libloader::*, prelude::*, window::Window};
 
-use druid_shell::{Application, WindowBuilder};
+use druid_shell::{Application, WindowBuilder, WindowHandle};
 use rosin_core::prelude::*;
 
 pub struct AppLauncher<S: 'static> {

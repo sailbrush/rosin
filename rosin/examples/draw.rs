@@ -13,22 +13,22 @@ pub struct State {
 
 pub fn main_view(state: &State) -> Node<State, WindowHandle> {
     ui!(state.style.clone(), "root" [{
-            .event(On::MouseDown, |s: &mut State, _| {
+            .event(On::PointerDown, |s: &mut State, _| {
                 s.lines.push(Vec::new());
                 Phase::Build
             })
-            .event(On::KeyDown, |s: &mut State, ctx| {
+            .event(On::Keyboard, |s: &mut State, ctx| {
                 let event = ctx.event_info.unwrap_key();
                 if event.key == KbKey::Backspace {
                     s.lines.pop();
                 }
                 Phase::Build
             })
-            .event(On::MouseMove, |s: &mut State, ctx| {
-                let event = ctx.event_info.unwrap_mouse();
+            .event(On::PointerMove, |s: &mut State, ctx| {
+                let event = ctx.event_info.unwrap_pointer();
                 if event.buttons.has_left() {
                     if let Some(line) = s.lines.last_mut() {
-                        line.push(event.pos);
+                        line.push(Point { x: event.pos_x.into(), y: event.pos_y.into() });
                     }
                 }
                 Phase::Draw
