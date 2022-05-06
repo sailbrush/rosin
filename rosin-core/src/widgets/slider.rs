@@ -73,7 +73,7 @@ impl Slider {
                 let this = if let Some(this) = weak2.upgrade() { this } else { return Some(Phase::Idle) };
                 let info = ctx.pointer()?;
 
-                if info.button.is_left() {
+                if info.buttons.has_left() {
                     if this.horizontal.get() {
                         this.value.set((info.pos_x / ctx.width()).into());
                     } else {

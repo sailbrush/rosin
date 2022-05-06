@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use druid_shell::KbKey;
+use druid_shell::KeyState;
 use rosin::prelude::*;
 use rosin::widgets::*;
 
@@ -125,9 +126,9 @@ impl State {
 
 pub fn main_view(state: &State) -> Node<State, WindowHandle> {
     ui!(state.style.clone(), "root" [{
-            // Print debug state when user presses F1
+            // When the user presses F1, print state to console
             .event(On::Keyboard, |s: &mut State, ctx| {
-                if ctx.keyboard()?.key == KbKey::F1 {
+                if ctx.keyboard()?.state == KeyState::Down && ctx.keyboard()?.key == KbKey::F1 {
                     println!("--------------------");
                     dbg!(&s);
                 }

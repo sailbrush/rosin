@@ -1,19 +1,21 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use druid_shell::kurbo::{Line, Point};
-use druid_shell::piet::{Color, RenderContext};
-use druid_shell::KbKey;
+use druid_shell::kurbo::{BezPath, Line, PathEl, Point};
+use druid_shell::piet::{Color, LineCap, LineJoin, RenderContext, StrokeStyle};
+use druid_shell::{KbKey, KeyState};
 use rosin::prelude::*;
 use rosin::widgets::*;
 
+#[derive(Debug)]
 pub struct State {
     style: Stylesheet,
     size_control: Slider,
     canvas: Canvas,
 }
 
+#[derive(Debug)]
 pub struct Canvas {
-    lines: Vec<(f64, Vec<Point>)>,
+    lines: Vec<(f64, BezPath)>,
     brush_size: f64,
 }
 
@@ -37,28 +39,34 @@ impl Canvas {
 
     pub fn view(&self) -> Node<State, WindowHandle> {
         ui!("canvas" [{
-            .event(On::PointerDown, |s: &mut State, _| {
-                s.canvas.lines.push((s.canvas.brush_size, Vec::new()));
+            .event(On::PointerDown, |s: &mut State, ctx| {
+                let mut path = BezPath::new();
+                path.move_to((ctx.pointer()?.pos_x as f64, ctx.pointer()?.pos_y as f64));
+                s.canvas.lines.push((s.canvas.brush_size, path));
                 Some(Phase::Build)
             })
             .event(On::PointerMove, |s: &mut State, ctx| {
-                if ctx.pointer()?.button.is_left() {
-                    if let Some((_, line)) = s.canvas.lines.last_mut() {
-                        line.push(Point { x: ctx.pointer()?.pos_x.into(), y: ctx.pointer()?.pos_y.into() });
+                if ctx.pointer()?.buttons.has_left() {
+                    if let Some((_, path)) = s.canvas.lines.last_mut() {
+                        match path.elements().last() {
+                            Some(PathEl::MoveTo(point)) | Some(PathEl::LineTo(point)) => {
+                                let new_point = (ctx.pointer()?.pos_x as f64, ctx.pointer()?.pos_y as f64);
+                                if (point.x - new_point.0).abs() >= 5.0 || (point.y - new_point.1).abs() >= 5.0 {
+                                    path.line_to(new_point);
+                                }
+                            }
+                            _ => {}
+                        }
                     }
                 }
                 Some(Phase::Draw)
             })
             .on_draw(false, |s, ctx| {
-                for (size, line) in &s.canvas.lines {
-                    let mut prev_point = None;
-                    for point in line {
-                        if let Some(prev) = prev_point {
-                            let path = Line::new(prev, point.clone());
-                            ctx.piet.stroke(path, &Color::BLACK, *size);
-                        }
-                        prev_point = Some(point.clone());
-                    }
+                let stroke_style = StrokeStyle::new()
+                    .line_join(LineJoin::Round)
+                    .line_cap(LineCap::Round);
+                for (size, path) in &s.canvas.lines {
+                    ctx.piet.stroke_styled(path, &Color::BLACK, *size, &stroke_style);
                 }
             })
         }])
@@ -67,12 +75,12 @@ impl Canvas {
 
 pub fn main_view(state: &State) -> Node<State, WindowHandle> {
     ui!(state.style.clone(), "root" [{
-            // When the user hits Backspace, call `undo()` on the canvas
+            // When the user presses Backspace, call `undo()` on the canvas
             .event(On::Keyboard, |s: &mut State, ctx| {
-                if ctx.keyboard()?.key == KbKey::Backspace {
+                if ctx.keyboard()?.state == KeyState::Down && ctx.keyboard()?.key == KbKey::Backspace {
                     Some(s.canvas.undo())
                 } else {
-                    Some(Phase::Idle)
+                    None
                 }
             })
         }
