@@ -10,10 +10,10 @@ use druid_shell::{
 };
 
 pub(crate) fn draw<S, H>(state: &S, tree: &[ArrayNode<S, H>], styles: &[Style], layout: &[Layout], piet: &mut Piet<'_>) {
-    draw_inner(state, tree, styles, layout, 0, piet);
+    draw_inner(state, tree, styles, layout, piet, 0);
 }
 
-fn draw_inner<S, H>(state: &S, tree: &[ArrayNode<S, H>], styles: &[Style], layout: &[Layout], id: usize, piet: &mut Piet<'_>) {
+fn draw_inner<S, H>(state: &S, tree: &[ArrayNode<S, H>], styles: &[Style], layout: &[Layout], piet: &mut Piet<'_>, id: usize) {
     if layout[id].size.width != 0.0 && layout[id].size.height != 0.0 {
         let style = &styles[id];
 
@@ -67,6 +67,6 @@ fn draw_inner<S, H>(state: &S, tree: &[ArrayNode<S, H>], styles: &[Style], layou
     }
 
     for i in tree[id].child_ids() {
-        draw_inner(state, tree, styles, layout, i, piet);
+        draw_inner(state, tree, styles, layout, piet, i);
     }
 }

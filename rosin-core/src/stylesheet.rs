@@ -161,7 +161,7 @@ pub(crate) fn apply_static_styles<S, H>(temp: &Bump, tree: &[ArrayNode<S, H>], s
         let rule_filter = |rule: &&Rule| {
             let mut direct = false;
             let mut cmp_node = id;
-            let mut first = false;
+            let mut first = true;
             for selector in rule.selectors.iter().rev() {
                 while cmp_node != usize::MAX {
                     match selector {
@@ -175,13 +175,13 @@ pub(crate) fn apply_static_styles<S, H>(temp: &Bump, tree: &[ArrayNode<S, H>], s
                                 cmp_node = tree[cmp_node].parent;
                                 direct = false;
                                 break; // Next selector
-                            } else if direct || !first {
+                            } else if direct || first {
                                 return false; // Must match, but didn't
                             }
 
                             cmp_node = tree[cmp_node].parent;
                             direct = false;
-                            first = true;
+                            first = false;
                             continue; // Don't go to the next selector, just move up the tree
                         }
                         Selector::DirectChildren => {
@@ -365,7 +365,7 @@ pub(crate) fn apply_dynamic_styles<S, H>(
         let rule_filter = |rule: &&Rule| {
             let mut direct = false;
             let mut cmp_node = id;
-            let mut first = false;
+            let mut first = true;
             for selector in rule.selectors.iter().rev() {
                 while cmp_node != usize::MAX {
                     match selector {
@@ -379,13 +379,13 @@ pub(crate) fn apply_dynamic_styles<S, H>(
                                 cmp_node = tree[cmp_node].parent;
                                 direct = false;
                                 break; // Next selector
-                            } else if direct || !first {
+                            } else if direct || first {
                                 return false; // Must match, but didn't
                             }
 
                             cmp_node = tree[cmp_node].parent;
                             direct = false;
-                            first = true;
+                            first = false;
                             continue; // Don't go to the next selector, just move up the tree
                         }
                         Selector::DirectChildren => {

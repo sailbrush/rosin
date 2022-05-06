@@ -180,6 +180,7 @@ impl<S, H: Clone> RosinWindow<S, H> {
             self.update_phase(phase);
 
             // The mouse has left the window, so it's not hovering over anything this frame
+            self.hot_nodes.clear();
             self.prev_hot_nodes.clear();
             self.prev_hot_keys.clear();
         }
@@ -523,6 +524,7 @@ impl<S, H: Clone> RosinWindow<S, H> {
         }
 
         // TODO - set phase to layout only if needed
+        // TODO - what happens if the tree was just rebuilt? Need to populate hot_nodes from prev_hot_keys
         stylesheet::apply_dynamic_styles(&self.temp, tree, self.focused_node, &self.hot_nodes, styles, &mut default_styles);
         self.phase = Phase::Layout;
 

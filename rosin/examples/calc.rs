@@ -119,7 +119,6 @@ impl State {
     }
 }
 
-#[no_mangle]
 pub fn main_view(state: &State) -> Node<State, WindowHandle> {
     ui!(state.style.clone(), "root" [
         "display" (state.display.view())
