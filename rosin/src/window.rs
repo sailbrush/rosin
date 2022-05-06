@@ -114,7 +114,12 @@ impl<S> WinHandler for Window<S> {
     fn paint(&mut self, piet: &mut Piet, _invalid: &Region) {
         // TODO - don't rebuild when not needed
         #[cfg(debug_assertions)]
-        self.rosin.update_phase(Phase::Build);
+        {
+            self.rosin.update_phase(Phase::Build);
+            self.handle.invalidate();
+            self.handle.request_anim_frame();
+        }
+        
 
         #[cfg(all(debug_assertions, feature = "hot-reload"))]
         if let Ok(libloader) = &mut self.libloader.as_ref().unwrap().try_lock() {

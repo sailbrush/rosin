@@ -317,7 +317,7 @@ impl<S, H> EventCtx<S, H> {
 
     pub fn offset_x(&self) -> Option<f32> {
         if let EventInfo::Pointer(event) = &self.event_info {
-            Some(event.pos_x as f32 - self.layout.position.x)
+            Some(event.pos_x as f32)
         } else {
             None
         }
@@ -325,7 +325,7 @@ impl<S, H> EventCtx<S, H> {
 
     pub fn offset_y(&self) -> Option<f32> {
         if let EventInfo::Pointer(event) = &self.event_info {
-            Some(event.pos_y as f32 - self.layout.position.y)
+            Some(event.pos_y as f32)
         } else {
             None
         }
