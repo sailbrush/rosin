@@ -4,7 +4,7 @@ use std::{
     any::Any,
     cell::RefCell,
     rc::Rc,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}},
     time::Duration,
 };
 
@@ -67,7 +67,6 @@ pub(crate) struct Window<S: 'static> {
     view: View<S, WindowHandle>,
     state: Rc<RefCell<S>>,
     libloader: Option<Arc<Mutex<LibLoader>>>,
-    last_ext: u32,
 }
 
 impl<S> Window<S> {
@@ -100,7 +99,6 @@ impl<S> Window<S> {
             view,
             state,
             libloader,
-            last_ext: 0,
         }
     }
 }
@@ -116,23 +114,22 @@ impl<S> WinHandler for Window<S> {
     fn paint(&mut self, piet: &mut Piet, _invalid: &Region) {
         // TODO - don't rebuild when not needed
         #[cfg(debug_assertions)]
-        {
-            #[cfg(feature = "hot-reload")]
-            if let Ok(libloader) = self.libloader.as_ref().unwrap().try_lock() {
-                if self.last_ext < libloader.get_ext() {
-                    let view_callback = *libloader.get(self.view.name).unwrap();
-                    self.rosin.set_view(view_callback);
+        self.rosin.update_phase(Phase::Build);
 
-                    let func: fn(Option<Rc<Alloc>>) = *libloader.get(b"set_thread_local_alloc").unwrap();
-                    func(Some(self.rosin.get_alloc()));
+        #[cfg(all(debug_assertions, feature = "hot-reload"))]
+        if let Ok(libloader) = &mut self.libloader.as_ref().unwrap().try_lock() {
+            // TODO - set a flag when poll returns true, and check that here
+            if true {
+                self.rosin.update_phase(Phase::Build);
 
-                    self.handle.invalidate();
-                    self.handle.request_anim_frame();
-                }
+                // Load the new view
+                let view_callback = *libloader.get(self.view.name).unwrap();
+                self.rosin.set_view(view_callback);
+
+                // Share the local allocator
+                let func: fn(Option<Rc<Alloc>>) = *libloader.get(b"set_thread_local_alloc").unwrap();
+                func(Some(self.rosin.get_alloc()));
             }
-
-            self.handle.invalidate();
-            self.handle.request_anim_frame();
         }
 
         self.rosin.animation_frame(&mut self.state.borrow_mut());

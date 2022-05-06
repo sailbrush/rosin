@@ -49,24 +49,29 @@ impl<S> AppLauncher<S> {
             ));
             let lib_path = std::env::current_dir().unwrap().join(&lib_name);
             let loader = Arc::new(Mutex::new(LibLoader::new(lib_path).expect("[Rosin] Hot-reload: Failed to init")));
-
-            // Start a thread that periodically polls the libloader
-            let thread_loader = loader.clone();
-            thread::spawn(move || loop {
-                if let Ok(mut loader) = thread_loader.try_lock() {
-                    loader.poll().unwrap();
-                }
-                thread::sleep(Duration::from_millis(100));
-            });
-
             Some(loader)
         };
 
-        let thread_resource_loader = self.resource_loader.clone();
         #[cfg(debug_assertions)]
         {
+            // Start a thread that periodically polls for resource changes
+            let thread_resource_loader = self.resource_loader.clone();
+            #[cfg(feature = "hot-reload")]
+            let thread_libloader = libloader.clone();
             thread::spawn(move || loop {
-                thread_resource_loader.lock().unwrap().poll().unwrap();
+                let mut should_load = thread_resource_loader.lock().unwrap().poll().unwrap();
+
+                #[cfg(feature = "hot-reload")]
+                if let Ok(mut loader) = thread_libloader.as_ref().unwrap().try_lock() {
+                    should_load = should_load || loader.poll().unwrap();
+                }
+
+                if should_load {
+                    // TODO
+                    // This shouldn't need to be in another thread, but Druid doesn't allow running non-event related code
+                    // Instead of building more a complex signaling method, for now we'll just redraw every frame while in debug
+                }
+
                 thread::sleep(Duration::from_millis(100));
             });
         }

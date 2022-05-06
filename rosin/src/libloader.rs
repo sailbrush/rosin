@@ -37,17 +37,13 @@ impl LibLoader {
         })
     }
 
-    pub fn get_ext(&self) -> u32 {
-        self.temp_ext
-    }
-
     /// Reload library if it changed on disk
     pub fn poll(&mut self) -> Result<bool, Box<dyn Error>> {
         let mut reloaded = false;
         let last_modified = fs::metadata(&self.lib_path)?.modified()?;
 
         if last_modified > self.last_modified {
-            let next_temp_ext = self.temp_ext + 1;
+            let next_temp_ext = if self.temp_ext == 0 { 1 } else { 0 };
             let next_temp_path = self.lib_path.with_extension(next_temp_ext.to_string());
 
             // Copy to a new location so the compiler can overwrite the original
@@ -60,7 +56,6 @@ impl LibLoader {
                 }
 
                 self.last_modified = last_modified;
-                fs::remove_file(self.lib_path.with_extension(self.temp_ext.to_string()))?;
                 self.temp_ext = next_temp_ext;
                 reloaded = true;
             }
@@ -81,6 +76,7 @@ impl LibLoader {
 impl Drop for LibLoader {
     fn drop(&mut self) {
         self.lib = None;
-        let _ = fs::remove_file(self.lib_path.with_extension(self.temp_ext.to_string()));
+        let _ = fs::remove_file(self.lib_path.with_extension(0.to_string()));
+        let _ = fs::remove_file(self.lib_path.with_extension(1.to_string()));
     }
 }
