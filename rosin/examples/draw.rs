@@ -1,6 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use druid_shell::kurbo::{BezPath, Line, PathEl, Point};
+use druid_shell::kurbo::{BezPath, PathEl};
 use druid_shell::piet::{Color, LineCap, LineJoin, RenderContext, StrokeStyle};
 use druid_shell::{KbKey, KeyState};
 use rosin::prelude::*;
