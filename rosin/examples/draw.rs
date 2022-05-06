@@ -18,7 +18,7 @@ pub fn main_view(state: &State) -> Node<State, WindowHandle> {
                 Phase::Build
             })
             .event(On::Keyboard, |s: &mut State, ctx| {
-                let event = ctx.event_info.unwrap_key();
+                let event = ctx.event_info.unwrap_keyboard();
                 if event.key == KbKey::Backspace {
                     s.lines.pop();
                 }

@@ -2,6 +2,7 @@
 
 use druid_shell::piet::Piet;
 use druid_shell::KeyEvent;
+use keyboard_types::Modifiers;
 
 use crate::geometry::Size;
 use crate::layout::Layout;
@@ -23,7 +24,7 @@ pub enum On {
     PointerMove,
     PointerEnter,
     PointerLeave,
-    Wheel,
+    PointerWheel,
     Keyboard,
     Focus,
     Blur,
@@ -216,19 +217,56 @@ impl std::fmt::Debug for PointerButtons {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub struct RawPointerEvent {
+    pub window_pos_x: f32,
+    pub window_pos_y: f32,
+    pub wheel_x: f32,
+    pub wheel_y: f32,
+    pub button: PointerButton,
+    pub buttons: PointerButtons,
+    pub mods: Modifiers,
+    pub count: u8,
+    pub focus: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct PointerEvent {
     pub pos_x: f32,
     pub pos_y: f32,
     pub window_pos_x: f32,
     pub window_pos_y: f32,
+    pub wheel_x: f32,
+    pub wheel_y: f32,
+    pub button: PointerButton,
     pub buttons: PointerButtons,
+    pub mods: Modifiers,
+    pub count: u8,
+    pub focus: bool,
+}
+
+impl From<RawPointerEvent> for PointerEvent {
+    fn from(event: RawPointerEvent) -> Self {
+        PointerEvent {
+            pos_x: 0.0,
+            pos_y: 0.0,
+            window_pos_x: event.window_pos_x,
+            window_pos_y: event.window_pos_y,
+            wheel_x: event.wheel_x,
+            wheel_y: event.wheel_y,
+            button: event.button,
+            buttons: event.buttons,
+            mods: event.mods,
+            count: event.count,
+            focus: event.focus,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 pub enum EventInfo {
     None,
     Pointer(PointerEvent),
-    Key(KeyEvent),
+    Keyboard(KeyEvent),
 }
 
 impl EventInfo {
@@ -240,8 +278,8 @@ impl EventInfo {
         }
     }
 
-    pub fn unwrap_key(&self) -> KeyEvent {
-        if let EventInfo::Key(event) = self.clone() {
+    pub fn unwrap_keyboard(&self) -> KeyEvent {
+        if let EventInfo::Keyboard(event) = self.clone() {
             event
         } else {
             panic!();

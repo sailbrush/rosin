@@ -9,8 +9,8 @@ use std::{
 };
 
 use druid_shell::{
-    kurbo, piet::Piet, Application, Cursor, FileDialogToken, FileInfo, IdleToken, KeyEvent, MouseButtons, MouseEvent, Region, Scale,
-    TimerToken, WinHandler, WindowHandle,
+    kurbo, piet::Piet, Application, Cursor, FileDialogToken, FileInfo, IdleToken, KeyEvent, MouseButton, MouseButtons, MouseEvent, Region,
+    Scale, TimerToken, WinHandler, WindowHandle,
 };
 use rosin_core::alloc::Alloc;
 
@@ -184,7 +184,7 @@ impl<S> WinHandler for Window<S> {
 
     fn wheel(&mut self, event: &MouseEvent) {
         let pointer_event = convert_event(event);
-        self.rosin.wheel(&mut self.state.borrow_mut(), pointer_event);
+        self.rosin.pointer_wheel(&mut self.state.borrow_mut(), pointer_event);
         if !self.rosin.is_idle() {
             self.handle.invalidate();
             self.handle.request_anim_frame();
@@ -225,7 +225,7 @@ impl<S> WinHandler for Window<S> {
 
     fn mouse_leave(&mut self) {
         let mut state = self.state.borrow_mut();
-        self.rosin.mouse_leave(&mut state);
+        self.rosin.pointer_leave(&mut state);
         if !self.rosin.is_idle() {
             self.handle.invalidate();
             self.handle.request_anim_frame();
@@ -265,13 +265,31 @@ impl<S> WinHandler for Window<S> {
     fn idle(&mut self, _token: IdleToken) {}
 }
 
-fn convert_event(event: &MouseEvent) -> PointerEvent {
-    PointerEvent {
-        pos_x: 0.0,
-        pos_y: 0.0,
+fn convert_event(event: &MouseEvent) -> RawPointerEvent {
+    RawPointerEvent {
         window_pos_x: event.pos.x as f32,
         window_pos_y: event.pos.y as f32,
+        wheel_x: event.wheel_delta.x as f32,
+        wheel_y: event.wheel_delta.y as f32,
+        button: convert_button(event.button),
         buttons: convert_buttons(event.buttons),
+        mods: convert_mods(event.mods),
+        count: event.count,
+        focus: event.focus,
+    }
+}
+
+fn convert_button(button: MouseButton) -> PointerButton {
+    if button.is_left() {
+        PointerButton::Left
+    } else if button.is_right() {
+        PointerButton::Right
+    } else if button.is_middle() {
+        PointerButton::Middle
+    } else if button.is_x1() {
+        PointerButton::X1
+    } else {
+        PointerButton::X2
     }
 }
 
@@ -295,4 +313,8 @@ fn convert_buttons(buttons: MouseButtons) -> PointerButtons {
     }
 
     result
+}
+
+fn convert_mods(mods: druid_shell::Modifiers) -> Modifiers {
+    Modifiers::from_bits_truncate(mods.raw().bits())
 }

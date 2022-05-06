@@ -20,7 +20,7 @@ pub mod widgets;
 pub mod prelude {
     pub use crate::callbacks::{
         AnimCallback, DrawCallback, DrawCtx, EventCallback, EventCtx, EventInfo, LayoutCallback, On, Phase, PointerButton, PointerButtons,
-        PointerEvent, ShouldStop, StyleCallback, ViewCallback,
+        PointerEvent, RawPointerEvent, ShouldStop, StyleCallback, ViewCallback,
     };
     pub use crate::key::Key;
     pub use crate::resource::ResourceLoader;
@@ -29,4 +29,5 @@ pub mod prelude {
     pub use crate::tree::Node;
     pub use crate::window::RosinWindow;
     pub use crate::{load_css, ui};
+    pub use keyboard_types::Modifiers;
 }

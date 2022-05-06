@@ -67,7 +67,7 @@ impl TextBox {
             .event(On::Keyboard, move |_, ctx: &mut EventCtx<S, H>| {
                 if let Some(this) = weak1.upgrade() {
                     ctx.emit_change();
-                    let event = ctx.event_info.clone().unwrap_key();
+                    let event = ctx.event_info.clone().unwrap_keyboard();
                     match &event.key {
                         KbKey::Character(c) => {
                             this.text.borrow_mut().push_str(c);

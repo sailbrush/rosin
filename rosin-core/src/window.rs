@@ -145,7 +145,7 @@ impl<S, H: Clone> RosinWindow<S, H> {
         }
     }
 
-    pub fn mouse_leave(&mut self, state: &mut S) {
+    pub fn pointer_leave(&mut self, state: &mut S) {
         if let Some(tree) = &mut self.tree_cache {
             let tree = tree.borrow_mut();
 
@@ -185,23 +185,23 @@ impl<S, H: Clone> RosinWindow<S, H> {
         }
     }
 
-    pub fn wheel(&mut self, state: &mut S, event: PointerEvent) {
-        self.pointer_event(state, event, On::Wheel)
+    pub fn pointer_wheel(&mut self, state: &mut S, event: RawPointerEvent) {
+        self.pointer_event(state, event, On::PointerWheel)
     }
 
-    pub fn pointer_move(&mut self, state: &mut S, event: PointerEvent) {
+    pub fn pointer_move(&mut self, state: &mut S, event: RawPointerEvent) {
         self.pointer_event(state, event, On::PointerMove)
     }
 
-    pub fn pointer_down(&mut self, state: &mut S, event: PointerEvent) {
+    pub fn pointer_down(&mut self, state: &mut S, event: RawPointerEvent) {
         self.pointer_event(state, event, On::PointerDown)
     }
 
-    pub fn pointer_up(&mut self, state: &mut S, event: PointerEvent) {
+    pub fn pointer_up(&mut self, state: &mut S, event: RawPointerEvent) {
         self.pointer_event(state, event, On::PointerUp)
     }
 
-    fn pointer_event(&mut self, state: &mut S, event: PointerEvent, event_type: On) {
+    fn pointer_event(&mut self, state: &mut S, event: RawPointerEvent, event_type: On) {
         if let (Some(tree), Some(styles), Some(layout)) = (&mut self.tree_cache, &self.style_cache, &self.layout_cache) {
             let tree = tree.borrow_mut();
             let styles = styles.borrow();
@@ -212,7 +212,7 @@ impl<S, H: Clone> RosinWindow<S, H> {
             let default_layout = Layout::default();
 
             let mut ctx = EventCtx {
-                event_info: EventInfo::Pointer(event),
+                event_info: EventInfo::None,
                 window_handle: self.handle.clone(),
                 resource_loader: self.resource_loader.clone(),
                 focus: self.focused_node,
@@ -277,20 +277,30 @@ impl<S, H: Clone> RosinWindow<S, H> {
 
             // Dispatch events
             let mut phase = Phase::Idle;
+            let mut pointer_event: PointerEvent = event.into();
 
             for id in mouse_leave_nodes {
+                pointer_event.pos_x = pointer_event.window_pos_x - layout[id].position.x;
+                pointer_event.pos_y = pointer_event.window_pos_y - layout[id].position.y;
+                ctx.event_info = EventInfo::Pointer(pointer_event);
                 ctx.style = styles[id].clone();
                 ctx.layout = layout[id];
                 phase.update(Self::dispatch_event(On::PointerLeave, state, &mut ctx, tree, id));
             }
 
             for id in mouse_enter_nodes {
+                pointer_event.pos_x = pointer_event.window_pos_x - layout[id].position.x;
+                pointer_event.pos_y = pointer_event.window_pos_y - layout[id].position.y;
+                ctx.event_info = EventInfo::Pointer(pointer_event);
                 ctx.style = styles[id].clone();
                 ctx.layout = layout[id];
                 phase.update(Self::dispatch_event(On::PointerEnter, state, &mut ctx, tree, id));
             }
 
             for &id in &self.hot_nodes {
+                pointer_event.pos_x = pointer_event.window_pos_x - layout[id].position.x;
+                pointer_event.pos_y = pointer_event.window_pos_y - layout[id].position.y;
+                ctx.event_info = EventInfo::Pointer(pointer_event);
                 ctx.style = styles[id].clone();
                 ctx.layout = layout[id];
                 phase.update(Self::dispatch_event(event_type, state, &mut ctx, tree, id));
@@ -331,7 +341,7 @@ impl<S, H: Clone> RosinWindow<S, H> {
 
             if tree[id].has_callback(On::Keyboard) {
                 let mut ctx = EventCtx {
-                    event_info: EventInfo::Key(event),
+                    event_info: EventInfo::Keyboard(event),
                     window_handle: self.handle.clone(),
                     resource_loader: self.resource_loader.clone(),
                     focus: self.focused_node,
