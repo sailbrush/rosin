@@ -35,10 +35,14 @@ impl Slider {
         }
     }
 
-    pub fn set_value(&self, new_value: f64) -> Phase {
+    pub fn set(&self, new_value: f64) -> Phase {
         self.data.value.replace(new_value);
         self.data.changed.replace(true);
         Phase::Draw
+    }
+
+    pub fn get(&self) -> f64 {
+        self.data.value.get()
     }
 
     pub fn view<S, H>(&self) -> Node<S, H> {
@@ -49,35 +53,37 @@ impl Slider {
         ui!([
             .key(self.key)
             .event(On::PointerDown, move |_, ctx: &mut EventCtx<S, H>| {
-                let this = if let Some(this) = weak1.upgrade() { this } else { return Phase::Idle };
-                let event = ctx.event_info.clone().unwrap_pointer();
-                let offset_x = ctx.offset_x().unwrap();
-                let _offset_y = ctx.offset_y().unwrap();
+                let this = if let Some(this) = weak1.upgrade() { this } else { return Some(Phase::Idle) };
+                let info = ctx.pointer()?;
 
-                if event.buttons.has_left() {
+                if info.button.is_left() {
                     if this.horizontal.get() {
-                        this.value.set((offset_x / ctx.width()).into());
+                        this.value.set((info.pos_x / ctx.width()).into());
+                    } else {
+                        this.value.set((info.pos_y / ctx.height()).into());
                     }
 
-                    Phase::Draw
+                    ctx.emit_change();
+                    Some(Phase::Draw)
                 } else {
-                    Phase::Idle
+                    Some(Phase::Idle)
                 }
             })
             .event(On::PointerMove, move |_, ctx: &mut EventCtx<S, H>| {
-                let this = if let Some(this) = weak2.upgrade() { this } else { return Phase::Idle };
-                let event = ctx.event_info.clone().unwrap_pointer();
-                let offset_x = ctx.offset_x().unwrap();
-                let _offset_y = ctx.offset_y().unwrap();
+                let this = if let Some(this) = weak2.upgrade() { this } else { return Some(Phase::Idle) };
+                let info = ctx.pointer()?;
 
-                if event.buttons.has_left() {
+                if info.button.is_left() {
                     if this.horizontal.get() {
-                        this.value.set((offset_x / ctx.width()).into());
+                        this.value.set((info.pos_x / ctx.width()).into());
+                    } else {
+                        this.value.set((info.pos_y / ctx.height()).into());
                     }
 
-                    Phase::Draw
+                    ctx.emit_change();
+                    Some(Phase::Draw)
                 } else {
-                    Phase::Idle
+                    Some(Phase::Idle)
                 }
             })
             .on_draw(true, move |_, ctx: &mut DrawCtx| {

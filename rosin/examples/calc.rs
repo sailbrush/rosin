@@ -1,8 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use druid_shell::KbKey;
 use rosin::prelude::*;
 use rosin::widgets::*;
 
+#[derive(Debug)]
 pub struct State {
     style: Stylesheet,
     display: DynLabel,
@@ -12,12 +14,14 @@ pub struct State {
     operation: Option<Op>,
 }
 
+#[derive(Debug)]
 enum Mode {
     Entry,
     DecimalEntry(u32),
     Result,
 }
 
+#[derive(Debug)]
 enum Op {
     Add,
     Sub,
@@ -35,7 +39,7 @@ enum Btn {
 }
 
 impl State {
-    fn press(&mut self, button: Btn) -> Phase {
+    fn press(&mut self, button: Btn) -> Option<Phase> {
         match button {
             Btn::Digit(val) => {
                 let mut precision = 0;
@@ -54,7 +58,7 @@ impl State {
                         self.mode = Mode::Entry;
                     }
                 }
-                self.display.set_text(&format!("{:.*}", precision as usize, self.register))
+                Some(self.display.set_text(&format!("{:.*}", precision as usize, self.register)))
             }
             Btn::Op(op) => {
                 if let Some(prev_op) = &self.operation {
@@ -70,27 +74,27 @@ impl State {
                 self.operation = Some(op);
                 self.register = 0.0;
                 self.mode = Mode::Entry;
-                Phase::Draw
+                Some(Phase::Draw)
             }
             Btn::Clear => {
                 self.mode = Mode::Entry;
                 self.operation = None;
                 self.accumulator = 0.0;
                 self.register = 0.0;
-                self.display.set_text("0")
+                Some(self.display.set_text("0"))
             }
             Btn::Sign => match self.mode {
                 Mode::Entry => {
                     self.register *= -1.0;
-                    self.display.set_text(&self.register.to_string())
+                    Some(self.display.set_text(&self.register.to_string()))
                 }
                 Mode::DecimalEntry(precision) => {
                     self.register *= -1.0;
-                    self.display.set_text(&format!("{:.*}", precision as usize, self.register))
+                    Some(self.display.set_text(&format!("{:.*}", precision as usize, self.register)))
                 }
                 Mode::Result => {
                     self.accumulator *= -1.0;
-                    self.display.set_text(&self.accumulator.to_string())
+                    Some(self.display.set_text(&self.accumulator.to_string()))
                 }
             },
             Btn::Decimal => {
@@ -99,7 +103,7 @@ impl State {
                     self.register = 0.0;
                 }
                 self.mode = Mode::DecimalEntry(1);
-                Phase::Draw
+                Some(Phase::Draw)
             }
             Btn::Equals => {
                 if let Some(prev_op) = &self.operation {
@@ -113,14 +117,23 @@ impl State {
                     self.accumulator = self.register
                 }
                 self.mode = Mode::Result;
-                self.display.set_text(&self.accumulator.to_string())
+                Some(self.display.set_text(&self.accumulator.to_string()))
             }
         }
     }
 }
 
 pub fn main_view(state: &State) -> Node<State, WindowHandle> {
-    ui!(state.style.clone(), "root" [
+    ui!(state.style.clone(), "root" [{
+            // Print debug state when user presses F1
+            .event(On::Keyboard, |s: &mut State, ctx| {
+                if ctx.keyboard()?.key == KbKey::F1 {
+                    println!("--------------------");
+                    dbg!(&s);
+                }
+                Some(Phase::Idle)
+            })
+        }
         "display" (state.display.view())
         "row" [
             "btn double" (button("Clear", |s: &mut State, _| { s.press(Btn::Clear) }))
@@ -158,7 +171,7 @@ fn main() {
     let view = new_view!(main_view);
 
     let window = WindowDesc::new(view)
-        .with_title("Rosin Calculator")
+        .with_title("Rosin Calculator Example")
         .with_size(400.0, 550.0);
 
     let mut rl = ResourceLoader::default();

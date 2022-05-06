@@ -59,6 +59,7 @@ impl<S> AppLauncher<S> {
             #[cfg(feature = "hot-reload")]
             let thread_libloader = libloader.clone();
             thread::spawn(move || loop {
+                #[allow(unused_mut)]
                 let mut should_load = thread_resource_loader.lock().unwrap().poll().unwrap();
 
                 #[cfg(feature = "hot-reload")]

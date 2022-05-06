@@ -129,8 +129,8 @@ impl<S, H: Clone> RosinWindow<S, H> {
             let default_layout = Layout::default();
 
             let mut ctx = EventCtx {
-                event_info: EventInfo::None,
-                window_handle: self.handle.clone(),
+                info: EventInfo::None,
+                platform_handle: self.handle.clone(),
                 resource_loader: self.resource_loader.clone(),
                 focus: self.focused_node,
                 style: default_style,
@@ -153,8 +153,8 @@ impl<S, H: Clone> RosinWindow<S, H> {
             let default_layout = Layout::default();
 
             let mut ctx = EventCtx {
-                event_info: EventInfo::None,
-                window_handle: self.handle.clone(),
+                info: EventInfo::None,
+                platform_handle: self.handle.clone(),
                 resource_loader: self.resource_loader.clone(),
                 focus: self.focused_node,
                 style: default_style,
@@ -203,6 +203,9 @@ impl<S, H: Clone> RosinWindow<S, H> {
     }
 
     fn pointer_event(&mut self, state: &mut S, event: RawPointerEvent, event_type: On) {
+        // TODO - this shouldn't be necessary, set phase only when dynamic styles require it
+        self.update_phase(Phase::Draw);
+
         if let (Some(tree), Some(styles), Some(layout)) = (&mut self.tree_cache, &self.style_cache, &self.layout_cache) {
             let tree = tree.borrow_mut();
             let styles = styles.borrow();
@@ -213,8 +216,8 @@ impl<S, H: Clone> RosinWindow<S, H> {
             let default_layout = Layout::default();
 
             let mut ctx = EventCtx {
-                event_info: EventInfo::None,
-                window_handle: self.handle.clone(),
+                info: EventInfo::None,
+                platform_handle: self.handle.clone(),
                 resource_loader: self.resource_loader.clone(),
                 focus: self.focused_node,
                 style: default_style,
@@ -283,7 +286,7 @@ impl<S, H: Clone> RosinWindow<S, H> {
             for id in mouse_leave_nodes {
                 pointer_event.pos_x = pointer_event.window_pos_x - layout[id].position.x;
                 pointer_event.pos_y = pointer_event.window_pos_y - layout[id].position.y;
-                ctx.event_info = EventInfo::Pointer(pointer_event);
+                ctx.info = EventInfo::Pointer(pointer_event);
                 ctx.style = styles[id].clone();
                 ctx.layout = layout[id];
                 phase.update(Self::dispatch_event(On::PointerLeave, state, &mut ctx, tree, id));
@@ -292,7 +295,7 @@ impl<S, H: Clone> RosinWindow<S, H> {
             for id in mouse_enter_nodes {
                 pointer_event.pos_x = pointer_event.window_pos_x - layout[id].position.x;
                 pointer_event.pos_y = pointer_event.window_pos_y - layout[id].position.y;
-                ctx.event_info = EventInfo::Pointer(pointer_event);
+                ctx.info = EventInfo::Pointer(pointer_event);
                 ctx.style = styles[id].clone();
                 ctx.layout = layout[id];
                 phase.update(Self::dispatch_event(On::PointerEnter, state, &mut ctx, tree, id));
@@ -301,7 +304,7 @@ impl<S, H: Clone> RosinWindow<S, H> {
             for &id in &self.hot_nodes {
                 pointer_event.pos_x = pointer_event.window_pos_x - layout[id].position.x;
                 pointer_event.pos_y = pointer_event.window_pos_y - layout[id].position.y;
-                ctx.event_info = EventInfo::Pointer(pointer_event);
+                ctx.info = EventInfo::Pointer(pointer_event);
                 ctx.style = styles[id].clone();
                 ctx.layout = layout[id];
                 phase.update(Self::dispatch_event(event_type, state, &mut ctx, tree, id));
@@ -342,8 +345,8 @@ impl<S, H: Clone> RosinWindow<S, H> {
 
             if tree[id].has_callback(On::Keyboard) {
                 let mut ctx = EventCtx {
-                    event_info: EventInfo::Keyboard(event),
-                    window_handle: self.handle.clone(),
+                    info: EventInfo::Keyboard(event),
+                    platform_handle: self.handle.clone(),
                     resource_loader: self.resource_loader.clone(),
                     focus: self.focused_node,
                     style: default_style,
@@ -371,8 +374,8 @@ impl<S, H: Clone> RosinWindow<S, H> {
             let default_layout = Layout::default();
 
             let mut change_ctx: EventCtx<S, H> = EventCtx {
-                event_info: EventInfo::None,
-                window_handle: ctx.window_handle.clone(),
+                info: EventInfo::None,
+                platform_handle: ctx.platform_handle.clone(),
                 resource_loader: ctx.resource_loader.clone(),
                 focus: ctx.focus,
                 style: default_style,
@@ -417,8 +420,8 @@ impl<S, H: Clone> RosinWindow<S, H> {
             let default_layout = Layout::default();
 
             let mut focus_ctx: EventCtx<S, H> = EventCtx {
-                event_info: EventInfo::None,
-                window_handle: ctx.window_handle.clone(),
+                info: EventInfo::None,
+                platform_handle: ctx.platform_handle.clone(),
                 resource_loader: ctx.resource_loader.clone(),
                 focus: ctx.focus,
                 style: default_style,

@@ -134,7 +134,7 @@ impl<S, H> ArrayNode<S, H> {
         let mut phase = Phase::Idle;
         for (et, callback) in &mut self.event_callbacks {
             if *et == event_type {
-                phase.update((callback)(state, ctx));
+                phase.update((callback)(state, ctx).unwrap_or(Phase::Idle));
             }
         }
         phase
@@ -197,7 +197,7 @@ impl<S, H> Node<S, H> {
     }
 
     /// Register an event callback.
-    pub fn event(mut self, event_type: On, callback: impl Fn(&mut S, &mut EventCtx<S, H>) -> Phase + 'static) -> Self {
+    pub fn event(mut self, event_type: On, callback: impl Fn(&mut S, &mut EventCtx<S, H>) -> Option<Phase> + 'static) -> Self {
         if let Some(callbacks) = &mut self.event_callbacks {
             let alloc = Alloc::get_thread_local_alloc().unwrap();
             callbacks.push((event_type, alloc.alloc(callback)));

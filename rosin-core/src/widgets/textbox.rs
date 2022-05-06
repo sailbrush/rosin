@@ -62,32 +62,31 @@ impl TextBox {
             .key(key)
             .event(On::PointerDown, move |_, ctx| {
                 ctx.focus_on(key);
-                Phase::Draw
+                Some(Phase::Draw)
             })
             .event(On::Keyboard, move |_, ctx: &mut EventCtx<S, H>| {
                 if let Some(this) = weak1.upgrade() {
                     ctx.emit_change();
-                    let event = ctx.event_info.clone().unwrap_keyboard();
-                    match &event.key {
+                    match &ctx.keyboard()?.key {
                         KbKey::Character(c) => {
                             this.text.borrow_mut().push_str(c);
                             this.changed.replace(true);
-                            return Phase::Draw;
+                            return Some(Phase::Draw);
                         },
                         KbKey::Enter => {
                             this.text.borrow_mut().push('\n');
                             this.changed.replace(true);
-                            return Phase::Draw;
+                            return Some(Phase::Draw);
                         },
                         KbKey::Backspace => {
                             this.text.borrow_mut().pop();
                             this.changed.replace(true);
-                            return Phase::Draw;
+                            return Some(Phase::Draw);
                         },
                         _ => {},
                     }
                 }
-                Phase::Idle
+                Some(Phase::Idle)
             })
             .on_draw(true, move |_, ctx: &mut DrawCtx| {
                 // If the underlying data is gone, then just return since there's nothing to draw.

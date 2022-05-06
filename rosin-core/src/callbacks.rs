@@ -269,27 +269,9 @@ pub enum EventInfo {
     Keyboard(KeyEvent),
 }
 
-impl EventInfo {
-    pub fn unwrap_pointer(&self) -> PointerEvent {
-        if let EventInfo::Pointer(event) = self.clone() {
-            event
-        } else {
-            panic!();
-        }
-    }
-
-    pub fn unwrap_keyboard(&self) -> KeyEvent {
-        if let EventInfo::Keyboard(event) = self.clone() {
-            event
-        } else {
-            panic!();
-        }
-    }
-}
-
 pub struct EventCtx<S, H> {
-    pub event_info: EventInfo,
-    pub window_handle: H,
+    pub info: EventInfo,
+    pub platform_handle: H,
     pub resource_loader: Arc<Mutex<ResourceLoader>>,
     pub focus: Option<Key>,
     pub style: Style,
@@ -299,44 +281,52 @@ pub struct EventCtx<S, H> {
 }
 
 impl<S, H> EventCtx<S, H> {
+    #[inline]
     pub fn blur(&mut self) {
         self.focus = None;
     }
 
+    #[inline]
     pub fn focus_on(&mut self, key: Key) {
         self.focus = Some(key);
     }
 
+    #[inline]
     pub fn start_animation(&mut self, callback: impl Fn(&mut S, Duration) -> (Phase, ShouldStop) + 'static) {
         self.anim_tasks.borrow_mut().push(Box::new(callback));
     }
 
+    #[inline]
     pub fn emit_change(&mut self) {
         self.change = true;
     }
 
-    pub fn offset_x(&self) -> Option<f32> {
-        if let EventInfo::Pointer(event) = &self.event_info {
-            Some(event.pos_x as f32)
-        } else {
-            None
-        }
-    }
-
-    pub fn offset_y(&self) -> Option<f32> {
-        if let EventInfo::Pointer(event) = &self.event_info {
-            Some(event.pos_y as f32)
-        } else {
-            None
-        }
-    }
-
+    #[inline]
     pub fn width(&self) -> f32 {
         self.layout.size.width
     }
 
+    #[inline]
     pub fn height(&self) -> f32 {
         self.layout.size.height
+    }
+
+    #[inline]
+    pub fn pointer(&self) -> Option<&PointerEvent> {
+        if let EventInfo::Pointer(event) = &self.info {
+            Some(event)
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    pub fn keyboard(&self) -> Option<&KeyEvent> {
+        if let EventInfo::Keyboard(event) = &self.info {
+            Some(event)
+        } else {
+            None
+        }
     }
 }
 
@@ -349,8 +339,8 @@ pub trait DrawCallback<S>: 'static + Fn(&S, &mut DrawCtx) {}
 impl<F, S> DrawCallback<S> for F where F: 'static + Fn(&S, &mut DrawCtx) {}
 
 /// `Fn(&mut S, &mut EventCtx<S, H>) -> Phase`
-pub trait EventCallback<S, H>: 'static + Fn(&mut S, &mut EventCtx<S, H>) -> Phase {}
-impl<F, S, H> EventCallback<S, H> for F where F: 'static + Fn(&mut S, &mut EventCtx<S, H>) -> Phase {}
+pub trait EventCallback<S, H>: 'static + Fn(&mut S, &mut EventCtx<S, H>) -> Option<Phase> {}
+impl<F, S, H> EventCallback<S, H> for F where F: 'static + Fn(&mut S, &mut EventCtx<S, H>) -> Option<Phase> {}
 
 /// `Fn(&S, Size)`
 pub trait LayoutCallback<S>: 'static + Fn(&S, Size) {}

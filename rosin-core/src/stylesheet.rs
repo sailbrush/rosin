@@ -82,9 +82,15 @@ struct StylesheetInner {
     static_rules: Vec<Rule>,
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Default, Clone)]
 pub struct Stylesheet {
     inner: Arc<RwLock<StylesheetInner>>,
+}
+
+impl std::fmt::Debug for Stylesheet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Stylesheet").finish()
+    }
 }
 
 impl Stylesheet {

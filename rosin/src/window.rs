@@ -4,7 +4,7 @@ use std::{
     any::Any,
     cell::RefCell,
     rc::Rc,
-    sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}},
+    sync::{Arc, Mutex},
     time::Duration,
 };
 
@@ -119,7 +119,6 @@ impl<S> WinHandler for Window<S> {
             self.handle.invalidate();
             self.handle.request_anim_frame();
         }
-        
 
         #[cfg(all(debug_assertions, feature = "hot-reload"))]
         if let Ok(libloader) = &mut self.libloader.as_ref().unwrap().try_lock() {

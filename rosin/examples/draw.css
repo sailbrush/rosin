@@ -1,5 +1,13 @@
 .root {
+    flex-direction: column;
     background-color: rgb(200, 200, 200);
+}
+
+.toolbar {
+    max-height: 70px;
+    min-height: 70px;
+    background-color: grey;
+    border: 1px;
 }
 
 .clear {
@@ -11,6 +19,8 @@
     margin: 0.5em;
     font-size: 16px;
     border-radius: 0.8em;
-    border-width: 1px;
-    border-color: rgb(21, 39, 68);
+}
+
+.clear:hover {
+    background-color: rgb(38, 84, 158);
 }
