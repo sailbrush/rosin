@@ -85,7 +85,7 @@ pub(crate) fn layout<S, H>(temp: &Bump, tree: &[ArrayNode<S, H>], styles: &[Styl
     //round_layout(tree, output, 0, 0.0, 0.0);
 }
 
-fn round_layout<S, H>(tree: &[ArrayNode<S, H>], layout: &mut [Layout], id: usize, abs_x: f32, abs_y: f32) {
+fn _round_layout<S, H>(tree: &[ArrayNode<S, H>], layout: &mut [Layout], id: usize, abs_x: f32, abs_y: f32) {
     let abs_x = abs_x + layout[id].position.x;
     let abs_y = abs_y + layout[id].position.y;
 
@@ -96,7 +96,7 @@ fn round_layout<S, H>(tree: &[ArrayNode<S, H>], layout: &mut [Layout], id: usize
     layout[id].size.height = (abs_y + layout[id].size.height).round() - abs_y.round();
 
     for id in tree[id].child_ids() {
-        round_layout(tree, layout, id, abs_x, abs_y);
+        _round_layout(tree, layout, id, abs_x, abs_y);
     }
 }
 
