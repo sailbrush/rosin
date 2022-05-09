@@ -11,7 +11,7 @@ pub mod resource;
 pub mod style;
 pub mod stylesheet;
 pub mod tree;
-pub mod window;
+pub mod viewport;
 
 /// Basic set of widgets
 pub mod widgets;
@@ -26,8 +26,8 @@ pub mod prelude {
     pub use crate::resource::ResourceLoader;
     pub use crate::style::Style;
     pub use crate::stylesheet::Stylesheet;
-    pub use crate::tree::Node;
-    pub use crate::window::RosinWindow;
+    pub use crate::tree::View;
+    pub use crate::viewport::Viewport;
     pub use crate::{load_css, ui};
     pub use keyboard_types::Modifiers;
 }

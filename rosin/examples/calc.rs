@@ -124,10 +124,10 @@ impl State {
     }
 }
 
-pub fn main_view(state: &State) -> Node<State, WindowHandle> {
+pub fn main_view(state: &State) -> View<State, WindowHandle> {
     ui!(state.style.clone(), "root" [{
             // When the user presses F1, print state to console
-            .event(On::Keyboard, |s: &mut State, ctx| {
+            .event(On::Keyboard, |s, ctx| {
                 if ctx.keyboard()?.state == KeyState::Down && ctx.keyboard()?.key == KbKey::F1 {
                     println!("--------------------");
                     dbg!(&s);
@@ -169,7 +169,7 @@ pub fn main_view(state: &State) -> Node<State, WindowHandle> {
 
 #[rustfmt::skip]
 fn main() {
-    let view = new_view!(main_view);
+    let view = new_viewfn!(main_view);
 
     let window = WindowDesc::new(view)
         .with_title("Rosin Calculator Example")

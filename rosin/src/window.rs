@@ -21,7 +21,7 @@ pub struct WindowId(u32);
 
 /// A description of a window.
 pub struct WindowDesc<S: 'static, H: 'static> {
-    pub(crate) view: View<S, H>,
+    pub(crate) view: ViewFn<S, H>,
     pub(crate) id: WindowId,
     pub(crate) title: Option<String>,
     pub(crate) size: (f32, f32),
@@ -29,7 +29,7 @@ pub struct WindowDesc<S: 'static, H: 'static> {
 }
 
 impl<S, H> WindowDesc<S, H> {
-    pub fn new(view: View<S, H>) -> Self {
+    pub fn new(view: ViewFn<S, H>) -> Self {
         Self {
             view,
             id: WindowId(0), // TODO - create a useful id
@@ -63,8 +63,8 @@ impl<S, H> WindowDesc<S, H> {
 #[allow(dead_code)]
 pub(crate) struct Window<S: 'static> {
     handle: WindowHandle,
-    rosin: RosinWindow<S, WindowHandle>,
-    view: View<S, WindowHandle>,
+    viewport: Viewport<S, WindowHandle>,
+    viewfn: ViewFn<S, WindowHandle>,
     state: Rc<RefCell<S>>,
     libloader: Option<Arc<Mutex<LibLoader>>>,
 }
@@ -72,7 +72,7 @@ pub(crate) struct Window<S: 'static> {
 impl<S> Window<S> {
     pub fn new(
         resource_loader: Arc<Mutex<ResourceLoader>>,
-        view: View<S, WindowHandle>,
+        viewfn: ViewFn<S, WindowHandle>,
         size: (f32, f32),
         state: Rc<RefCell<S>>,
         libloader: Option<Arc<Mutex<LibLoader>>>,
@@ -80,13 +80,13 @@ impl<S> Window<S> {
     ) -> Self {
         let handle = WindowHandle::default();
         let mut rosin = if let Some(libloader) = libloader.clone() {
-            let view_func = *libloader.lock().unwrap().get(view.name).unwrap();
-            let rosin = RosinWindow::new(resource_loader, view_func, size, handle.clone());
+            let view_func = *libloader.lock().unwrap().get(viewfn.name).unwrap();
+            let rosin = Viewport::new(resource_loader, view_func, size, handle.clone());
             let func: fn(Option<Rc<Alloc>>) = *libloader.lock().unwrap().get(b"set_thread_local_alloc").unwrap();
             func(Some(rosin.get_alloc()));
             rosin
         } else {
-            RosinWindow::new(resource_loader, view.func, size, handle.clone())
+            Viewport::new(resource_loader, viewfn.func, size, handle.clone())
         };
 
         for anim in anim_tasks {
@@ -95,8 +95,8 @@ impl<S> Window<S> {
 
         Self {
             handle,
-            rosin,
-            view,
+            viewport: rosin,
+            viewfn,
             state,
             libloader,
         }
@@ -106,7 +106,7 @@ impl<S> Window<S> {
 impl<S> WinHandler for Window<S> {
     fn connect(&mut self, handle: &WindowHandle) {
         self.handle = handle.clone();
-        self.rosin.set_handle(handle.clone());
+        self.viewport.set_handle(handle.clone());
     }
 
     fn prepare_paint(&mut self) {}
@@ -115,7 +115,7 @@ impl<S> WinHandler for Window<S> {
         // TODO - don't rebuild when not needed
         #[cfg(debug_assertions)]
         {
-            self.rosin.update_phase(Phase::Build);
+            self.viewport.update_phase(Phase::Build);
             self.handle.invalidate();
             self.handle.request_anim_frame();
         }
@@ -136,10 +136,10 @@ impl<S> WinHandler for Window<S> {
             }
         }
 
-        self.rosin.animation_frame(&mut self.state.borrow_mut());
-        self.rosin.draw(&self.state.borrow(), Some(piet)).unwrap();
+        self.viewport.animation_frame(&mut self.state.borrow_mut());
+        self.viewport.draw(&self.state.borrow(), Some(piet)).unwrap();
 
-        if self.rosin.has_anim_tasks() {
+        if self.viewport.has_anim_tasks() {
             self.handle.request_anim_frame();
         }
     }
@@ -149,11 +149,11 @@ impl<S> WinHandler for Window<S> {
     }
 
     fn size(&mut self, size: kurbo::Size) {
-        self.rosin.size((size.width as f32, size.height as f32))
+        self.viewport.size((size.width as f32, size.height as f32))
     }
 
     fn scale(&mut self, scale: Scale) {
-        self.rosin.scale((scale.x() as f32, scale.y() as f32));
+        self.viewport.scale((scale.x() as f32, scale.y() as f32));
     }
 
     fn rebuild_resources(&mut self) {}
@@ -166,8 +166,8 @@ impl<S> WinHandler for Window<S> {
 
     fn key_down(&mut self, event: KeyEvent) -> bool {
         let mut state = self.state.borrow_mut();
-        let result = self.rosin.key_event(&mut state, event);
-        if !self.rosin.is_idle() {
+        let result = self.viewport.key_event(&mut state, event);
+        if !self.viewport.is_idle() {
             self.handle.invalidate();
             self.handle.request_anim_frame();
         }
@@ -176,8 +176,8 @@ impl<S> WinHandler for Window<S> {
 
     fn key_up(&mut self, event: KeyEvent) {
         let mut state = self.state.borrow_mut();
-        self.rosin.key_event(&mut state, event);
-        if !self.rosin.is_idle() {
+        self.viewport.key_event(&mut state, event);
+        if !self.viewport.is_idle() {
             self.handle.invalidate();
             self.handle.request_anim_frame();
         }
@@ -185,8 +185,8 @@ impl<S> WinHandler for Window<S> {
 
     fn wheel(&mut self, event: &MouseEvent) {
         let pointer_event = convert_event(event);
-        self.rosin.pointer_wheel(&mut self.state.borrow_mut(), pointer_event);
-        if !self.rosin.is_idle() {
+        self.viewport.pointer_wheel(&mut self.state.borrow_mut(), pointer_event);
+        if !self.viewport.is_idle() {
             self.handle.invalidate();
             self.handle.request_anim_frame();
         }
@@ -197,8 +197,8 @@ impl<S> WinHandler for Window<S> {
     fn mouse_move(&mut self, event: &MouseEvent) {
         let pointer_event = convert_event(event);
         self.handle.set_cursor(&Cursor::Arrow);
-        self.rosin.pointer_move(&mut self.state.borrow_mut(), pointer_event);
-        if !self.rosin.is_idle() {
+        self.viewport.pointer_move(&mut self.state.borrow_mut(), pointer_event);
+        if !self.viewport.is_idle() {
             self.handle.invalidate();
             self.handle.request_anim_frame();
         }
@@ -207,8 +207,8 @@ impl<S> WinHandler for Window<S> {
     fn mouse_down(&mut self, event: &MouseEvent) {
         let pointer_event = convert_event(event);
         let mut state = self.state.borrow_mut();
-        self.rosin.pointer_down(&mut state, pointer_event);
-        if !self.rosin.is_idle() {
+        self.viewport.pointer_down(&mut state, pointer_event);
+        if !self.viewport.is_idle() {
             self.handle.invalidate();
             self.handle.request_anim_frame();
         }
@@ -217,8 +217,8 @@ impl<S> WinHandler for Window<S> {
     fn mouse_up(&mut self, event: &MouseEvent) {
         let pointer_event = convert_event(event);
         let mut state = self.state.borrow_mut();
-        self.rosin.pointer_up(&mut state, pointer_event);
-        if !self.rosin.is_idle() {
+        self.viewport.pointer_up(&mut state, pointer_event);
+        if !self.viewport.is_idle() {
             self.handle.invalidate();
             self.handle.request_anim_frame();
         }
@@ -226,8 +226,8 @@ impl<S> WinHandler for Window<S> {
 
     fn mouse_leave(&mut self) {
         let mut state = self.state.borrow_mut();
-        self.rosin.pointer_leave(&mut state);
-        if !self.rosin.is_idle() {
+        self.viewport.pointer_leave(&mut state);
+        if !self.viewport.is_idle() {
             self.handle.invalidate();
             self.handle.request_anim_frame();
         }
@@ -237,8 +237,8 @@ impl<S> WinHandler for Window<S> {
 
     fn got_focus(&mut self) {
         let mut state = self.state.borrow_mut();
-        self.rosin.got_focus(&mut state);
-        if !self.rosin.is_idle() {
+        self.viewport.got_focus(&mut state);
+        if !self.viewport.is_idle() {
             self.handle.invalidate();
             self.handle.request_anim_frame();
         }
@@ -246,8 +246,8 @@ impl<S> WinHandler for Window<S> {
 
     fn lost_focus(&mut self) {
         let mut state = self.state.borrow_mut();
-        self.rosin.lost_focus(&mut state);
-        if !self.rosin.is_idle() {
+        self.viewport.lost_focus(&mut state);
+        if !self.viewport.is_idle() {
             self.handle.invalidate();
             self.handle.request_anim_frame();
         }
@@ -255,7 +255,7 @@ impl<S> WinHandler for Window<S> {
 
     fn request_close(&mut self) {
         let mut state = self.state.borrow_mut();
-        self.rosin.close(&mut state);
+        self.viewport.close(&mut state);
         self.handle.close();
     }
 
@@ -268,10 +268,10 @@ impl<S> WinHandler for Window<S> {
 
 fn convert_event(event: &MouseEvent) -> RawPointerEvent {
     RawPointerEvent {
-        window_pos_x: event.pos.x as f32,
-        window_pos_y: event.pos.y as f32,
-        wheel_x: event.wheel_delta.x as f32,
-        wheel_y: event.wheel_delta.y as f32,
+        window_pos_x: event.pos.x,
+        window_pos_y: event.pos.y,
+        wheel_x: event.wheel_delta.x,
+        wheel_y: event.wheel_delta.y,
         button: convert_button(event.button),
         buttons: convert_buttons(event.buttons),
         mods: convert_mods(event.mods),

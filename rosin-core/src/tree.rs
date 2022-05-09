@@ -17,13 +17,13 @@ use bumpalo::Bump;
 #[macro_export]
 macro_rules! ui {
     ($($classes:literal)? [ $($children:tt)* ]) => {
-        ui!(Node::default() $(.add_classes($classes))*; $($children)* )
+        ui!(View::default() $(.add_classes($classes))*; $($children)* )
     };
     ($sheet:expr, $($classes:literal)? [ $($children:tt)* ]) => {
-        ui!(Node::default().use_style_sheet(Some($sheet)) $(.add_classes($classes))*; $($children)* )
+        ui!(View::default().use_style_sheet(Some($sheet)) $(.add_classes($classes))*; $($children)* )
     };
     ($tree:expr; $($classes:literal)? [ $($children:tt)* ] $($tail:tt)*) => {
-        ui!($tree.add_child(ui!(Node::default() $(.add_classes($classes))*; $($children)* )); $($tail)* )
+        ui!($tree.add_child(ui!(View::default() $(.add_classes($classes))*; $($children)* )); $($tail)* )
     };
     ($tree:expr; $($classes:literal)? ( $($child:tt)* ) $($tail:tt)*) => {
         ui!($tree.add_child($($child)* $(.add_classes($classes))* ); $($tail)* )
@@ -152,7 +152,7 @@ impl<S, H> ArrayNode<S, H> {
 
 /// A node in the view tree. Panics if created outside of a `ViewCallback`.
 #[allow(clippy::type_complexity)]
-pub struct Node<S: 'static, H: 'static> {
+pub struct View<S: 'static, H: 'static> {
     key: Option<Key>,
     classes: Option<BumpVec<'static, &'static str>>,
     style_sheet: Option<Stylesheet>,
@@ -163,11 +163,11 @@ pub struct Node<S: 'static, H: 'static> {
     draw_cache_enable: bool,
     tree_size: usize,
     num_children: usize,
-    prev_sibling: Option<&'static mut Node<S, H>>,
-    last_child: Option<&'static mut Node<S, H>>,
+    prev_sibling: Option<&'static mut View<S, H>>,
+    last_child: Option<&'static mut View<S, H>>,
 }
 
-impl<S, H> Default for Node<S, H> {
+impl<S, H> Default for View<S, H> {
     fn default() -> Self {
         let alloc = Alloc::get_thread_local_alloc().unwrap();
         alloc.increment_counter();
@@ -189,7 +189,7 @@ impl<S, H> Default for Node<S, H> {
     }
 }
 
-impl<S, H> Node<S, H> {
+impl<S, H> View<S, H> {
     /// Set a key on a node, providing a stable identity between rebuilds.
     pub fn key(mut self, key: Key) -> Self {
         self.key = Some(key);
@@ -261,9 +261,9 @@ impl<S, H> Node<S, H> {
         let alloc = Alloc::get_thread_local_alloc().unwrap();
 
         let mut tree: BumpVec<ArrayNode<S, H>> = alloc.vec_capacity(self.tree_size);
-        let mut stack: BumpVec<(bool, usize, &mut Node<S, H>)> = BumpVec::new_in(temp);
+        let mut stack: BumpVec<(bool, usize, &mut View<S, H>)> = BumpVec::new_in(temp);
 
-        // Root's parent is usize::MAX, since it would be impossible for the node at the end of the largest possible aray to have children
+        // Root's parent is set to usize::MAX, since it would be impossible for the node at the end of the largest possible array to have children
         stack.push((false, usize::MAX, &mut self));
         while let Some((is_last_child, parent, curr_node)) = stack.pop() {
             let index = tree.len();

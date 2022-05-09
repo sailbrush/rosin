@@ -45,7 +45,7 @@ impl Slider {
         self.data.value.get()
     }
 
-    pub fn view<S, H>(&self) -> Node<S, H> {
+    pub fn view<S, H>(&self) -> View<S, H> {
         let weak1 = Rc::downgrade(&self.data);
         let weak2 = Rc::downgrade(&self.data);
         let weak3 = Rc::downgrade(&self.data);

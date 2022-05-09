@@ -15,9 +15,9 @@ use bumpalo::{collections::Vec as BumpVec, Bump};
 use druid_shell::piet::Piet;
 use druid_shell::KeyEvent;
 
-pub struct RosinWindow<S: 'static, H: Clone + 'static> {
-    resource_loader: Arc<Mutex<ResourceLoader>>, // TODO - does this need to be here?
-    view: ViewCallback<S, H>,
+pub struct Viewport<S: 'static, H: Clone + 'static> {
+    resource_loader: Arc<Mutex<ResourceLoader>>,
+    view_callback: ViewCallback<S, H>,
     size: (f32, f32),
     scale: (f32, f32),
     handle: H,
@@ -36,11 +36,11 @@ pub struct RosinWindow<S: 'static, H: Clone + 'static> {
     temp: Bump,
 }
 
-impl<S, H: Clone> RosinWindow<S, H> {
-    pub fn new(resource_loader: Arc<Mutex<ResourceLoader>>, view: ViewCallback<S, H>, size: (f32, f32), handle: H) -> Self {
+impl<S, H: Clone> Viewport<S, H> {
+    pub fn new(resource_loader: Arc<Mutex<ResourceLoader>>, view_callback: ViewCallback<S, H>, size: (f32, f32), handle: H) -> Self {
         Self {
             resource_loader,
-            view,
+            view_callback,
             size,
             scale: (1.0, 1.0),
             handle,
@@ -93,7 +93,7 @@ impl<S, H: Clone> RosinWindow<S, H> {
     }
 
     pub fn set_view(&mut self, new_view: ViewCallback<S, H>) {
-        self.view = new_view;
+        self.view_callback = new_view;
         self.phase = Phase::Build;
     }
 
@@ -284,8 +284,8 @@ impl<S, H: Clone> RosinWindow<S, H> {
             let mut pointer_event: PointerEvent = event.into();
 
             for id in mouse_leave_nodes {
-                pointer_event.pos_x = pointer_event.window_pos_x - layout[id].position.x;
-                pointer_event.pos_y = pointer_event.window_pos_y - layout[id].position.y;
+                pointer_event.pos_x = pointer_event.window_pos_x - layout[id].position.x as f64;
+                pointer_event.pos_y = pointer_event.window_pos_y - layout[id].position.y as f64;
                 ctx.info = EventInfo::Pointer(pointer_event);
                 ctx.style = styles[id].clone();
                 ctx.layout = layout[id];
@@ -293,8 +293,8 @@ impl<S, H: Clone> RosinWindow<S, H> {
             }
 
             for id in mouse_enter_nodes {
-                pointer_event.pos_x = pointer_event.window_pos_x - layout[id].position.x;
-                pointer_event.pos_y = pointer_event.window_pos_y - layout[id].position.y;
+                pointer_event.pos_x = pointer_event.window_pos_x - layout[id].position.x as f64;
+                pointer_event.pos_y = pointer_event.window_pos_y - layout[id].position.y as f64;
                 ctx.info = EventInfo::Pointer(pointer_event);
                 ctx.style = styles[id].clone();
                 ctx.layout = layout[id];
@@ -302,8 +302,8 @@ impl<S, H: Clone> RosinWindow<S, H> {
             }
 
             for &id in &self.hot_nodes {
-                pointer_event.pos_x = pointer_event.window_pos_x - layout[id].position.x;
-                pointer_event.pos_y = pointer_event.window_pos_y - layout[id].position.y;
+                pointer_event.pos_x = pointer_event.window_pos_x - layout[id].position.x as f64;
+                pointer_event.pos_y = pointer_event.window_pos_y - layout[id].position.y as f64;
                 ctx.info = EventInfo::Pointer(pointer_event);
                 ctx.style = styles[id].clone();
                 ctx.layout = layout[id];
@@ -461,6 +461,7 @@ impl<S, H: Clone> RosinWindow<S, H> {
         phase
     }
 
+    // TODO - pass in dt
     pub fn animation_frame(&mut self, state: &mut S) {
         // Get time since last frame
         let now = Instant::now();
@@ -492,13 +493,13 @@ impl<S, H: Clone> RosinWindow<S, H> {
 
             // SAFETY: This is safe because we panic if client code breaks scope()'s contract
             let tree = unsafe {
-                // Run the view function
-                alloc.scope(|| (self.view)(state).finish(&self.temp, &mut self.key_map).unwrap())
+                // Run the view callback
+                alloc.scope(|| (self.view_callback)(state).finish(&self.temp, &mut self.key_map).unwrap())
             };
 
             let len = tree.borrow().len();
 
-            // Panic if the view function didn't return the number of nodes we expected
+            // Panic if the view callback didn't return the number of nodes we expected
             assert!(alloc.get_counter() == len, "[Rosin] Nodes missing");
 
             // Allocate style cache

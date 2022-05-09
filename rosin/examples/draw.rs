@@ -37,7 +37,7 @@ impl Canvas {
         Phase::Draw
     }
 
-    pub fn view(&self) -> Node<State, WindowHandle> {
+    pub fn view(&self) -> View<State, WindowHandle> {
         ui!("canvas" [{
             .event(On::PointerDown, |s: &mut State, ctx| {
                 let mut path = BezPath::new();
@@ -45,7 +45,7 @@ impl Canvas {
                 s.canvas.lines.push((s.canvas.brush_size, path));
                 Some(Phase::Build)
             })
-            .event(On::PointerMove, |s: &mut State, ctx| {
+            .event(On::PointerMove, |s, ctx| {
                 if ctx.pointer()?.buttons.has_left() {
                     if let Some((_, path)) = s.canvas.lines.last_mut() {
                         match path.elements().last() {
@@ -73,7 +73,7 @@ impl Canvas {
     }
 }
 
-pub fn main_view(state: &State) -> Node<State, WindowHandle> {
+pub fn main_view(state: &State) -> View<State, WindowHandle> {
     ui!(state.style.clone(), "root" [{
             // When the user presses Backspace, call `undo()` on the canvas
             .event(On::Keyboard, |s: &mut State, ctx| {
@@ -103,7 +103,7 @@ pub fn main_view(state: &State) -> Node<State, WindowHandle> {
 
 #[rustfmt::skip]
 fn main() {
-    let view = new_view!(main_view);
+    let view = new_viewfn!(main_view);
 
     let window = WindowDesc::new(view)
         .with_title("Rosin Draw Example")

@@ -218,10 +218,10 @@ impl std::fmt::Debug for PointerButtons {
 
 #[derive(Debug, Clone, Copy)]
 pub struct RawPointerEvent {
-    pub window_pos_x: f32,
-    pub window_pos_y: f32,
-    pub wheel_x: f32,
-    pub wheel_y: f32,
+    pub window_pos_x: f64,
+    pub window_pos_y: f64,
+    pub wheel_x: f64,
+    pub wheel_y: f64,
     pub button: PointerButton,
     pub buttons: PointerButtons,
     pub mods: Modifiers,
@@ -231,12 +231,12 @@ pub struct RawPointerEvent {
 
 #[derive(Debug, Clone, Copy)]
 pub struct PointerEvent {
-    pub pos_x: f32,
-    pub pos_y: f32,
-    pub window_pos_x: f32,
-    pub window_pos_y: f32,
-    pub wheel_x: f32,
-    pub wheel_y: f32,
+    pub pos_x: f64,
+    pub pos_y: f64,
+    pub window_pos_x: f64,
+    pub window_pos_y: f64,
+    pub wheel_x: f64,
+    pub wheel_y: f64,
     pub button: PointerButton,
     pub buttons: PointerButtons,
     pub mods: Modifiers,
@@ -302,13 +302,13 @@ impl<S, H> EventCtx<S, H> {
     }
 
     #[inline]
-    pub fn width(&self) -> f32 {
-        self.layout.size.width
+    pub fn width(&self) -> f64 {
+        self.layout.size.width as f64
     }
 
     #[inline]
-    pub fn height(&self) -> f32 {
-        self.layout.size.height
+    pub fn height(&self) -> f64 {
+        self.layout.size.height as f64
     }
 
     #[inline]
@@ -350,4 +350,4 @@ impl<F, S> LayoutCallback<S> for F where F: 'static + Fn(&S, Size) {}
 pub trait StyleCallback<S>: 'static + Fn(&S, &mut Style) {}
 impl<F, S> StyleCallback<S> for F where F: 'static + Fn(&S, &mut Style) {}
 
-pub type ViewCallback<S, H> = fn(&S) -> Node<S, H>;
+pub type ViewCallback<S, H> = fn(&S) -> View<S, H>;
