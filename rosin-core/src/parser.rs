@@ -5,6 +5,7 @@ use crate::style::*;
 use crate::stylesheet::*;
 
 use cssparser::*;
+use druid_shell::piet;
 
 // ---------- Rules Parser ----------
 
@@ -383,9 +384,150 @@ fn parse_align_self<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>
     }
 }
 
-fn parse_background_image<'i, 't>(_parser: &mut Parser<'i, 't>) -> Result<Vec<Property>, cssparser::ParseError<'i, ()>> {
-    // Parse gradient function
-    todo!();
+fn parse_background_image<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>, cssparser::ParseError<'i, ()>> {
+    let mut result = Vec::new();
+    while !parser.is_exhausted() {
+        let token = parser.next()?;
+        match token {
+            Token::Function(s) => match_ignore_ascii_case! { s,
+                // TODO - Make stop positions optional
+                "linear-gradient" => result.push(parser.parse_nested_block(|parser| {
+                    // Refer to https://developer.mozilla.org/en-US/docs/Web/CSS/gradient/linear-gradient#formal_syntax
+                    let mut gradient_stops: Vec<piet::GradientStop> = Vec::new();
+                    let mut angle = GradientAngle::Bottom;
+                    let mut color: Option<piet::Color> = None;
+                    let mut first = true;
+                    let mut comma = false; // Did we just see a comma?
+                    let mut to_left = false;
+                    let mut to_right = false;
+                    let mut to_top = false;
+                    let mut to_bottom = false;
+                    while !parser.is_exhausted() {
+                        let token = parser.next()?;
+                        match token {
+                            Token::Dimension { value, unit, .. } => {
+                                if !first {
+                                    return Err(parser.new_error_for_next_token());
+                                }
+                                match_ignore_ascii_case! { unit,
+                                    "deg" => angle = GradientAngle::Degrees(*value),
+                                    "rad" => angle = GradientAngle::Degrees(value.to_degrees()),
+                                    "grad" => angle = GradientAngle::Degrees(*value * 0.9),
+                                    "turn" => angle = GradientAngle::Degrees(*value * 360.0),
+                                    _ => return Err(parser.new_error_for_next_token()),
+                                };
+                                comma = false;
+                            },
+                            Token::Number { value, .. } => {
+                                if !first || *value != 0.0 {
+                                    return Err(parser.new_error_for_next_token());
+                                }
+                                angle = GradientAngle::Top;
+                                comma = false;
+                            },
+                            Token::Hash(hash) | Token::IDHash(hash) => {
+                                if !comma && !first {
+                                    return Err(parser.new_error_for_next_token());
+                                }
+                                if let Ok(cssparser::Color::RGBA(rgba)) = cssparser::Color::parse_hash(hash.as_bytes()) {
+                                    color = Some(piet::Color::rgba8(rgba.red, rgba.green, rgba.blue, rgba.alpha));
+                                } else {
+                                    return Err(parser.new_error_for_next_token());
+                                };
+                                comma = false;
+                            },
+                            Token::Ident(ident) => {
+                                if first {
+                                    // Set some flags and deal with them under the comma branch
+                                    match_ignore_ascii_case! { ident,
+                                        "to" => (),
+                                        "left" => to_left = true,
+                                        "right" => to_right = true,
+                                        "top" => to_top = true,
+                                        "bottom" => to_bottom = true,
+                                        _ => return Err(parser.new_error_for_next_token()),
+                                    }
+                                    continue; // Don't set `first` flag to false
+                                }
+                                if !comma {
+                                    return Err(parser.new_error_for_next_token());
+                                }
+                                if let Ok(cssparser::Color::RGBA(rgba)) = cssparser::parse_color_keyword(ident) {
+                                    color = Some(piet::Color::rgba8(rgba.red, rgba.green, rgba.blue, rgba.alpha));
+                                } else {
+                                    return Err(parser.new_error_for_next_token());
+                                };
+                                comma = false;
+                            },
+                            Token::Comma => {
+                                if first {
+                                    match (to_left, to_right, to_top, to_bottom) {
+                                        (true, false, false, false) => {
+                                            angle = GradientAngle::Left;
+                                        },
+                                        (false, true, false, false) => {
+                                            angle = GradientAngle::Right;
+                                        },
+                                        (false, false, true, false) => {
+                                            angle = GradientAngle::Top;
+                                        },
+                                        (false, false, false, true) => {
+                                            angle = GradientAngle::Bottom;
+                                        },
+                                        (true, false, true, false) => {
+                                            angle = GradientAngle::TopLeft;
+                                        },
+                                        (true, false, false, true) => {
+                                            angle = GradientAngle::BottomLeft;
+                                        },
+                                        (false, true, true, false) => {
+                                            angle = GradientAngle::TopRight;
+                                        },
+                                        (false, true, false, true) => {
+                                            angle = GradientAngle::BottomRight;
+                                        },
+                                        (false, false, false, false) => return Err(parser.new_error_for_next_token()),
+                                        _ => return Err(parser.new_error_for_next_token()),
+                                    }
+                                }
+                                comma = true;
+                            },
+                            Token::Percentage { unit_value, .. } => {
+                                if !comma {
+                                    if let Some(color) = &color {
+                                        if let Some(last) = gradient_stops.last() {
+                                            let pos = f32::max(last.pos, *unit_value);
+                                            gradient_stops.push(piet::GradientStop { pos, color: color.clone()} );
+                                        } else {
+                                            gradient_stops.push(piet::GradientStop { pos: *unit_value, color: color.clone()} );
+                                        }
+                                    }
+                                } else {
+                                    // TODO - if we see a percent, and just saw a comma, need to adjust midpoint to next color
+                                }
+                                comma = false;
+                            },
+                            _ => return Err(parser.new_error_for_next_token()),
+                        }
+                        first = false;
+                    }
+                    if gradient_stops.len() < 2 {
+                        Err(parser.new_error_for_next_token())
+                    } else {
+                        Ok(LinearGradient { angle, gradient_stops })
+                    }
+                })?),
+                _ => return Err(parser.new_error_for_next_token()),
+            },
+            Token::Comma => {},
+            _ => return Err(parser.new_error_for_next_token()),
+        }
+    }
+    if result.is_empty() {
+        Err(parser.new_error_for_next_token())
+    } else {
+        Ok(vec![Property::BackgroundImage(PropertyValue::Exact(Arc::new(result)))])
+    }
 }
 
 fn parse_border<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>, cssparser::ParseError<'i, ()>> {
@@ -685,6 +827,10 @@ fn parse_border_width<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Propert
     }
 
     Ok(result)
+}
+
+fn parse_box_shadow<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>, cssparser::ParseError<'i, ()>> {
+    todo!();
 }
 
 fn parse_cursor<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>, cssparser::ParseError<'i, ()>> {

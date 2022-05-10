@@ -6,7 +6,7 @@ use crate::tree::ArrayNode;
 
 use druid_shell::{
     kurbo::{Affine, RoundedRect},
-    piet::{Color, Piet, RenderContext},
+    piet::{Piet, RenderContext},
 };
 
 pub(crate) fn draw<S, H>(state: &S, tree: &[ArrayNode<S, H>], styles: &[Style], layout: &[Layout], piet: &mut Piet<'_>) {
@@ -18,16 +18,10 @@ fn draw_inner<S, H>(state: &S, tree: &[ArrayNode<S, H>], styles: &[Style], layou
         let style = &styles[id];
 
         // ---------- Draw the box ----------
-        let bg_color = Color::rgba8(
-            style.background_color.red,
-            style.background_color.green,
-            style.background_color.blue,
-            style.background_color.alpha,
-        );
+        let bg_color = &style.background_color;
 
         // TODO - use all border colors
-        let border_color = style.border_top_color;
-        let border_color = Color::rgba8(border_color.red, border_color.green, border_color.blue, border_color.alpha);
+        let border_color = &style.border_top_color;
 
         let path = RoundedRect::new(
             layout[id].position.x as f64,
@@ -37,8 +31,13 @@ fn draw_inner<S, H>(state: &S, tree: &[ArrayNode<S, H>], styles: &[Style], layou
             style.border_top_left_radius.into(),
         );
 
-        piet.fill(path, &bg_color);
-        piet.stroke(path, &border_color, style.border_top_width.into());
+        piet.fill(path, bg_color);
+
+        if let Some(gradients) = &style.background_image {
+            for gradient in gradients.iter() {
+                piet.fill(path, &gradient.resolve(layout[id].size.width, layout[id].size.height));
+            }
+        }
 
         // Call on_draw()
         if let Some(on_draw) = &tree[id].draw_callback {
@@ -63,7 +62,7 @@ fn draw_inner<S, H>(state: &S, tree: &[ArrayNode<S, H>], styles: &[Style], layou
             piet.restore().unwrap();
         }
 
-        piet.stroke(path, &border_color, style.border_top_width.into());
+        piet.stroke(path, border_color, style.border_top_width.into());
     }
 
     for i in tree[id].child_ids() {

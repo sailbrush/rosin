@@ -9,6 +9,7 @@ use crate::tree::*;
 use bumpalo::collections::Vec as BumpVec;
 use bumpalo::Bump;
 use cssparser::{Parser, ParserInput, RuleListParser};
+use druid_shell::piet;
 
 use std::cmp::Ordering;
 use std::sync::Arc;
@@ -101,11 +102,17 @@ impl Stylesheet {
         let mut dynamic_rules = Vec::new();
         let mut static_rules = Vec::new();
 
-        for (dynamic, rule) in RuleListParser::new_for_stylesheet(&mut parser, RulesParser).flatten() {
-            if dynamic {
-                dynamic_rules.push(rule);
-            } else {
-                static_rules.push(rule);
+        for result in RuleListParser::new_for_stylesheet(&mut parser, RulesParser) {
+            match result {
+                Ok((true, rule)) => {
+                    dynamic_rules.push(rule);
+                },
+                Ok((false, rule)) => {
+                    static_rules.push(rule);
+                },
+                Err((_, error)) => {
+                    // TODO - print parsing errors when in debug mode
+                }
             }
         }
 
@@ -128,11 +135,17 @@ impl Stylesheet {
             data.dynamic_rules.clear();
             data.static_rules.clear();
 
-            for (dynamic, rule) in RuleListParser::new_for_stylesheet(&mut parser, RulesParser).flatten() {
-                if dynamic {
-                    data.dynamic_rules.push(rule);
-                } else {
-                    data.static_rules.push(rule);
+            for result in RuleListParser::new_for_stylesheet(&mut parser, RulesParser) {
+                match result {
+                    Ok((true, rule)) => {
+                        data.dynamic_rules.push(rule);
+                    },
+                    Ok((false, rule)) => {
+                        data.static_rules.push(rule);
+                    },
+                    Err((_, error)) => {
+                        // TODO - print parsing errors when in debug mode
+                    }
                 }
             }
 
@@ -277,13 +290,13 @@ pub(crate) fn apply_static_styles<S, H>(temp: &Bump, tree: &[ArrayNode<S, H>], s
                                 PropertyValue::Initial => styles[id].color = Style::default().color,
                                 PropertyValue::Exact(color) => {
                                     if let cssparser::Color::RGBA(rgba) = color {
-                                        styles[id].color = *rgba;
+                                        styles[id].color = piet::Color::rgba8(rgba.red, rgba.green, rgba.blue, rgba.alpha);
                                     }
                                 }
                                 _ => {
                                     // Inherited by default
                                     if let Some(parent) = &parent_style {
-                                        styles[id].color = parent.color;
+                                        styles[id].color = parent.color.clone();
                                     }
                                 }
                             }
@@ -316,7 +329,7 @@ pub(crate) fn apply_static_styles<S, H>(temp: &Bump, tree: &[ArrayNode<S, H>], s
         }
         if !color_set {
             if let Some(parent) = &parent_style {
-                styles[id].color = parent.color;
+                styles[id].color = parent.color.clone();
             }
         }
 

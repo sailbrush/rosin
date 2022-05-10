@@ -2,6 +2,8 @@
 
 use std::sync::Arc;
 
+use druid_shell::piet;
+
 use crate::style::*;
 
 #[derive(Debug, Copy, Clone)]
@@ -24,8 +26,7 @@ pub enum Property {
     AlignItems(PropertyValue<AlignItems>),
     AlignSelf(PropertyValue<AlignItems>),
     BackgroundColor(PropertyValue<cssparser::Color>),
-    //TODO
-    //BackgroundImage(PropertyValue<piet::FixedGradient>),
+    BackgroundImage(PropertyValue<Arc<Vec<LinearGradient>>>),
     BorderBottomColor(PropertyValue<cssparser::Color>),
     BorderBottomLeftRadius(PropertyValue<Length>),
     BorderBottomRightRadius(PropertyValue<Length>),
@@ -94,24 +95,28 @@ macro_rules! apply {
                     $style.$attr = $style.color.clone();
                 }
                 cssparser::Color::RGBA(rgba) => {
-                    $style.$attr = *rgba;
+                    $style.$attr = piet::Color::rgba8(rgba.red, rgba.green, rgba.blue, rgba.alpha);
                 }
             },
             _ => debug_assert!(false),
         }
     };
-    (@font_family, $value:expr, $style:expr, $parent_style:ident, $attr:ident) => {
+    (@clone_opt, $value:expr, $style:expr, $parent_style:ident, $attr:ident) => {
         match $value {
             PropertyValue::Initial => {
                 $style.$attr = Style::default().$attr;
             }
             PropertyValue::Inherit => {
                 if let Some(parent) = &$parent_style {
-                    $style.$attr = parent.$attr.clone();
+                    if let Some(attribute) = &parent.$attr {
+                        $style.$attr = Some(Arc::clone(attribute));
+                    }
+                } else {
+                    $style.$attr = None;
                 }
             }
             PropertyValue::Exact(value) => {
-                $style.$attr = Some(value.clone());
+                $style.$attr = Some(Arc::clone(value));
             }
             _ => debug_assert!(false),
         }
@@ -255,8 +260,7 @@ impl Property {
             Property::AlignItems(value) => apply!(@generic, value, style, parent_style, align_items),
             Property::AlignSelf(value) => apply!(@generic, value, style, parent_style, align_self),
             Property::BackgroundColor(value) => apply!(@color, value, style, parent_style, background_color),
-            // TODO - for gradients
-            /*Property::BackgroundImage(_) => apply!(@generic_opt, value, arena[id].style, parent_style, background_image),*/
+            Property::BackgroundImage(value) => apply!(@clone_opt, value, style, parent_style, background_image),
             Property::BorderBottomColor(value) => apply!(@color, value, style, parent_style, border_bottom_color),
             Property::BorderBottomLeftRadius(value) => apply!(@length, value, style, parent_style, border_bottom_left_radius),
             Property::BorderBottomRightRadius(value) => apply!(@length, value, style, parent_style, border_bottom_right_radius),
@@ -282,7 +286,7 @@ impl Property {
             Property::FlexGrow(value) => apply!(@generic, value, style, parent_style, flex_grow),
             Property::FlexShrink(value) => apply!(@generic, value, style, parent_style, flex_shrink),
             Property::FlexWrap(value) => apply!(@generic, value, style, parent_style, flex_wrap),
-            Property::FontFamily(value) => apply!(@font_family, value, style, parent_style, font_family),
+            Property::FontFamily(value) => apply!(@clone_opt, value, style, parent_style, font_family),
             Property::FontSize(value) => apply!(@length, value, style, parent_style, font_size),
             Property::FontWeight(value) => apply!(@generic, value, style, parent_style, font_weight),
             Property::Height(value) => apply!(@length_opt, value, style, parent_style, height),

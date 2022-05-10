@@ -58,9 +58,9 @@ impl Slider {
 
                 if info.button.is_left() {
                     if this.horizontal.get() {
-                        this.value.set((info.pos_x / ctx.width()).into());
+                        this.value.set(info.pos_x / ctx.width());
                     } else {
-                        this.value.set((info.pos_y / ctx.height()).into());
+                        this.value.set(info.pos_y / ctx.height());
                     }
 
                     ctx.emit_change();
@@ -75,9 +75,9 @@ impl Slider {
 
                 if info.buttons.has_left() {
                     if this.horizontal.get() {
-                        this.value.set((info.pos_x / ctx.width()).into());
+                        this.value.set(info.pos_x / ctx.width());
                     } else {
-                        this.value.set((info.pos_y / ctx.height()).into());
+                        this.value.set(info.pos_y / ctx.height());
                     }
 
                     ctx.emit_change();

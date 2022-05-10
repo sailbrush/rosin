@@ -2,9 +2,9 @@
 
 use crate::geometry::*;
 
-use cssparser::RGBA;
+use druid_shell::piet::{self, UnitPoint};
 
-use std::sync::Arc;
+use std::{f32::consts::TAU, sync::Arc};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AlignContent {
@@ -105,6 +105,113 @@ pub enum JustifyContent {
     SpaceEvenly,
 }
 
+#[derive(Debug, Clone)]
+pub enum GradientAngle {
+    Top,
+    Right,
+    Bottom,
+    Left,
+    TopRight,
+    TopLeft,
+    BottomRight,
+    BottomLeft,
+    Degrees(f32),
+}
+
+#[derive(Debug, Clone)]
+pub struct LinearGradient {
+    pub angle: GradientAngle,
+    pub gradient_stops: Vec<piet::GradientStop>,
+}
+
+impl LinearGradient {
+    // Calculate the start and end points for a linear gradient
+    pub fn resolve(&self, width: f32, height: f32) -> piet::LinearGradient {
+        let start_point;
+        let end_point;
+
+        let calc = |mut rad: f32| {
+            while rad < 0.0 {
+                rad += TAU;
+            }
+            while rad >= TAU {
+                rad -= TAU;
+            }
+
+            let u;
+            let v;
+            let hypot = width.hypot(height) / 2.0;
+            if rad < TAU * 0.25 {
+                let theta = (width / height).atan() - rad;
+                let len = theta.cos() * hypot;
+                let x = rad.sin() * len;
+                let y = rad.cos() * len;
+                u = (x / width) + 0.5;
+                v = ((height / 2.0) - y) / height;
+            } else if rad < TAU * 0.5 {
+                let theta = rad - (TAU / 4.0) - (height / width).atan();
+                let len = theta.cos() * hypot;
+                let x = rad.sin() * len;
+                let y = rad.cos() * len;
+                u = (x / width) + 0.5;
+                v = ((height / 2.0) - y) / height;
+            } else if rad < TAU * 0.75 {
+                let theta = (width / height).atan() - rad;
+                let len = theta.cos() * hypot;
+                let x = rad.sin() * len;
+                let y = rad.cos() * len;
+                u = 0.5 - (x / width);
+                v = 1.0 - ((height / 2.0) - y) / height;
+            } else {
+                let theta = rad - (3.0 * TAU / 4.0) - (height / width).atan();
+                let len = theta.cos() * hypot;
+                let x = rad.sin() * len;
+                let y = rad.cos() * len;
+                u = 1.0 - ((width / 2.0) - x) / width;
+                v = ((height / 2.0) - y) / height;
+            }
+
+            (UnitPoint::new(1.0 - u as f64, 1.0 - v as f64), UnitPoint::new(u as f64, v as f64))
+        };
+
+        match &self.angle {
+            GradientAngle::Top => {
+                start_point = UnitPoint::BOTTOM;
+                end_point = UnitPoint::TOP;
+            }
+            GradientAngle::Right => {
+                start_point = UnitPoint::LEFT;
+                end_point = UnitPoint::RIGHT;
+            }
+            GradientAngle::Bottom => {
+                start_point = UnitPoint::TOP;
+                end_point = UnitPoint::BOTTOM;
+            }
+            GradientAngle::Left => {
+                start_point = UnitPoint::RIGHT;
+                end_point = UnitPoint::LEFT;
+            }
+            GradientAngle::TopRight => {
+                (start_point, end_point) = calc((height / width).atan());
+            }
+            GradientAngle::TopLeft => {
+                (start_point, end_point) = calc((width / height).atan() - TAU / 4.0);
+            }
+            GradientAngle::BottomRight => {
+                (start_point, end_point) = calc((width / height).atan() + TAU / 4.0);
+            }
+            GradientAngle::BottomLeft => {
+                (start_point, end_point) = calc((height / width).atan() + TAU / 2.0);
+            }
+            GradientAngle::Degrees(deg) => {
+                (start_point, end_point) = calc(deg.to_radians());
+            }
+        }
+
+        piet::LinearGradient::new(start_point, end_point, &*self.gradient_stops)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Position {
     Static,
@@ -118,17 +225,17 @@ pub struct Style {
     pub align_content: AlignContent,
     pub align_items: AlignItems,
     pub align_self: AlignItems,
-    pub background_color: RGBA,
-    //pub background_image: Option<piet::FixedGradient>,
-    pub border_bottom_color: RGBA,
+    pub background_color: piet::Color,
+    pub background_image: Option<Arc<Vec<LinearGradient>>>,
+    pub border_bottom_color: piet::Color,
     pub border_bottom_left_radius: f32,
     pub border_bottom_right_radius: f32,
     pub border_bottom_width: f32,
-    pub border_left_color: RGBA,
+    pub border_left_color: piet::Color,
     pub border_left_width: f32,
-    pub border_right_color: RGBA,
+    pub border_right_color: piet::Color,
     pub border_right_width: f32,
-    pub border_top_color: RGBA,
+    pub border_top_color: piet::Color,
     pub border_top_left_radius: f32,
     pub border_top_right_radius: f32,
     pub border_top_width: f32,
@@ -136,9 +243,9 @@ pub struct Style {
     pub box_shadow_offset_x: f32,
     pub box_shadow_offset_y: f32,
     pub box_shadow_blur: f32,
-    pub box_shadow_color: RGBA,
+    pub box_shadow_color: piet::Color,
     pub box_shadow_inset: Option<bool>,
-    pub color: RGBA,
+    pub color: piet::Color,
     pub cursor: Cursor,
     pub flex_basis: Option<f32>,
     pub flex_direction: FlexDirection,
@@ -178,17 +285,17 @@ impl Default for Style {
             align_content: AlignContent::Stretch,
             align_items: AlignItems::Stretch,
             align_self: AlignItems::Stretch,
-            background_color: RGBA::transparent(),
-            //background_image: None,
-            border_bottom_color: RGBA::new(0, 0, 0, 255),
+            background_color: piet::Color::rgba8(0, 0, 0, 0),
+            background_image: None,
+            border_bottom_color: piet::Color::rgba8(0, 0, 0, 255),
             border_bottom_left_radius: 0.0,
             border_bottom_right_radius: 0.0,
             border_bottom_width: 0.0,
-            border_left_color: RGBA::new(0, 0, 0, 255),
+            border_left_color: piet::Color::rgba8(0, 0, 0, 255),
             border_left_width: 0.0,
-            border_right_color: RGBA::new(0, 0, 0, 255),
+            border_right_color: piet::Color::rgba8(0, 0, 0, 255),
             border_right_width: 0.0,
-            border_top_color: RGBA::new(0, 0, 0, 255),
+            border_top_color: piet::Color::rgba8(0, 0, 0, 255),
             border_top_left_radius: 0.0,
             border_top_right_radius: 0.0,
             border_top_width: 0.0,
@@ -196,9 +303,9 @@ impl Default for Style {
             box_shadow_offset_x: 0.0,
             box_shadow_offset_y: 0.0,
             box_shadow_blur: 0.0,
-            box_shadow_color: RGBA::new(0, 0, 0, 255),
+            box_shadow_color: piet::Color::rgba8(0, 0, 0, 255),
             box_shadow_inset: None,
-            color: RGBA::new(0, 0, 0, 255),
+            color: piet::Color::rgba8(0, 0, 0, 255),
             cursor: Cursor::Default,
             flex_basis: None,
             flex_direction: FlexDirection::Row,

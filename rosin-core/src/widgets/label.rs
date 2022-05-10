@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use druid_shell::piet::{Color, FontFamily, RenderContext, Text, TextLayoutBuilder};
+use druid_shell::piet::{FontFamily, RenderContext, Text, TextLayoutBuilder};
 
 use crate::prelude::*;
 
@@ -8,12 +8,7 @@ use crate::prelude::*;
 pub fn label<S, H>(text: &'static str) -> View<S, H> {
     ui!([
         .on_draw(true, move |_: &S, ctx: &mut DrawCtx| {
-            let font_color = Color::rgba8(
-                ctx.style.color.red,
-                ctx.style.color.green,
-                ctx.style.color.blue,
-                ctx.style.color.alpha
-            );
+            let font_color = ctx.style.color.clone();
 
             let font_family = if let Some(family_name) = &ctx.style.font_family {
                 ctx.piet.text().font_family(family_name.as_ref())
