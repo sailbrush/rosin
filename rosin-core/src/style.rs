@@ -24,6 +24,29 @@ pub enum AlignItems {
     FlexEnd,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct BoxShadow {
+    pub offset_x: f32,
+    pub offset_y: f32,
+    pub blur: f32,
+    pub spread: f32,
+    pub color: Option<piet::Color>,
+    pub inset: bool,
+}
+
+impl Default for BoxShadow {
+    fn default() -> Self {
+        Self {
+            offset_x: 0.0,
+            offset_y: 0.0,
+            blur: 0.0,
+            spread: 0.0,
+            color: None,
+            inset: false,
+        }
+    }
+}
+
 #[allow(non_camel_case_types)]
 #[derive(Debug, Clone, Copy)]
 pub enum Cursor {
@@ -240,11 +263,7 @@ pub struct Style {
     pub border_top_right_radius: f32,
     pub border_top_width: f32,
     pub bottom: Option<f32>,
-    pub box_shadow_offset_x: f32,
-    pub box_shadow_offset_y: f32,
-    pub box_shadow_blur: f32,
-    pub box_shadow_color: piet::Color,
-    pub box_shadow_inset: Option<bool>,
+    pub box_shadow: Option<Vec<BoxShadow>>,
     pub color: piet::Color,
     pub cursor: Cursor,
     pub flex_basis: Option<f32>,
@@ -300,11 +319,7 @@ impl Default for Style {
             border_top_right_radius: 0.0,
             border_top_width: 0.0,
             bottom: None,
-            box_shadow_offset_x: 0.0,
-            box_shadow_offset_y: 0.0,
-            box_shadow_blur: 0.0,
-            box_shadow_color: piet::Color::rgba8(0, 0, 0, 255),
-            box_shadow_inset: None,
+            box_shadow: None,
             color: piet::Color::rgba8(0, 0, 0, 255),
             cursor: Cursor::Default,
             flex_basis: None,

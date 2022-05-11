@@ -173,7 +173,7 @@ impl<'i> DeclarationParser<'i> for PropertiesParser {
             "border-top-width" => Ok(vec![Property::BorderTopWidth(parse_length(parser)?)]),
             "border-width" => parse_border_width(parser),
             "bottom" => Ok(vec![Property::Bottom(parse_length(parser)?)]),
-            "box-shadow" => todo!(),
+            "box-shadow" => parse_box_shadow(parser),
             "color" => Ok(vec![Property::Color(PropertyValue::Exact(cssparser::Color::parse(parser)?))]),
             "cursor" => parse_cursor(parser),
             "flex" => parse_flex(parser),
@@ -389,6 +389,14 @@ fn parse_background_image<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Pro
     while !parser.is_exhausted() {
         let token = parser.next()?;
         match token {
+            Token::Ident(s) => {
+                match_ignore_ascii_case! { s,
+                    "none" => return Ok(vec![Property::BackgroundImage(PropertyValue::Exact(None))]),
+                    "initial" => return Ok(vec![Property::BackgroundImage(PropertyValue::Initial)]),
+                    "inherit" => return Ok(vec![Property::BackgroundImage(PropertyValue::Inherit)]),
+                    _ => return Err(parser.new_error_for_next_token()),
+                }
+            }
             Token::Function(s) => match_ignore_ascii_case! { s,
                 "linear-gradient" => result.push(parser.parse_nested_block(|parser| {
                     // Refer to https://developer.mozilla.org/en-US/docs/Web/CSS/gradient/linear-gradient#formal_syntax
@@ -453,12 +461,12 @@ fn parse_background_image<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Pro
                                 prev_comma = false;
                                 prev_color = true;
                             },
-                            Token::Ident(ident) => {
+                            Token::Ident(s) => {
                                 if first {
                                     prev_comma = false;
                                     prev_color = false;
                                     // Set some flags and deal with them under the comma branch
-                                    match_ignore_ascii_case! { ident,
+                                    match_ignore_ascii_case! { s,
                                         "to" => {
                                             continue; // Don't set `first` flag to false
                                         },
@@ -483,7 +491,7 @@ fn parse_background_image<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Pro
                                 } else if !prev_comma {
                                     return Err(parser.new_error_for_next_token());
                                 }
-                                if let Ok(cssparser::Color::RGBA(rgba)) = cssparser::parse_color_keyword(ident) {
+                                if let Ok(cssparser::Color::RGBA(rgba)) = cssparser::parse_color_keyword(s) {
                                     color = Some(piet::Color::rgba8(rgba.red, rgba.green, rgba.blue, rgba.alpha));
                                 } else {
                                     return Err(parser.new_error_for_next_token());
@@ -614,7 +622,7 @@ fn parse_background_image<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Pro
     if result.is_empty() {
         Err(parser.new_error_for_next_token())
     } else {
-        Ok(vec![Property::BackgroundImage(PropertyValue::Exact(Arc::new(result)))])
+        Ok(vec![Property::BackgroundImage(PropertyValue::Exact(Some(Arc::new(result))))])
     }
 }
 
@@ -918,7 +926,108 @@ fn parse_border_width<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Propert
 }
 
 fn parse_box_shadow<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>, cssparser::ParseError<'i, ()>> {
-    todo!();
+    let mut result = Vec::new();
+    let mut box_shadow_values = Vec::new();
+    let mut color: Option<piet::Color> = None;
+    let mut inset = false;
+    while !parser.is_exhausted() {
+        let parser_state = parser.state();
+        let token = parser.next()?;
+        match token {
+            Token::Ident(s) => {
+                match_ignore_ascii_case! { s,
+                    "none" => return Ok(vec![Property::BoxShadow(PropertyValue::Exact(None))]),
+                    "initial" => return Ok(vec![Property::BoxShadow(PropertyValue::Initial)]),
+                    "inherit" => return Ok(vec![Property::BoxShadow(PropertyValue::Inherit)]),
+                    "inset" => inset = true,
+                    _ => {
+                        if let Ok(cssparser::Color::RGBA(rgba)) = cssparser::parse_color_keyword(s) {
+                            color = Some(piet::Color::rgba8(rgba.red, rgba.green, rgba.blue, rgba.alpha));
+                        } else {
+                            return Err(parser.new_error_for_next_token());
+                        };
+                    },
+                }
+            }
+            Token::Function(_) => {
+                parser.reset(&parser_state);
+                if let Ok(cssparser::Color::RGBA(rgba)) = cssparser::Color::parse(parser) {
+                    color = Some(piet::Color::rgba8(rgba.red, rgba.green, rgba.blue, rgba.alpha));
+                } else {
+                    return Err(parser.new_error_for_next_token());
+                }
+            }
+            Token::Hash(hash) | Token::IDHash(hash) => {
+                if let Ok(cssparser::Color::RGBA(rgba)) = cssparser::Color::parse_hash(hash.as_bytes()) {
+                    color = Some(piet::Color::rgba8(rgba.red, rgba.green, rgba.blue, rgba.alpha));
+                } else {
+                    return Err(parser.new_error_for_next_token());
+                }
+            }
+            Token::Number { .. } | Token::Dimension { .. } => {
+                if let Some(length) = parse_length_token(token) {
+                    box_shadow_values.push(length);
+                } else {
+                    return Err(parser.new_error_for_next_token());
+                }
+            }
+            Token::Comma => {
+                let mut box_shadow = BoxShadowProperty::default();
+                box_shadow.color = color;
+                box_shadow.inset = inset;
+                match box_shadow_values[..] {
+                    [offset_x, offset_y, blur, spread] => {
+                        box_shadow.offset_x = offset_x;
+                        box_shadow.offset_y = offset_y;
+                        box_shadow.blur = blur;
+                        box_shadow.spread = spread;
+                    }
+                    [offset_x, offset_y, blur] => {
+                        box_shadow.offset_x = offset_x;
+                        box_shadow.offset_y = offset_y;
+                        box_shadow.blur = blur;
+                    }
+                    [offset_x, offset_y] => {
+                        box_shadow.offset_x = offset_x;
+                        box_shadow.offset_y = offset_y;
+                    }
+                    _ => {
+                        return Err(parser.new_error_for_next_token());
+                    }
+                }
+                result.push(box_shadow);
+                box_shadow_values.clear();
+                color = None;
+                inset = false;
+            }
+            _ => {}
+        }
+    }
+    let mut box_shadow = BoxShadowProperty::default();
+    box_shadow.color = color;
+    box_shadow.inset = inset;
+    match box_shadow_values[..] {
+        [offset_x, offset_y, blur, spread] => {
+            box_shadow.offset_x = offset_x;
+            box_shadow.offset_y = offset_y;
+            box_shadow.blur = blur;
+            box_shadow.spread = spread;
+        }
+        [offset_x, offset_y, blur] => {
+            box_shadow.offset_x = offset_x;
+            box_shadow.offset_y = offset_y;
+            box_shadow.blur = blur;
+        }
+        [offset_x, offset_y] => {
+            box_shadow.offset_x = offset_x;
+            box_shadow.offset_y = offset_y;
+        }
+        _ => {
+            return Err(parser.new_error_for_next_token());
+        }
+    }
+    result.push(box_shadow);
+    Ok(vec![Property::BoxShadow(PropertyValue::Exact(Some(result)))])
 }
 
 fn parse_cursor<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>, cssparser::ParseError<'i, ()>> {
