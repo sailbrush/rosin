@@ -106,10 +106,10 @@ impl Stylesheet {
             match result {
                 Ok((true, rule)) => {
                     dynamic_rules.push(rule);
-                },
+                }
                 Ok((false, rule)) => {
                     static_rules.push(rule);
-                },
+                }
                 Err((_, error)) => {
                     // TODO - print parsing errors when in debug mode
                 }
@@ -139,10 +139,10 @@ impl Stylesheet {
                 match result {
                     Ok((true, rule)) => {
                         data.dynamic_rules.push(rule);
-                    },
+                    }
                     Ok((false, rule)) => {
                         data.static_rules.push(rule);
-                    },
+                    }
                     Err((_, error)) => {
                         // TODO - print parsing errors when in debug mode
                     }

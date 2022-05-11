@@ -390,21 +390,35 @@ fn parse_background_image<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Pro
         let token = parser.next()?;
         match token {
             Token::Function(s) => match_ignore_ascii_case! { s,
-                // TODO - Make stop positions optional
                 "linear-gradient" => result.push(parser.parse_nested_block(|parser| {
                     // Refer to https://developer.mozilla.org/en-US/docs/Web/CSS/gradient/linear-gradient#formal_syntax
-                    let mut gradient_stops: Vec<piet::GradientStop> = Vec::new();
+                    let mut gradient_stops: Vec<(f32, Option<piet::Color>)> = Vec::new();
                     let mut angle = GradientAngle::Bottom;
                     let mut color: Option<piet::Color> = None;
                     let mut first = true;
-                    let mut comma = false; // Did we just see a comma?
+                    let mut prev_comma = false; // Did we just see a comma?
+                    let mut prev_color = false; // Did we just see a color?
                     let mut to_left = false;
                     let mut to_right = false;
                     let mut to_top = false;
                     let mut to_bottom = false;
                     while !parser.is_exhausted() {
+                        let parser_state = parser.state();
                         let token = parser.next()?;
                         match token {
+                            Token::Function(_) => {
+                                if !prev_comma && !first {
+                                    return Err(parser.new_error_for_next_token());
+                                }
+                                parser.reset(&parser_state);
+                                if let Ok(cssparser::Color::RGBA(rgba)) = cssparser::Color::parse(parser) {
+                                    color = Some(piet::Color::rgba8(rgba.red, rgba.green, rgba.blue, rgba.alpha));
+                                } else {
+                                    return Err(parser.new_error_for_next_token());
+                                }
+                                prev_comma = false;
+                                prev_color = true;
+                            },
                             Token::Dimension { value, unit, .. } => {
                                 if !first {
                                     return Err(parser.new_error_for_next_token());
@@ -416,17 +430,19 @@ fn parse_background_image<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Pro
                                     "turn" => angle = GradientAngle::Degrees(*value * 360.0),
                                     _ => return Err(parser.new_error_for_next_token()),
                                 };
-                                comma = false;
+                                prev_comma = false;
+                                prev_color = false;
                             },
                             Token::Number { value, .. } => {
                                 if !first || *value != 0.0 {
                                     return Err(parser.new_error_for_next_token());
                                 }
                                 angle = GradientAngle::Top;
-                                comma = false;
+                                prev_comma = false;
+                                prev_color = false;
                             },
                             Token::Hash(hash) | Token::IDHash(hash) => {
-                                if !comma && !first {
+                                if !prev_comma && !first {
                                     return Err(parser.new_error_for_next_token());
                                 }
                                 if let Ok(cssparser::Color::RGBA(rgba)) = cssparser::Color::parse_hash(hash.as_bytes()) {
@@ -434,22 +450,37 @@ fn parse_background_image<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Pro
                                 } else {
                                     return Err(parser.new_error_for_next_token());
                                 };
-                                comma = false;
+                                prev_comma = false;
+                                prev_color = true;
                             },
                             Token::Ident(ident) => {
                                 if first {
+                                    prev_comma = false;
+                                    prev_color = false;
                                     // Set some flags and deal with them under the comma branch
                                     match_ignore_ascii_case! { ident,
-                                        "to" => (),
-                                        "left" => to_left = true,
-                                        "right" => to_right = true,
-                                        "top" => to_top = true,
-                                        "bottom" => to_bottom = true,
-                                        _ => return Err(parser.new_error_for_next_token()),
+                                        "to" => {
+                                            continue; // Don't set `first` flag to false
+                                        },
+                                        "left" => {
+                                            to_left = true;
+                                            continue; // Don't set `first` flag to false
+                                        },
+                                        "right" => {
+                                            to_right = true;
+                                            continue; // Don't set `first` flag to false
+                                        },
+                                        "top" => {
+                                            to_top = true;
+                                            continue; // Don't set `first` flag to false
+                                        },
+                                        "bottom" => {
+                                            to_bottom = true;
+                                            continue; // Don't set `first` flag to false
+                                        },
+                                        _ => {},
                                     }
-                                    continue; // Don't set `first` flag to false
-                                }
-                                if !comma {
+                                } else if !prev_comma {
                                     return Err(parser.new_error_for_next_token());
                                 }
                                 if let Ok(cssparser::Color::RGBA(rgba)) = cssparser::parse_color_keyword(ident) {
@@ -457,7 +488,8 @@ fn parse_background_image<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Pro
                                 } else {
                                     return Err(parser.new_error_for_next_token());
                                 };
-                                comma = false;
+                                prev_comma = false;
+                                prev_color = true;
                             },
                             Token::Comma => {
                                 if first {
@@ -489,37 +521,93 @@ fn parse_background_image<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Pro
                                         (false, false, false, false) => return Err(parser.new_error_for_next_token()),
                                         _ => return Err(parser.new_error_for_next_token()),
                                     }
+                                } else if prev_color {
+                                    gradient_stops.push((f32::NAN, color.clone()));
                                 }
-                                comma = true;
+                                prev_color = false;
+                                prev_comma = true;
                             },
                             Token::Percentage { unit_value, .. } => {
-                                if !comma {
-                                    if let Some(color) = &color {
-                                        if let Some(last) = gradient_stops.last() {
-                                            let pos = f32::max(last.pos, *unit_value);
-                                            gradient_stops.push(piet::GradientStop { pos, color: color.clone()} );
-                                        } else {
-                                            gradient_stops.push(piet::GradientStop { pos: *unit_value, color: color.clone()} );
-                                        }
+                                if !prev_comma {
+                                    if let Some(last) = gradient_stops.last() {
+                                        let pos = f32::max(last.0, *unit_value);
+                                        gradient_stops.push((pos, color.clone()));
+                                    } else {
+                                        gradient_stops.push((*unit_value, color.clone()));
                                     }
                                 } else {
-                                    // TODO - if we see a percent, and just saw a comma, need to adjust midpoint to next color
+                                    gradient_stops.push((*unit_value, None));
                                 }
-                                comma = false;
+                                prev_color = false;
+                                prev_comma = false;
                             },
                             _ => return Err(parser.new_error_for_next_token()),
                         }
                         first = false;
                     }
-                    if gradient_stops.len() < 2 {
-                        Err(parser.new_error_for_next_token())
-                    } else {
-                        Ok(LinearGradient { angle, gradient_stops })
+                    // If a color without a percent was the last token
+                    if prev_color {
+                        gradient_stops.push((f32::NAN, color));
                     }
+                    // If we didn't see enough stops
+                    if gradient_stops.len() < 2 {
+                        return Err(parser.new_error_for_next_token());
+                    }
+                    // Calculate position of stops without a specified position (f32::NAN)
+                    if gradient_stops[0].0.is_nan() {
+                        gradient_stops[0].0 = 0.0;
+                    }
+                    let last_idx = gradient_stops.len() - 1;
+                    if gradient_stops[last_idx].1.is_none() {
+                        return Err(parser.new_error_for_next_token());
+                    }
+                    if gradient_stops[last_idx].0.is_nan() {
+                        gradient_stops[last_idx].0 = 1.0;
+                    }
+                    // Find a span of stops with position f32::NAN and calculate their position
+                    for i in 1..gradient_stops.len() - 1 {
+                        if gradient_stops[i].0.is_nan() {
+                            for j in i..gradient_stops.len() {
+                                if !gradient_stops[j].0.is_nan() {
+                                    let span_len = (j - i) + 1;
+                                    let start = gradient_stops[i - 1].0;
+                                    let end = gradient_stops[j].0;
+                                    let stride = (end - start) / span_len as f32;
+                                    let mut num = 1.0;
+                                    for stop in gradient_stops.iter_mut().take(j).skip(i) {
+                                        stop.0 = start + num * stride;
+                                        num += 1.0;
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    // Calculate colors of mid-point adjustment stops
+                    for i in 1..gradient_stops.len() - 1 {
+                        if gradient_stops[i].1.is_none() {
+                            if let (Some(l), Some(r)) = (&gradient_stops[i - 1].1, &gradient_stops[i + 1].1) {
+                                let l = l.as_rgba8();
+                                let r = r.as_rgba8();
+                                gradient_stops[i].1 = Some(piet::Color::rgba8(
+                                    (l.0 / 2) + (r.0 / 2),
+                                    (l.1 / 2) + (r.1 / 2),
+                                    (l.2 / 2) + (r.2 / 2),
+                                    (l.3 / 2) + (r.3 / 2)));
+                            } else {
+                                return Err(parser.new_error_for_next_token());
+                            }
+                        }
+                    }
+                    // Convert to piet gradient stops
+                    let gradient_stops = gradient_stops.into_iter().map(|stop| {
+                        piet::GradientStop { pos: stop.0, color: stop.1.unwrap() }
+                    }).collect();
+                    Ok(LinearGradient {angle, gradient_stops })
                 })?),
                 _ => return Err(parser.new_error_for_next_token()),
             },
-            Token::Comma => {},
+            Token::Comma => {}
             _ => return Err(parser.new_error_for_next_token()),
         }
     }
