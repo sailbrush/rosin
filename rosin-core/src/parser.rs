@@ -972,9 +972,11 @@ fn parse_box_shadow<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>
                 }
             }
             Token::Comma => {
-                let mut box_shadow = BoxShadowProperty::default();
-                box_shadow.color = color;
-                box_shadow.inset = inset;
+                let mut box_shadow = BoxShadowProperty {
+                    color,
+                    inset,
+                    ..Default::default()
+                };
                 match box_shadow_values[..] {
                     [offset_x, offset_y, blur, spread] => {
                         box_shadow.offset_x = offset_x;
@@ -1003,9 +1005,11 @@ fn parse_box_shadow<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>
             _ => {}
         }
     }
-    let mut box_shadow = BoxShadowProperty::default();
-    box_shadow.color = color;
-    box_shadow.inset = inset;
+    let mut box_shadow = BoxShadowProperty {
+        color,
+        inset,
+        ..Default::default()
+    };
     match box_shadow_values[..] {
         [offset_x, offset_y, blur, spread] => {
             box_shadow.offset_x = offset_x;
