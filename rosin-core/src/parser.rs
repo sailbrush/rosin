@@ -432,10 +432,10 @@ fn parse_background_image<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Pro
                                     return Err(parser.new_error_for_next_token());
                                 }
                                 match_ignore_ascii_case! { unit,
-                                    "deg" => angle = GradientAngle::Degrees(*value),
-                                    "rad" => angle = GradientAngle::Degrees(value.to_degrees()),
+                                    "deg" => angle = GradientAngle::Radians(value.to_radians()),
+                                    "rad" => angle = GradientAngle::Radians(*value),
                                     "grad" => angle = GradientAngle::Degrees(*value * 0.9),
-                                    "turn" => angle = GradientAngle::Degrees(*value * 360.0),
+                                    "turn" => angle = GradientAngle::Radians(*value * std::f32::consts::TAU),
                                     _ => return Err(parser.new_error_for_next_token()),
                                 };
                                 prev_comma = false;

@@ -126,6 +126,7 @@ pub enum GradientAngle {
     BottomRight,
     BottomLeft,
     Degrees(f32),
+    Radians(f32),
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -142,10 +143,10 @@ impl Default for Length {
 
 impl Length {
     #[inline]
-    pub fn resolve(&self, font_size: f32) -> f32 {
+    pub fn resolve(&self, font_size: f32) -> f64 {
         match self {
-            Length::Em(value) => font_size * value,
-            Length::Px(value) => *value,
+            Length::Em(value) => (font_size * value) as f64,
+            Length::Px(value) => *value as f64,
         }
     }
 }
@@ -237,6 +238,9 @@ impl LinearGradient {
             }
             GradientAngle::Degrees(deg) => {
                 (start_point, end_point) = calc(deg.to_radians());
+            }
+            GradientAngle::Radians(rad) => {
+                (start_point, end_point) = calc(*rad);
             }
         }
 
