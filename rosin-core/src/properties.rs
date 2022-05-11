@@ -7,43 +7,11 @@ use druid_shell::piet;
 use crate::style::*;
 
 #[derive(Debug, Copy, Clone)]
-pub enum Length {
-    Px(f32),
-    Em(f32),
-}
-
-impl Default for Length {
-    fn default() -> Self {
-        Self::Px(0.0)
-    }
-}
-
-impl Length {
-    #[inline]
-    fn resolve(&self, font_size: f32) -> f32 {
-        match self {
-            Length::Em(value) => font_size * value,
-            Length::Px(value) => *value,
-        }
-    }
-}
-
-#[derive(Debug, Copy, Clone)]
 pub enum PropertyValue<T> {
     Auto,
     Initial,
     Inherit,
     Exact(T),
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct BoxShadowProperty {
-    pub offset_x: Length,
-    pub offset_y: Length,
-    pub blur: Length,
-    pub spread: Length,
-    pub color: Option<piet::Color>,
-    pub inset: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -66,7 +34,7 @@ pub enum Property {
     BorderTopRightRadius(PropertyValue<Length>),
     BorderTopWidth(PropertyValue<Length>),
     Bottom(PropertyValue<Length>),
-    BoxShadow(PropertyValue<Option<Vec<BoxShadowProperty>>>),
+    BoxShadow(PropertyValue<Option<Arc<Vec<BoxShadow>>>>),
     Color(PropertyValue<cssparser::Color>),
     Cursor(PropertyValue<Cursor>),
     FlexBasis(PropertyValue<Length>),
@@ -102,40 +70,6 @@ pub enum Property {
 }
 
 macro_rules! apply {
-    (@box_shadow, $value:expr, $style:expr, $parent_style:ident, $attr:ident) => {
-        match $value {
-            PropertyValue::Initial => {
-                $style.$attr = Style::default().$attr;
-            }
-            PropertyValue::Inherit => {
-                if let Some(parent) = &$parent_style {
-                    if let Some(attribute) = &parent.$attr {
-                        $style.$attr = Some(attribute.clone());
-                    }
-                } else {
-                    $style.$attr = None;
-                }
-            }
-            PropertyValue::Exact(None) => {
-                $style.$attr = None;
-            }
-            PropertyValue::Exact(Some(values)) => {
-                let mut box_shadows = Vec::with_capacity(values.len());
-                for value in values {
-                    box_shadows.push(BoxShadow {
-                        offset_x: value.offset_x.resolve($style.font_size),
-                        offset_y: value.offset_y.resolve($style.font_size),
-                        blur: value.blur.resolve($style.font_size),
-                        spread: value.spread.resolve($style.font_size),
-                        color: value.color.clone(),
-                        inset: value.inset,
-                    });
-                }
-                $style.$attr = Some(box_shadows);
-            }
-            _ => debug_assert!(false),
-        }
-    };
     (@color, $value:expr, $style:expr, $parent_style:ident, $attr:ident) => {
         match $value {
             PropertyValue::Initial => {
@@ -353,7 +287,7 @@ impl Property {
             Property::BorderTopRightRadius(value) => apply!(@length, value, style, parent_style, border_top_right_radius),
             Property::BorderTopWidth(value) => apply!(@length, value, style, parent_style, border_top_width),
             Property::Bottom(value) => apply!(@length_opt, value, style, parent_style, bottom),
-            Property::BoxShadow(value) => apply!(@box_shadow, value, style, parent_style, box_shadow),
+            Property::BoxShadow(value) => apply!(@clone_opt, value, style, parent_style, box_shadow),
             Property::Cursor(value) => apply!(@generic, value, style, parent_style, cursor),
             Property::Color(value) => apply!(@color, value, style, parent_style, color),
             Property::FlexBasis(value) => apply!(@length_opt, value, style, parent_style, flex_basis),

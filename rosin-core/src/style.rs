@@ -24,27 +24,14 @@ pub enum AlignItems {
     FlexEnd,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Default, Clone)]
 pub struct BoxShadow {
-    pub offset_x: f32,
-    pub offset_y: f32,
-    pub blur: f32,
-    pub spread: f32,
+    pub offset_x: Length,
+    pub offset_y: Length,
+    pub blur: Length,
+    pub spread: Length,
     pub color: Option<piet::Color>,
     pub inset: bool,
-}
-
-impl Default for BoxShadow {
-    fn default() -> Self {
-        Self {
-            offset_x: 0.0,
-            offset_y: 0.0,
-            blur: 0.0,
-            spread: 0.0,
-            color: None,
-            inset: false,
-        }
-    }
 }
 
 #[allow(non_camel_case_types)]
@@ -139,6 +126,28 @@ pub enum GradientAngle {
     BottomRight,
     BottomLeft,
     Degrees(f32),
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum Length {
+    Px(f32),
+    Em(f32),
+}
+
+impl Default for Length {
+    fn default() -> Self {
+        Self::Px(0.0)
+    }
+}
+
+impl Length {
+    #[inline]
+    pub fn resolve(&self, font_size: f32) -> f32 {
+        match self {
+            Length::Em(value) => font_size * value,
+            Length::Px(value) => *value,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -263,7 +272,7 @@ pub struct Style {
     pub border_top_right_radius: f32,
     pub border_top_width: f32,
     pub bottom: Option<f32>,
-    pub box_shadow: Option<Vec<BoxShadow>>,
+    pub box_shadow: Option<Arc<Vec<BoxShadow>>>,
     pub color: piet::Color,
     pub cursor: Cursor,
     pub flex_basis: Option<f32>,

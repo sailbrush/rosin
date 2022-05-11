@@ -972,7 +972,7 @@ fn parse_box_shadow<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>
                 }
             }
             Token::Comma => {
-                let mut box_shadow = BoxShadowProperty {
+                let mut box_shadow = BoxShadow {
                     color,
                     inset,
                     ..Default::default()
@@ -1005,7 +1005,7 @@ fn parse_box_shadow<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>
             _ => {}
         }
     }
-    let mut box_shadow = BoxShadowProperty {
+    let mut box_shadow = BoxShadow {
         color,
         inset,
         ..Default::default()
@@ -1031,7 +1031,7 @@ fn parse_box_shadow<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>
         }
     }
     result.push(box_shadow);
-    Ok(vec![Property::BoxShadow(PropertyValue::Exact(Some(result)))])
+    Ok(vec![Property::BoxShadow(PropertyValue::Exact(Some(Arc::new(result))))])
 }
 
 fn parse_cursor<'i, 't>(parser: &mut Parser<'i, 't>) -> Result<Vec<Property>, cssparser::ParseError<'i, ()>> {
