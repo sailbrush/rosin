@@ -120,7 +120,7 @@ macro_rules! apply {
                 $style.$attr = None;
             }
             PropertyValue::Exact(Some(values)) => {
-                let mut box_shadows = Vec::new();
+                let mut box_shadows = Vec::with_capacity(values.len());
                 for value in values {
                     box_shadows.push(BoxShadow {
                         offset_x: value.offset_x.resolve($style.font_size),

@@ -110,7 +110,7 @@ impl Stylesheet {
                 Ok((false, rule)) => {
                     static_rules.push(rule);
                 }
-                Err((_, error)) => {
+                Err((_, _error)) => {
                     // TODO - print parsing errors when in debug mode
                 }
             }
@@ -143,7 +143,7 @@ impl Stylesheet {
                     Ok((false, rule)) => {
                         data.static_rules.push(rule);
                     }
-                    Err((_, error)) => {
+                    Err((_, _error)) => {
                         // TODO - print parsing errors when in debug mode
                     }
                 }
