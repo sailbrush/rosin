@@ -120,14 +120,29 @@ impl<S, H> Drop for ArrayNode<S, H> {
     }
 }
 
+impl<S, H> std::fmt::Debug for ArrayNode<S, H> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ArrayNode")
+            .field("key", &self.key)
+            .field("classes", &self.classes)
+            .field("event_callbacks", &self.event_callbacks.len())
+            .field("style_sheet", &self.style_sheet)
+            .field("style_callback", &self.style_callback.is_some())
+            .field("layout_callback", &self.layout_callback.is_some())
+            .field("draw_callback", &self.draw_callback.is_some())
+            .field("_draw_cache_enable", &self._draw_cache_enable)
+            .field("parent", &self.parent)
+            .field("num_children", &self.num_children)
+            .field("last_child", &self.last_child)
+            .finish()
+    }
+}
+
 impl<S, H> ArrayNode<S, H> {
     // Note: Children are reversed
-    pub(crate) fn child_ids(&self) -> std::ops::Range<usize> {
-        if let Some(last_child) = self.last_child {
-            last_child.get()..(last_child.get() + self.num_children)
-        } else {
-            0..0
-        }
+    pub(crate) fn child_ids(&self) -> Option<std::ops::Range<usize>> {
+        self.last_child
+            .map(|last_child| last_child.get()..(last_child.get() + self.num_children))
     }
 
     pub fn run_callbacks(&mut self, event_type: On, state: &mut S, ctx: &mut EventCtx<S, H>) -> Phase {

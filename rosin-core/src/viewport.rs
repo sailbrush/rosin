@@ -564,7 +564,7 @@ impl<S, H: Clone> Viewport<S, H> {
         // ---------- Draw Phase ----------
         // TODO - If phase == Idle, re-issue commands from last frame
         if let Some(piet) = piet {
-            draw::draw(state, tree, styles, layout, piet);
+            draw::draw(&self.temp, state, tree, styles, layout, piet);
         }
 
         // ---------- Cleanup ----------

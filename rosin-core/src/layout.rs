@@ -95,8 +95,10 @@ fn _round_layout<S, H>(tree: &[ArrayNode<S, H>], layout: &mut [Layout], id: usiz
     layout[id].size.width = (abs_x + layout[id].size.width).round() - abs_x.round();
     layout[id].size.height = (abs_y + layout[id].size.height).round() - abs_y.round();
 
-    for id in tree[id].child_ids() {
-        _round_layout(tree, layout, id, abs_x, abs_y);
+    if let Some(child_ids) = tree[id].child_ids() {
+        for id in child_ids {
+            _round_layout(tree, layout, id, abs_x, abs_y);
+        }
     }
 }
 
@@ -124,6 +126,7 @@ fn layout_inner<S, H>(
     // 1 - Generate anonymous flex items
     let flex_items_iter = tree[id]
         .child_ids()
+        .unwrap()
         .rev()
         .map(|id| (id, &styles[id]))
         .filter(|(_, style)| style.position != Position::Fixed) // TODO: Handle Absolute and Fixed positioning

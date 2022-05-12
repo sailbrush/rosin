@@ -4,17 +4,32 @@ use crate::layout::Layout;
 use crate::prelude::*;
 use crate::tree::ArrayNode;
 
+use bumpalo::{
+    collections::{CollectIn, Vec as BumpVec},
+    Bump,
+};
 use druid_shell::{
     kurbo::{Affine, RoundedRect},
     piet::{Piet, RenderContext},
 };
 
-pub(crate) fn draw<S, H>(state: &S, tree: &[ArrayNode<S, H>], styles: &[Style], layout: &[Layout], piet: &mut Piet<'_>) {
-    draw_inner(state, tree, styles, layout, piet, 0);
+pub(crate) fn draw<S, H>(temp: &Bump, state: &S, tree: &[ArrayNode<S, H>], styles: &[Style], layout: &[Layout], piet: &mut Piet<'_>) {
+    draw_inner(temp, state, tree, styles, layout, piet, 0..1);
 }
 
-fn draw_inner<S, H>(state: &S, tree: &[ArrayNode<S, H>], styles: &[Style], layout: &[Layout], piet: &mut Piet<'_>, id: usize) {
-    if layout[id].size.width != 0.0 && layout[id].size.height != 0.0 {
+fn draw_inner<S, H>(
+    temp: &Bump,
+    state: &S,
+    tree: &[ArrayNode<S, H>],
+    styles: &[Style],
+    layout: &[Layout],
+    piet: &mut Piet<'_>,
+    range: std::ops::Range<usize>,
+) {
+    let mut ids: BumpVec<usize> = range.collect_in(temp);
+    ids.sort_by(|a, b| styles[*a].z_index.partial_cmp(&styles[*b].z_index).unwrap());
+
+    for id in ids {
         let style = &styles[id];
 
         // ---------- Draw the box ----------
@@ -31,8 +46,17 @@ fn draw_inner<S, H>(state: &S, tree: &[ArrayNode<S, H>], styles: &[Style], layou
             style.border_top_left_radius.into(),
         );
 
+        if let Some(shadows) = &style.box_shadow {
+            for shadow in shadows.iter() {
+                let blur = shadow.blur.resolve(style.font_size);
+                if blur < 1.0 {
+                    piet.fill(path.rect(), bg_color);
+                } else {
+                    piet.blurred_rect(path.rect(), blur, shadow.color.as_ref().unwrap_or(&style.color));
+                }
+            }
+        }
         piet.fill(path, bg_color);
-
         if let Some(gradients) = &style.background_image {
             for gradient in gradients.iter() {
                 piet.fill(path, &gradient.resolve(layout[id].size.width, layout[id].size.height));
@@ -63,9 +87,9 @@ fn draw_inner<S, H>(state: &S, tree: &[ArrayNode<S, H>], styles: &[Style], layou
         }
 
         piet.stroke(path, border_color, style.border_top_width.into());
-    }
 
-    for i in tree[id].child_ids() {
-        draw_inner(state, tree, styles, layout, piet, i);
+        if let Some(child_ids) = tree[id].child_ids() {
+            draw_inner(temp, state, tree, styles, layout, piet, child_ids);
+        }
     }
 }
