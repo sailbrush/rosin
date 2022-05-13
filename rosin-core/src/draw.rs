@@ -17,6 +17,7 @@ pub(crate) fn draw<S, H>(temp: &Bump, state: &S, tree: &[ArrayNode<S, H>], style
     draw_inner(temp, state, tree, styles, layouts, piet, 0..1);
 }
 
+// TODO - support opacity
 fn draw_inner<S, H>(
     temp: &Bump,
     state: &S,
