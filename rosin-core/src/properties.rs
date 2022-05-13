@@ -88,7 +88,11 @@ macro_rules! apply {
                     $style.$attr = piet::Color::rgba8(rgba.red, rgba.green, rgba.blue, rgba.alpha);
                 }
             },
-            _ => debug_assert!(false),
+            _ => {
+                if cfg!(debug_assertions) {
+                    eprintln!("[Rosin] Failed to apply CSS property: {}", stringify!($attr));
+                }
+            },
         }
     };
     (@clone, $value:expr, $style:expr, $parent_style:ident, $attr:ident) => {
@@ -108,7 +112,11 @@ macro_rules! apply {
             PropertyValue::Exact(value) => {
                 $style.$attr = Some(Arc::clone(value));
             }
-            _ => debug_assert!(false),
+            _ => {
+                if cfg!(debug_assertions) {
+                    eprintln!("[Rosin] Failed to apply CSS property: {}", stringify!($attr));
+                }
+            },
         }
     };
     (@clone_opt, $value:expr, $style:expr, $parent_style:ident, $attr:ident) => {
@@ -131,7 +139,11 @@ macro_rules! apply {
             PropertyValue::Exact(Some(value)) => {
                 $style.$attr = Some(Arc::clone(value));
             }
-            _ => debug_assert!(false),
+            _ => {
+                if cfg!(debug_assertions) {
+                    eprintln!("[Rosin] Failed to apply CSS property: {}", stringify!($attr));
+                }
+            },
         }
     };
     (@generic, $value:expr, $style:expr, $parent_style:ident, $attr:ident) => {
@@ -147,7 +159,11 @@ macro_rules! apply {
             PropertyValue::Exact(value) => {
                 $style.$attr = *value;
             }
-            _ => debug_assert!(false),
+            _ => {
+                if cfg!(debug_assertions) {
+                    eprintln!("[Rosin] Failed to apply CSS property: {}", stringify!($attr));
+                }
+            },
         }
     };
     (@generic_opt, $value:expr, $style:expr, $parent_style:ident, $attr:ident) => {
@@ -163,7 +179,11 @@ macro_rules! apply {
             PropertyValue::Exact(value) => {
                 $style.$attr = Some(*value);
             }
-            _ => debug_assert!(false),
+            _ => {
+                if cfg!(debug_assertions) {
+                    eprintln!("[Rosin] Failed to apply CSS property: {}", stringify!($attr));
+                }
+            },
         }
     };
     (@length, $value:expr, $style:expr, $parent_style:ident, $attr:ident) => {
@@ -184,7 +204,11 @@ macro_rules! apply {
                     $style.$attr = *value;
                 }
             },
-            _ => debug_assert!(false),
+            _ => {
+                if cfg!(debug_assertions) {
+                    eprintln!("[Rosin] Failed to apply CSS property: {}", stringify!($attr));
+                }
+            },
         }
     };
     (@length_opt, $value:expr, $style:expr, $parent_style:ident, $attr:ident) => {
@@ -260,7 +284,11 @@ macro_rules! apply {
             PropertyValue::Exact(value) => {
                 $style.$attr = Some(value.clone());
             }
-            _ => debug_assert!(false),
+            _ => {
+                if cfg!(debug_assertions) {
+                    eprintln!("[Rosin] Failed to apply CSS property: {}", stringify!($attr));
+                }
+            },
         }
     };
 }
