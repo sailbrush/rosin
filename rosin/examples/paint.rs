@@ -112,7 +112,7 @@ fn main() {
     let mut rl = ResourceLoader::default();
 
     let state = State {
-        style: load_css!(rl, "examples/draw.css"),
+        style: load_css!(rl, "examples/paint.css"),
         size_control: Slider::new(0.2, true),
         canvas: Canvas::new(),
     };
