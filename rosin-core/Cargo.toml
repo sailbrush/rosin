@@ -15,5 +15,5 @@ license = "MIT"
 [dependencies]
 bumpalo = { version = "3.6", features = ["collections"] }
 cssparser = "0.28"
-druid-shell = "0.7"
+druid-shell = { git = "https://github.com/linebender/druid.git" }
 keyboard-types = "0.6"

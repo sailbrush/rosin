@@ -18,11 +18,11 @@
 
 .btn {
     flex-direction: row;
-    background-color: rgb(105, 105, 105);
     border: 1px solid rgb(35, 35, 35);
     border-radius: 10px;
     margin: 2px;
     padding: 25px;
+    background-image: linear-gradient(rgb(150, 150, 150), 10%, rgb(105, 105, 105), 90%, rgb(74, 74, 74));
 }
 
 .double {
@@ -32,18 +32,13 @@
 }
 
 .orange {
-    background-color: rgb(255, 150, 0);
+    background-image: linear-gradient(rgb(255, 128, 0), 90%, rgb(150, 72, 0));
 }
 
 .btn:hover {
-    background-color: rgb(115, 115, 115);
+    background-image: linear-gradient(rgb(165, 165, 165), 10%, rgb(123, 123, 123), 90%, rgb(74, 74, 74));
 }
 
 .orange:hover {
-    background-color: rgb(255, 161, 30);
-}
-
-.fixed {
-    position: fixed;
-    top: 10px;
+    background-image: linear-gradient(rgb(255, 151, 47), 90%, rgb(163, 79, 0));
 }

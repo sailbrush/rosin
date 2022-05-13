@@ -31,7 +31,7 @@ fn main() {
     let mut rl = ResourceLoader::default();
 
     let state = State {
-        style: load_css!(rl, "examples/min.css"),
+        style: load_css!(rl, "examples/counter.css"),
         label: DynLabel::new("0"),
         count: 0,
     };

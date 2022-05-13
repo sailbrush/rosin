@@ -2,6 +2,8 @@
 
 use std::ops::{Add, Sub};
 
+use druid_shell::kurbo;
+
 use crate::style::FlexDirection;
 
 #[derive(Debug, Default, Copy, Clone)]
@@ -206,6 +208,15 @@ impl From<(f32, f32)> for Point {
     }
 }
 
+impl From<Point> for kurbo::Point {
+    fn from(point: Point) -> Self {
+        kurbo::Point {
+            x: point.x as f64,
+            y: point.y as f64,
+        }
+    }
+}
+
 impl Add for Point {
     type Output = Self;
 
@@ -228,6 +239,50 @@ impl Sub for Point {
     }
 }
 
+impl Add<(f32, f32)> for Point {
+    type Output = Self;
+
+    fn add(self, other: (f32, f32)) -> Self {
+        Self {
+            x: self.x + other.0,
+            y: self.y + other.1,
+        }
+    }
+}
+
+impl Sub<(f32, f32)> for Point {
+    type Output = Self;
+
+    fn sub(self, other: (f32, f32)) -> Self {
+        Self {
+            x: self.x - other.0,
+            y: self.y - other.1,
+        }
+    }
+}
+
+impl Add<Point> for (f32, f32) {
+    type Output = Point;
+
+    fn add(self, other: Point) -> Point {
+        Point {
+            x: self.0 + other.x,
+            y: self.1 + other.y,
+        }
+    }
+}
+
+impl Sub<Point> for (f32, f32) {
+    type Output = Point;
+
+    fn sub(self, other: Point) -> Point {
+        Point {
+            x: self.0 - other.x,
+            y: self.1 - other.y,
+        }
+    }
+}
+
 impl Point {
     pub fn new(x: f32, y: f32) -> Self {
         Self { x, y }
@@ -235,5 +290,12 @@ impl Point {
 
     pub fn zero() -> Self {
         Self::new(0.0, 0.0)
+    }
+
+    pub fn lerp(self, other: Self, t: f32) -> Self {
+        Self {
+            x: self.x + (other.x - self.x) * t,
+            y: self.y + (other.y - self.y) * t,
+        }
     }
 }

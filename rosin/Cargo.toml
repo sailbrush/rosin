@@ -14,7 +14,7 @@ license = "MIT"
 
 [dependencies]
 rosin-core = { version = "0.2.0", path = "../rosin-core" }
-druid-shell = "0.7"
+druid-shell = { git = "https://github.com/linebender/druid.git" }
 libloading = "0.7"
 
 [features]
