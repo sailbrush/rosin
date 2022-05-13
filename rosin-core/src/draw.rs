@@ -36,16 +36,49 @@ fn draw_inner<S, H>(
         let style = &styles[id];
         let pos = layouts[id].position;
         let size = layouts[id].size;
+        let mut border_top_left_radius;
+        let mut border_top_right_radius;
+        let mut border_bottom_right_radius;
+        let mut border_bottom_left_radius;
+
+        // Clamp radii if they're larger than the box
+        if style.border_top_left_radius + style.border_top_right_radius > size.width {
+            let total_radius = style.border_top_left_radius + style.border_top_right_radius;
+            border_top_left_radius = (style.border_top_left_radius / total_radius) * size.width;
+            border_top_right_radius = (style.border_top_right_radius / total_radius) * size.width;
+        } else {
+            border_top_left_radius = style.border_top_left_radius;
+            border_top_right_radius = style.border_top_right_radius;
+        }
+        if style.border_bottom_left_radius + style.border_bottom_right_radius > size.width {
+            let total_radius = style.border_bottom_left_radius + style.border_bottom_right_radius;
+            border_bottom_left_radius = (style.border_bottom_left_radius / total_radius) * size.width;
+            border_bottom_right_radius = (style.border_bottom_right_radius / total_radius) * size.width;
+        } else {
+            border_bottom_left_radius = style.border_bottom_left_radius;
+            border_bottom_right_radius = style.border_bottom_right_radius;
+        }
+        if style.border_top_left_radius + style.border_bottom_left_radius > size.height {
+            let total_radius = style.border_top_left_radius + style.border_bottom_left_radius;
+            border_top_left_radius = border_top_left_radius.min((style.border_top_left_radius / total_radius) * size.height);
+            border_bottom_left_radius = border_bottom_left_radius.min((style.border_bottom_left_radius / total_radius) * size.height);
+        }
+        if style.border_top_right_radius + style.border_bottom_right_radius > size.height {
+            let total_radius = style.border_top_right_radius + style.border_bottom_right_radius;
+            border_top_right_radius = border_top_right_radius.min((style.border_top_right_radius / total_radius) * size.height);
+            border_bottom_right_radius = border_bottom_right_radius.min((style.border_bottom_right_radius / total_radius) * size.height);
+        }
+
         let mask = kurbo::RoundedRect::new(
             0.0,
             0.0,
             size.width as f64,
             size.height as f64,
             (
-                style.border_top_left_radius as f64,
-                style.border_top_right_radius as f64,
-                style.border_bottom_right_radius as f64,
-                style.border_bottom_left_radius as f64,
+                border_top_left_radius as f64,
+                border_top_right_radius as f64,
+                border_bottom_right_radius as f64,
+                border_bottom_left_radius as f64,
             ),
         );
 
@@ -127,89 +160,69 @@ fn draw_inner<S, H>(
                 border_mask.line_to(tl + (style.border_left_width, size.height / 2.0));
 
                 // Top left corner
-                let p1 = tl + (style.border_left_width, style.border_top_left_radius.max(style.border_top_width));
-                let (p2, p3) = ctrl_points(style.border_top_left_radius, style.border_left_width, style.border_top_width);
-                let p4 = tl + (style.border_top_left_radius.max(style.border_left_width), style.border_top_width);
+                let p1 = tl + (style.border_left_width, border_top_left_radius.max(style.border_top_width));
+                let (p2, p3) = ctrl_points(border_top_left_radius, style.border_left_width, style.border_top_width);
+                let p4 = tl + (border_top_left_radius.max(style.border_left_width), style.border_top_width);
                 border_mask.line_to(p1);
                 border_mask.curve_to(p2, p3, p4);
 
                 // Top right corner
-                let p5 = tr + (-style.border_top_right_radius.max(style.border_right_width), style.border_top_width);
-                let (p7, p6) = ctrl_points(style.border_top_right_radius, style.border_right_width, style.border_top_width);
+                let p5 = tr + (-border_top_right_radius.max(style.border_right_width), style.border_top_width);
+                let (p7, p6) = ctrl_points(border_top_right_radius, style.border_right_width, style.border_top_width);
                 let p6 = tr + (-p6.x, p6.y);
                 let p7 = tr + (-p7.x, p7.y);
-                let p8 = tr + (-style.border_right_width, style.border_top_right_radius.max(style.border_top_width));
+                let p8 = tr + (-style.border_right_width, border_top_right_radius.max(style.border_top_width));
                 border_mask.line_to(p5);
                 border_mask.curve_to(p6, p7, p8);
 
                 // Bottom right corner
-                let p9 = br
-                    - (
-                        style.border_right_width,
-                        style.border_bottom_right_radius.max(style.border_bottom_width),
-                    );
-                let (p10, p11) = ctrl_points(
-                    style.border_bottom_right_radius,
-                    style.border_right_width,
-                    style.border_bottom_width,
-                );
+                let p9 = br - (style.border_right_width, border_bottom_right_radius.max(style.border_bottom_width));
+                let (p10, p11) = ctrl_points(border_bottom_right_radius, style.border_right_width, style.border_bottom_width);
                 let p10 = br - p10;
                 let p11 = br - p11;
-                let p12 = br
-                    - (
-                        style.border_bottom_right_radius.max(style.border_right_width),
-                        style.border_bottom_width,
-                    );
+                let p12 = br - (border_bottom_right_radius.max(style.border_right_width), style.border_bottom_width);
                 border_mask.line_to(p9);
                 border_mask.curve_to(p10, p11, p12);
 
                 // Bottom left corner
-                let p13 = bl
-                    + (
-                        style.border_bottom_left_radius.max(style.border_left_width),
-                        -style.border_bottom_width,
-                    );
-                let (p15, p14) = ctrl_points(style.border_bottom_left_radius, style.border_left_width, style.border_bottom_width);
+                let p13 = bl + (border_bottom_left_radius.max(style.border_left_width), -style.border_bottom_width);
+                let (p15, p14) = ctrl_points(border_bottom_left_radius, style.border_left_width, style.border_bottom_width);
                 let p14 = bl + (p14.x, -p14.y);
                 let p15 = bl + (p15.x, -p15.y);
-                let p16 = bl
-                    + (
-                        style.border_left_width,
-                        -style.border_bottom_left_radius.max(style.border_bottom_width),
-                    );
+                let p16 = bl + (style.border_left_width, -border_bottom_left_radius.max(style.border_bottom_width));
                 border_mask.line_to(p13);
                 border_mask.curve_to(p14, p15, p16);
                 border_mask.close_path();
                 piet.clip(border_mask);
 
                 // Lerp factors for corner points
-                let f1 = if style.border_left_width >= style.border_top_left_radius {
+                let f1 = if style.border_left_width >= border_top_left_radius {
                     1.0
-                } else if style.border_top_width >= style.border_top_left_radius {
+                } else if style.border_top_width >= border_top_left_radius {
                     0.0
                 } else {
                     ((style.border_left_width / style.border_top_width).min(f32::INFINITY).atan() / std::f32::consts::FRAC_PI_2)
                         .clamp(0.0, 1.0)
                 };
-                let f2 = if style.border_top_width >= style.border_top_right_radius {
+                let f2 = if style.border_top_width >= border_top_right_radius {
                     1.0
-                } else if style.border_right_width >= style.border_top_right_radius {
+                } else if style.border_right_width >= border_top_right_radius {
                     0.0
                 } else {
                     ((style.border_top_width / style.border_right_width).min(f32::INFINITY).atan() / std::f32::consts::FRAC_PI_2)
                         .clamp(0.0, 1.0)
                 };
-                let f3 = if style.border_right_width >= style.border_bottom_right_radius {
+                let f3 = if style.border_right_width >= border_bottom_right_radius {
                     1.0
-                } else if style.border_bottom_width >= style.border_bottom_right_radius {
+                } else if style.border_bottom_width >= border_bottom_right_radius {
                     0.0
                 } else {
                     ((style.border_right_width / style.border_bottom_width).min(f32::INFINITY).atan() / std::f32::consts::FRAC_PI_2)
                         .clamp(0.0, 1.0)
                 };
-                let f4 = if style.border_bottom_width >= style.border_bottom_left_radius {
+                let f4 = if style.border_bottom_width >= border_bottom_left_radius {
                     1.0
-                } else if style.border_left_width >= style.border_bottom_left_radius {
+                } else if style.border_left_width >= border_bottom_left_radius {
                     0.0
                 } else {
                     ((style.border_bottom_width / style.border_left_width).min(f32::INFINITY).atan() / std::f32::consts::FRAC_PI_2)
