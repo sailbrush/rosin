@@ -69,6 +69,7 @@ fn draw_inner<S, H>(
             border_bottom_right_radius = border_bottom_right_radius.min((style.border_bottom_right_radius / total_radius) * size.height);
         }
 
+        // TODO - Construct a custom Rounded rect with correct radii
         let mask = kurbo::RoundedRect::new(
             0.0,
             0.0,
