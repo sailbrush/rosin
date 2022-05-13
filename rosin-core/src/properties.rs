@@ -92,7 +92,7 @@ macro_rules! apply {
                 if cfg!(debug_assertions) {
                     eprintln!("[Rosin] Failed to apply CSS property: {}", stringify!($attr));
                 }
-            },
+            }
         }
     };
     (@clone, $value:expr, $style:expr, $parent_style:ident, $attr:ident) => {
@@ -116,7 +116,7 @@ macro_rules! apply {
                 if cfg!(debug_assertions) {
                     eprintln!("[Rosin] Failed to apply CSS property: {}", stringify!($attr));
                 }
-            },
+            }
         }
     };
     (@clone_opt, $value:expr, $style:expr, $parent_style:ident, $attr:ident) => {
@@ -143,7 +143,7 @@ macro_rules! apply {
                 if cfg!(debug_assertions) {
                     eprintln!("[Rosin] Failed to apply CSS property: {}", stringify!($attr));
                 }
-            },
+            }
         }
     };
     (@generic, $value:expr, $style:expr, $parent_style:ident, $attr:ident) => {
@@ -163,7 +163,7 @@ macro_rules! apply {
                 if cfg!(debug_assertions) {
                     eprintln!("[Rosin] Failed to apply CSS property: {}", stringify!($attr));
                 }
-            },
+            }
         }
     };
     (@generic_opt, $value:expr, $style:expr, $parent_style:ident, $attr:ident) => {
@@ -183,7 +183,7 @@ macro_rules! apply {
                 if cfg!(debug_assertions) {
                     eprintln!("[Rosin] Failed to apply CSS property: {}", stringify!($attr));
                 }
-            },
+            }
         }
     };
     (@length, $value:expr, $style:expr, $parent_style:ident, $attr:ident) => {
@@ -208,7 +208,7 @@ macro_rules! apply {
                 if cfg!(debug_assertions) {
                     eprintln!("[Rosin] Failed to apply CSS property: {}", stringify!($attr));
                 }
-            },
+            }
         }
     };
     (@length_opt, $value:expr, $style:expr, $parent_style:ident, $attr:ident) => {
@@ -288,7 +288,7 @@ macro_rules! apply {
                 if cfg!(debug_assertions) {
                     eprintln!("[Rosin] Failed to apply CSS property: {}", stringify!($attr));
                 }
-            },
+            }
         }
     };
 }
