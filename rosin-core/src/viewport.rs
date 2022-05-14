@@ -322,6 +322,7 @@ impl<S, H: Clone> Viewport<S, H> {
         }
     }
 
+    // TODO - always route events to root
     pub fn key_event(&mut self, state: &mut S, event: KeyEvent) -> bool {
         if let Some(tree) = &mut self.tree_cache {
             let tree = tree.borrow_mut();
