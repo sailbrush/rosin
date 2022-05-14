@@ -16,7 +16,7 @@ pub enum AlignContent {
     Stretch,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AlignItems {
     Stretch,
     Center,
@@ -35,7 +35,7 @@ pub struct BoxShadow {
 }
 
 #[allow(non_camel_case_types)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Cursor {
     Default,
     None,
@@ -74,7 +74,7 @@ pub enum Cursor {
     ZoomOut,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FlexDirection {
     Row,
     RowReverse,
@@ -105,7 +105,7 @@ pub enum FlexWrap {
     WrapReverse,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JustifyContent {
     FlexStart,
     FlexEnd,
@@ -115,7 +115,7 @@ pub enum JustifyContent {
     SpaceEvenly,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum GradientAngle {
     Top,
     Right,
@@ -129,7 +129,7 @@ pub enum GradientAngle {
     Radians(f32),
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Length {
     Px(f32),
     Em(f32),
@@ -248,7 +248,7 @@ impl LinearGradient {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Position {
     Static,
     Relative,
