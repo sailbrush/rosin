@@ -8,7 +8,6 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::error::Error;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use bumpalo::{collections::Vec as BumpVec, Bump};
@@ -16,7 +15,7 @@ use druid_shell::piet::Piet;
 use druid_shell::KeyEvent;
 
 pub struct Viewport<S: 'static, H: Clone + 'static> {
-    resource_loader: Arc<Mutex<ResourceLoader>>,
+    resource_loader: ResourceLoader,
     view_callback: ViewCallback<S, H>,
     size: (f32, f32),
     scale: (f32, f32),
@@ -36,7 +35,7 @@ pub struct Viewport<S: 'static, H: Clone + 'static> {
 }
 
 impl<S, H: Clone> Viewport<S, H> {
-    pub fn new(resource_loader: Arc<Mutex<ResourceLoader>>, view_callback: ViewCallback<S, H>, size: (f32, f32), handle: H) -> Self {
+    pub fn new(resource_loader: ResourceLoader, view_callback: ViewCallback<S, H>, size: (f32, f32), handle: H) -> Self {
         Self {
             resource_loader,
             view_callback,

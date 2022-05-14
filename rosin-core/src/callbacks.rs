@@ -10,7 +10,6 @@ use crate::prelude::*;
 
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 /// A list of events that Nodes can register callbacks for.
@@ -272,7 +271,7 @@ pub enum EventInfo {
 pub struct EventCtx<S, H> {
     pub info: EventInfo,
     pub platform_handle: H,
-    pub resource_loader: Arc<Mutex<ResourceLoader>>,
+    pub resource_loader: ResourceLoader,
     pub focus: Option<Key>,
     pub style: Style,
     pub(crate) layout: Layout,

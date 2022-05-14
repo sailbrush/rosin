@@ -14,14 +14,14 @@ use druid_shell::{Application, WindowBuilder, WindowHandle};
 use rosin_core::prelude::*;
 
 pub struct AppLauncher<S: 'static> {
-    resource_loader: Arc<Mutex<ResourceLoader>>,
+    resource_loader: ResourceLoader,
     windows: Vec<WindowDesc<S, WindowHandle>>,
 }
 
 impl<S> AppLauncher<S> {
     pub fn new(resource_loader: ResourceLoader, window: WindowDesc<S, WindowHandle>) -> Self {
         Self {
-            resource_loader: Arc::new(Mutex::new(resource_loader)),
+            resource_loader,
             windows: vec![window],
         }
     }
@@ -55,12 +55,12 @@ impl<S> AppLauncher<S> {
         #[cfg(debug_assertions)]
         {
             // Start a thread that periodically polls for resource changes
-            let thread_resource_loader = self.resource_loader.clone();
+            let mut thread_resource_loader = self.resource_loader.clone();
             #[cfg(feature = "hot-reload")]
             let thread_libloader = libloader.clone();
             thread::spawn(move || loop {
                 #[allow(unused_mut)]
-                let mut should_load = thread_resource_loader.lock().unwrap().poll().unwrap();
+                let mut should_load = thread_resource_loader.poll().unwrap();
 
                 #[cfg(feature = "hot-reload")]
                 if let Ok(mut loader) = thread_libloader.as_ref().unwrap().try_lock() {

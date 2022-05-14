@@ -72,7 +72,7 @@ pub(crate) struct Window<S: 'static> {
 
 impl<S> Window<S> {
     pub fn new(
-        resource_loader: Arc<Mutex<ResourceLoader>>,
+        resource_loader: ResourceLoader,
         viewfn: ViewFn<S, WindowHandle>,
         size: (f32, f32),
         state: Rc<RefCell<S>>,
@@ -140,7 +140,8 @@ impl<S> WinHandler for Window<S> {
 
         let now = Instant::now();
         if let Some(last_frame) = self.last_frame {
-            self.viewport.animation_frame(&mut self.state.borrow_mut(), now.duration_since(last_frame));
+            self.viewport
+                .animation_frame(&mut self.state.borrow_mut(), now.duration_since(last_frame));
         }
         self.last_frame = Some(now);
         self.viewport.draw(&self.state.borrow(), Some(piet)).unwrap();
