@@ -5,7 +5,7 @@ use std::{
     cell::RefCell,
     rc::Rc,
     sync::{Arc, Mutex},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use druid_shell::{
@@ -67,6 +67,7 @@ pub(crate) struct Window<S: 'static> {
     viewfn: ViewFn<S, WindowHandle>,
     state: Rc<RefCell<S>>,
     libloader: Option<Arc<Mutex<LibLoader>>>,
+    last_frame: Option<Instant>,
 }
 
 impl<S> Window<S> {
@@ -99,6 +100,7 @@ impl<S> Window<S> {
             viewfn,
             state,
             libloader,
+            last_frame: None,
         }
     }
 }
@@ -136,7 +138,11 @@ impl<S> WinHandler for Window<S> {
             }
         }
 
-        self.viewport.animation_frame(&mut self.state.borrow_mut());
+        let now = Instant::now();
+        if let Some(last_frame) = self.last_frame {
+            self.viewport.animation_frame(&mut self.state.borrow_mut(), now.duration_since(last_frame));
+        }
+        self.last_frame = Some(now);
         self.viewport.draw(&self.state.borrow(), Some(piet)).unwrap();
 
         if self.viewport.has_anim_tasks() {

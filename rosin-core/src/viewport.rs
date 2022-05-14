@@ -461,14 +461,7 @@ impl<S, H: Clone> Viewport<S, H> {
         phase
     }
 
-    // TODO - pass in dt
-    pub fn animation_frame(&mut self, state: &mut S) {
-        // Get time since last frame
-        let now = Instant::now();
-        let dt = now.duration_since(self.last_frame);
-        self.last_frame = now;
-
-        // Run Animation Tasks
+    pub fn animation_frame(&mut self, state: &mut S, dt: Duration) {
         let mut anim_phase = Phase::Idle;
         self.anim_tasks.borrow_mut().retain(|task| {
             let (phase, stop) = task(state, dt);
