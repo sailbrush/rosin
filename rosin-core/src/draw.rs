@@ -196,88 +196,96 @@ fn draw_inner<S, H>(
                 border_mask.close_path();
                 piet.clip(border_mask);
 
-                // Lerp factors for corner points
-                let f1 = if style.border_left_width >= border_top_left_radius {
-                    1.0
-                } else if style.border_top_width >= border_top_left_radius {
-                    0.0
+                // Fast path for when all border colors are the same
+                if style.border_top_color == style.border_right_color
+                    && style.border_right_color == style.border_bottom_color
+                    && style.border_bottom_color == style.border_left_color
+                {
+                    piet.fill(&mask, &style.border_top_color);
                 } else {
-                    ((style.border_left_width / style.border_top_width).min(f32::INFINITY).atan() / std::f32::consts::FRAC_PI_2)
-                        .clamp(0.0, 1.0)
-                };
-                let f2 = if style.border_top_width >= border_top_right_radius {
-                    1.0
-                } else if style.border_right_width >= border_top_right_radius {
-                    0.0
-                } else {
-                    ((style.border_top_width / style.border_right_width).min(f32::INFINITY).atan() / std::f32::consts::FRAC_PI_2)
-                        .clamp(0.0, 1.0)
-                };
-                let f3 = if style.border_right_width >= border_bottom_right_radius {
-                    1.0
-                } else if style.border_bottom_width >= border_bottom_right_radius {
-                    0.0
-                } else {
-                    ((style.border_right_width / style.border_bottom_width).min(f32::INFINITY).atan() / std::f32::consts::FRAC_PI_2)
-                        .clamp(0.0, 1.0)
-                };
-                let f4 = if style.border_bottom_width >= border_bottom_left_radius {
-                    1.0
-                } else if style.border_left_width >= border_bottom_left_radius {
-                    0.0
-                } else {
-                    ((style.border_bottom_width / style.border_left_width).min(f32::INFINITY).atan() / std::f32::consts::FRAC_PI_2)
-                        .clamp(0.0, 1.0)
-                };
+                    // Lerp factors for corner points
+                    let f1 = if style.border_left_width >= border_top_left_radius {
+                        1.0
+                    } else if style.border_top_width >= border_top_left_radius {
+                        0.0
+                    } else {
+                        ((style.border_left_width / style.border_top_width).min(f32::INFINITY).atan() / std::f32::consts::FRAC_PI_2)
+                            .clamp(0.0, 1.0)
+                    };
+                    let f2 = if style.border_top_width >= border_top_right_radius {
+                        1.0
+                    } else if style.border_right_width >= border_top_right_radius {
+                        0.0
+                    } else {
+                        ((style.border_top_width / style.border_right_width).min(f32::INFINITY).atan() / std::f32::consts::FRAC_PI_2)
+                            .clamp(0.0, 1.0)
+                    };
+                    let f3 = if style.border_right_width >= border_bottom_right_radius {
+                        1.0
+                    } else if style.border_bottom_width >= border_bottom_right_radius {
+                        0.0
+                    } else {
+                        ((style.border_right_width / style.border_bottom_width).min(f32::INFINITY).atan() / std::f32::consts::FRAC_PI_2)
+                            .clamp(0.0, 1.0)
+                    };
+                    let f4 = if style.border_bottom_width >= border_bottom_left_radius {
+                        1.0
+                    } else if style.border_left_width >= border_bottom_left_radius {
+                        0.0
+                    } else {
+                        ((style.border_bottom_width / style.border_left_width).min(f32::INFINITY).atan() / std::f32::consts::FRAC_PI_2)
+                            .clamp(0.0, 1.0)
+                    };
 
-                // Corner points that mark the boundaries between border colors
-                let c1 = p1.lerp(p4, f1);
-                let c2 = p5.lerp(p8, f2);
-                let c3 = p9.lerp(p12, f3);
-                let c4 = p13.lerp(p16, f4);
+                    // Corner points that mark the boundaries between border colors
+                    let c1 = p1.lerp(p4, f1);
+                    let c2 = p5.lerp(p8, f2);
+                    let c3 = p9.lerp(p12, f3);
+                    let c4 = p13.lerp(p16, f4);
 
-                // Top line
-                if style.border_top_width > 0.0 {
-                    let mut border_top = kurbo::BezPath::new();
-                    border_top.move_to(tl + (-1.0, -1.0));
-                    border_top.line_to(c1);
-                    border_top.line_to(c2);
-                    border_top.line_to(tr + (1.0, -1.0));
-                    border_top.close_path();
-                    piet.fill(border_top, &style.border_top_color);
-                }
+                    // Top line
+                    if style.border_top_width > 0.0 {
+                        let mut border_top = kurbo::BezPath::new();
+                        border_top.move_to(tl + (-1.0, -1.0));
+                        border_top.line_to(c1);
+                        border_top.line_to(c2);
+                        border_top.line_to(tr + (1.0, -1.0));
+                        border_top.close_path();
+                        piet.fill(border_top, &style.border_top_color);
+                    }
 
-                // Bottom line
-                if style.border_bottom_width > 0.0 {
-                    let mut border_bottom = kurbo::BezPath::new();
-                    border_bottom.move_to(bl + (-1.0, 1.0));
-                    border_bottom.line_to(br + (1.0, 1.0));
-                    border_bottom.line_to(c3);
-                    border_bottom.line_to(c4);
-                    border_bottom.close_path();
-                    piet.fill(border_bottom, &style.border_bottom_color);
-                }
+                    // Bottom line
+                    if style.border_bottom_width > 0.0 {
+                        let mut border_bottom = kurbo::BezPath::new();
+                        border_bottom.move_to(bl + (-1.0, 1.0));
+                        border_bottom.line_to(br + (1.0, 1.0));
+                        border_bottom.line_to(c3);
+                        border_bottom.line_to(c4);
+                        border_bottom.close_path();
+                        piet.fill(border_bottom, &style.border_bottom_color);
+                    }
 
-                // Left line
-                if style.border_left_width > 0.0 {
-                    let mut border_left = kurbo::BezPath::new();
-                    border_left.move_to(tl + (-1.0, -1.0));
-                    border_left.line_to(c1);
-                    border_left.line_to(c4);
-                    border_left.line_to(bl + (-1.0, 1.0));
-                    border_left.close_path();
-                    piet.fill(border_left, &style.border_left_color);
-                }
+                    // Left line
+                    if style.border_left_width > 0.0 {
+                        let mut border_left = kurbo::BezPath::new();
+                        border_left.move_to(tl + (-1.0, -1.0));
+                        border_left.line_to(c1);
+                        border_left.line_to(c4);
+                        border_left.line_to(bl + (-1.0, 1.0));
+                        border_left.close_path();
+                        piet.fill(border_left, &style.border_left_color);
+                    }
 
-                // Right line
-                if style.border_right_width > 0.0 {
-                    let mut border_right = kurbo::BezPath::new();
-                    border_right.move_to(tr + (1.0, -1.0));
-                    border_right.line_to(c2);
-                    border_right.line_to(c3);
-                    border_right.line_to(br + (1.0, 1.0));
-                    border_right.close_path();
-                    piet.fill(border_right, &style.border_right_color);
+                    // Right line
+                    if style.border_right_width > 0.0 {
+                        let mut border_right = kurbo::BezPath::new();
+                        border_right.move_to(tr + (1.0, -1.0));
+                        border_right.line_to(c2);
+                        border_right.line_to(c3);
+                        border_right.line_to(br + (1.0, 1.0));
+                        border_right.close_path();
+                        piet.fill(border_right, &style.border_right_color);
+                    }
                 }
             }
 
