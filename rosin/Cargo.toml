@@ -1,6 +1,6 @@
 [package]
 name = "rosin"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["TimTom <timtom.business@gmail.com>"]
 edition = "2024"
 description = "Rosin is a GUI library that aims to be extremely easy to use."
