@@ -1,6 +1,6 @@
 <div align="center">
 
-![The Rosin Logo](/img/logo.png)
+![The Rosin Logo](https://raw.githubusercontent.com/sailbrush/rosin/main/img/logo.png)
 
 # Rosin
 
@@ -32,11 +32,11 @@ Currently, only the macOS platform integration is ready to use.
 
 ## Examples
 
-<img src="img/url_example.png" width="500" alt="URL Example Screenshot">
+<img src="https://raw.githubusercontent.com/sailbrush/rosin/main/img/url_example.png" width="500" alt="URL Example Screenshot">
 
-<img src="img/text_example.png" width="500" alt="Text Layout Example Screenshot">
+<img src="https://raw.githubusercontent.com/sailbrush/rosin/main/img/text_example.png" width="500" alt="Text Layout Example Screenshot">
 
-<img src="img/border_example.png" width="500" alt="CSS Border Example Screenshot">
+<img src="https://raw.githubusercontent.com/sailbrush/rosin/main/img/border_example.png" width="500" alt="CSS Border Example Screenshot">
 
 ## Planned Work
 

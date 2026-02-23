@@ -125,6 +125,13 @@ pub mod win;
 #[cfg(target_os = "windows")]
 use crate::win as platform;
 
+#[cfg(target_os = "linux")]
+#[doc(hidden)]
+pub mod linux;
+
+#[cfg(target_os = "linux")]
+use crate::linux as platform;
+
 #[doc(inline)]
 pub use rosin_core::{id, stylesheet, ui_format};
 
