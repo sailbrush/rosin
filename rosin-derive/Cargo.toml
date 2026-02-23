@@ -1,7 +1,16 @@
 [package]
 name = "rosin-derive"
 version = "0.3.0"
+authors = ["TimTom <timtom.business@gmail.com>"]
 edition = "2024"
+description = "Rosin is a GUI library that aims to be extremely easy to use."
+documentation = "https://github.com/sailbrush/rosin"
+homepage = "https://github.com/sailbrush/rosin"
+repository = "https://github.com/sailbrush/rosin"
+readme = "../README.md"
+keywords = ["GUI"]
+categories = ["gui"]
+license = "Apache-2.0 OR MIT"
 
 [lib]
 proc-macro = true
