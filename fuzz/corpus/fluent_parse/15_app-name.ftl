@@ -1,0 +1,1 @@
+app-name = Welcome to { brand-name.short }

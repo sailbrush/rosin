@@ -1,123 +1,113 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use druid_shell::kurbo::{BezPath, PathEl};
-use druid_shell::piet::{Color, LineCap, LineJoin, RenderContext, StrokeStyle};
-use druid_shell::{KbKey, KeyState};
 use rosin::prelude::*;
 use rosin::widgets::*;
 
-#[derive(Debug)]
+use rosin::kurbo::{Affine, BezPath, PathEl, Stroke};
+use rosin::peniko::Color;
+
 pub struct State {
     style: Stylesheet,
-    size_control: Slider,
     canvas: Canvas,
 }
 
-#[derive(Debug)]
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            style: stylesheet!("examples/styles/paint.css"),
+            canvas: Canvas::new(),
+        }
+    }
+}
+
 pub struct Canvas {
-    lines: Vec<(f64, BezPath)>,
-    brush_size: f64,
+    lines: Var<Vec<(f64, BezPath)>>,
+    pub brush_size: Var<f64>,
 }
 
 impl Canvas {
     pub fn new() -> Self {
         Canvas {
-            lines: Vec::new(),
-            brush_size: 10.0,
+            lines: Var::new(Vec::new()),
+            brush_size: Var::new(1.0),
         }
     }
 
-    pub fn clear(&mut self) -> Phase {
-        self.lines.clear();
-        Phase::Draw
+    pub fn clear(&mut self) {
+        self.lines.write().clear();
     }
 
-    pub fn undo(&mut self) -> Phase {
-        self.lines.pop();
-        Phase::Draw
+    pub fn undo(&mut self) {
+        self.lines.write().pop();
     }
 
-    pub fn view(&self) -> View<State, WindowHandle> {
-        ui!("canvas" [{
-            .event(On::PointerDown, |s: &mut State, ctx| {
+    pub fn view<'a>(&self, ui: &'a mut Ui<State, WindowHandle>, id: NodeId) -> &'a mut Ui<State, WindowHandle> {
+        ui.node()
+            .classes("canvas")
+            .id(id)
+            .event(On::PointerDown, |s, ctx| {
+                let Some(pos) = ctx.local_pointer_pos() else {
+                    return;
+                };
+
+                ctx.begin_pointer_capture();
                 let mut path = BezPath::new();
-                path.move_to((ctx.pointer()?.pos_x as f64, ctx.pointer()?.pos_y as f64));
-                s.canvas.lines.push((s.canvas.brush_size, path));
-                Some(Phase::Build)
+                path.move_to((pos.x as f64, pos.y as f64));
+                s.canvas.lines.write().push((s.canvas.brush_size.get(), path));
             })
             .event(On::PointerMove, |s, ctx| {
-                if ctx.pointer()?.buttons.has_left() {
-                    if let Some((_, path)) = s.canvas.lines.last_mut() {
-                        match path.elements().last() {
+                let Some(ev) = ctx.pointer() else {
+                    return;
+                };
+                let Some(pos) = ctx.local_pointer_pos() else {
+                    return;
+                };
+
+                if ev.buttons.contains(PointerButton::Primary) {
+                    if let Some((_, path)) = s.canvas.lines.write().last_mut() {
+                        match path.elements_mut().last_mut() {
                             Some(PathEl::MoveTo(point)) | Some(PathEl::LineTo(point)) => {
-                                let new_point = (ctx.pointer()?.pos_x as f64, ctx.pointer()?.pos_y as f64);
-                                if (point.x - new_point.0).abs() >= 5.0 || (point.y - new_point.1).abs() >= 5.0 {
-                                    path.line_to(new_point);
+                                if point.distance(pos) >= 1.0 {
+                                    path.line_to(pos);
                                 }
                             }
                             _ => {}
                         }
                     }
                 }
-                Some(Phase::Draw)
             })
-            .on_draw(false, |s, ctx| {
-                let stroke_style = StrokeStyle::new()
-                    .line_join(LineJoin::Round)
-                    .line_cap(LineCap::Round);
-                for (size, path) in &s.canvas.lines {
-                    ctx.piet.stroke_styled(path, &Color::BLACK, *size, &stroke_style);
+            .event(On::PointerUp, |_, ctx| {
+                ctx.end_pointer_capture();
+            })
+            .on_canvas(|s, ctx| {
+                for (size, path) in s.canvas.lines.read().iter() {
+                    ctx.scene.stroke(&Stroke::new(*size), Affine::IDENTITY, &Color::BLACK, None, &path);
                 }
             })
-        }])
     }
 }
 
-pub fn main_view(state: &State) -> View<State, WindowHandle> {
-    ui!(state.style.clone(), "root" [{
-            // When the user presses Backspace, call `undo()` on the canvas
-            .event(On::Keyboard, |s: &mut State, ctx| {
-                if ctx.keyboard()?.state == KeyState::Down && ctx.keyboard()?.key == KbKey::Backspace {
-                    Some(s.canvas.undo())
-                } else {
-                    None
-                }
-            })
-        }
-        "toolbar" [
-            "clear" (button("Clear", |s: &mut State, _| {
-                Some(s.canvas.clear())
-            }))
+pub fn main_view(state: &State, ui: &mut Ui<State, WindowHandle>) {
+    ui.node().classes("root").style_sheet(&state.style).children(|ui| {
+        ui.node().classes("toolbar").children(|ui| {
+            button(ui, id!(), "Clear", |s, _| s.canvas.clear());
+            button(ui, id!(), "Undo", |s, _| s.canvas.undo());
+            SliderParams::new().min(1.0).max(50.0).view(ui, id!(), *state.canvas.brush_size);
+        });
 
-            // When the slider widget changes, update the canvas's brush size
-            (state.size_control.view()
-                .event(On::Change, |s: &mut State, _| {
-                    s.canvas.brush_size = s.size_control.get() * 50.0 + 0.5;
-                    Some(Phase::Idle)
-                })
-            )
-        ]
-        (state.canvas.view())
-    ])
+        state.canvas.view(ui, id!());
+    });
 }
 
 #[rustfmt::skip]
 fn main() {
-    let view = new_viewfn!(main_view);
+    env_logger::init();
 
-    let window = WindowDesc::new(view)
-        .with_title("Rosin Draw Example")
-        .with_size(1000.0, 800.0);
+    let window = WindowDesc::new(callback!(main_view))
+        .title("Paint Example")
+        .size(1000, 800);
 
-    let mut rl = ResourceLoader::default();
-
-    let state = State {
-        style: load_css!(rl, "examples/paint.css"),
-        size_control: Slider::new(0.2, true),
-        canvas: Canvas::new(),
-    };
-
-    AppLauncher::new(rl, window)
-        .run(state)
+    AppLauncher::new(window)
+        .run(State::default(), TranslationMap::default())
         .expect("Failed to launch");
 }

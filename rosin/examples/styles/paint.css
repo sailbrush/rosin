@@ -1,0 +1,34 @@
+.root {
+    --bg-primary: oklch(60% 0 0);
+    --bg-light: oklch(100% 0.00011 271.152);
+    --bg-dark: oklch(100% 0.00011 271.152);
+    --primary: oklch(70% 0.14 250.0);
+    --primary-dark: oklch(60% 0.14 250.0);
+
+    background-color: var(--bg-primary);
+    color: oklch(100% 0 0);
+    font-size: 16px;
+}
+
+.toolbar {
+    display: row;
+    height: 4em;
+    background-color: oklch(100% 0 0);
+}
+
+.canvas {
+    background-color: oklch(100% 0 0);
+}
+
+.button {
+    background-image: none;
+    background-color: oklch(50% 0 0);
+}
+
+.button:hover {
+    background-color: oklch(71.733% 0.13433 247.495);
+}
+
+.button:active {
+    background-color: oklch(50.659% 0.10155 247.898);
+}

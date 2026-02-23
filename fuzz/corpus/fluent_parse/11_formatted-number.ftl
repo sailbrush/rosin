@@ -1,0 +1,1 @@
+formatted-number = Total: { NUMBER($value, minimumFractionDigits: 2) }

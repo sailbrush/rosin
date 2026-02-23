@@ -1,0 +1,60 @@
+.root {
+    --bg-primary: oklch(90% 0 0);
+    --bg-light: oklch(100% 0 0);
+    --bg-dark: oklch(100% 0 0);
+    --primary: oklch(70% 0.14 250.0);
+    --primary-dark: oklch(40% 0.14 250.0);
+    --highlight: oklch(100% 0 0 / 0.2);
+    --outline: oklch(50% 0 0);
+
+    --radius: 5px;
+
+    --inset-border: 0px 2px 0px 0px var(--highlight), 0px 0px 0px 1px var(--outline);
+    --outset-border: 0px 0px 0px 1px var(--outline);
+
+    --bg-btn: linear-gradient(var(--bg-primary), var(--bg-dark));
+    --bg-btn-hover: linear-gradient(var(--primary), var(--primary-dark));
+    --bg-btn-active: linear-gradient(var(--bg-dark), var(--bg-primary));
+
+    --focus-outline: 1px solid var(--primary);
+    --focus-outline-offset: 2px;
+
+    background-color: var(--bg-primary);
+    color: oklch(0% 0 0);
+    font-size: 14px;
+
+    display: row;
+}
+
+.left {
+    display: column;
+    width: 300px;
+    space: 1.5em;
+}
+
+.label {
+    height: 20px;
+    width: auto;
+    space: 0;
+}
+
+.box {
+    background-color: #fff;
+    width: 200px;
+    height: 200px;
+    left: 1s;
+    right: 1s;
+    top: 1s;
+    bottom: 1s;
+    border-top-color: #54d2d2;
+    border-right-color: #ffcb00;
+    border-bottom-color: #f8aa4b;
+    border-left-color: #ff6150;
+    outline: 2px rgb(255, 0, 0);
+    box-shadow: 30px 30px 20px rgba(0, 0, 0, 0.3);
+}
+
+.slider {
+    space:0;
+    bottom:1em;
+}

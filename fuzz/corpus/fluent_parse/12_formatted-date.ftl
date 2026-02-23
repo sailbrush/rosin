@@ -1,0 +1,1 @@
+formatted-date = Today is { DATETIME($date, weekday: "long", year: "numeric", month: "long", day: "numeric") }

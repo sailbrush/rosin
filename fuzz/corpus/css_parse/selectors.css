@@ -1,0 +1,17 @@
+/* CSS file for testing */
+.classc > .classk {
+    max-height: 300px;
+    max-height: 250px;
+}
+.classd:hover, .classl:focus, .classv {
+    min-child-between: 4px;
+    font-style: normal;
+}
+.classi:hover, .classo:focus, .classi > .classg {
+    font-weight: normal;
+    child-between: 5px;
+}
+.classa:active, .classe:focus {
+    min-width: 100px;
+    text-shadow: 2px 2px 4px #000000, 1px 1px 2px #ff0000;
+}

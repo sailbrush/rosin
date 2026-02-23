@@ -1,10 +1,18 @@
 [workspace]
+resolver = "2"
+
 members = [
     "rosin",
     "rosin-core",
+    "rosin-derive",
 ]
 
 default-members = [
     "rosin",
-    "rosin-core"
+    "rosin-core",
+    "rosin-derive",
+]
+
+exclude = [
+    "rosin-core/fuzz"
 ]

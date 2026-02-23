@@ -1,0 +1,3 @@
+examine_globs = [
+    "rosin-core/src/css/*.rs"
+]

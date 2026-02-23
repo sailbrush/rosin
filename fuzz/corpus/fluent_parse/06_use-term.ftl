@@ -1,0 +1,1 @@
+app-theme = Theme color: { -brand-color }

@@ -1,0 +1,29 @@
+.root {
+    --bg-primary: oklch(30% 0 0);
+    --bg-light: oklch(35% 0 0);
+    --bg-dark: oklch(25% 0 0);
+    --primary: oklch(50% 0.14 250.0);
+    --primary-dark: oklch(40% 0.14 250.0);
+    --highlight: oklch(100% 0 0 / 0.2);
+    --outline: oklch(0 0 0);
+
+    --radius: 5px;
+
+    --inset-border: 0px 2px 0px 0px var(--highlight), 0px 0px 0px 1px var(--outline);
+    --outset-border: 0px 0px 0px 1px var(--outline);
+
+    --bg-btn: linear-gradient(var(--bg-primary), var(--bg-dark));
+    --bg-btn-hover: linear-gradient(var(--primary), var(--primary-dark));
+    --bg-btn-active: linear-gradient(var(--bg-dark), var(--bg-primary));
+
+    --focus-outline: 1px solid var(--primary);
+    --focus-outline-offset: 2px;
+
+    background-color: var(--bg-primary);
+    color: oklch(100% 0 0);
+    font-size: 16px;
+}
+
+.row {
+    display: row;
+}

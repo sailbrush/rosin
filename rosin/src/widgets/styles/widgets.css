@@ -1,0 +1,198 @@
+/* --- BUTTON --- */
+.button {
+    background-image: var(--bg-btn, linear-gradient(oklch(30% 0 0), oklch(25% 0 0)));
+    space: 1em;
+    height: 2em;
+    border-radius: var(--radius, 5px);
+    box-shadow: var(--outset-border, 0px 0px 0px 1px oklch(0 0 0));
+    border-top: 1px solid var(--highlight, oklch(100% 0 0 / 0.2));
+    child-top: 0.4em;
+    child-left: 1s;
+    child-right: 1s;
+}
+
+.button:hover {
+    background-image: var(--bg-btn-hover, linear-gradient(oklch(50% 0.14 250.0), oklch(40% 0.14 250.0)));
+}
+
+.button:active {
+    border-top: 1px transparent;
+    box-shadow: var(--inset-border, 0px 2px 0px 0px oklch(100% 0 0 / 0.2), 0px 0px 0px 1px oklch(0 0 0));
+    background-image: var(--bg-btn-active, linear-gradient(oklch(25% 0 0), oklch(30% 0 0)));
+}
+
+.button:focus {
+    outline: var(--focus-outline, 1px solid oklch(50% 0.14 250.0));
+    outline-offset: var(--focus-outline-offset, 2px);
+}
+
+/* --- CHECKBOX --- */
+.checkbox {
+    display: row;
+    min-height: 30px;
+    height: 2em;
+}
+
+.checkbox:hover > .box {
+    border-top-color: var(--primary, oklch(50% 0.14 250.0));
+    border-right-color: var(--primary, oklch(50% 0.14 250.0));
+    border-bottom-color: var(--primary, oklch(50% 0.14 250.0));
+    border-left-color: var(--primary, oklch(50% 0.14 250.0));
+}
+
+.checkbox > .box {
+    border-radius: var(--radius, 5px);
+    box-shadow: var(--inset-border, 0px 2px 0px 0px oklch(100% 0 0 / 0.2), 0px 0px 0px 1px oklch(0 0 0));
+    background-color: var(--bg-dark, oklch(25% 0 0));
+    color: var(--primary, oklch(50% 0.14 250.0));
+    height: 1.1em;
+    space: 1s 0.5em 1s 1em;
+    width: 1.1em;
+}
+
+.checkbox > .checkbox_label {
+    child-top: 1s;
+    child-bottom: 1s;
+}
+
+/* --- DRAG VALUE --- */
+.drag-value {
+    space: 1em;
+    height: auto;
+    width: auto;
+}
+
+/* --- DROP DOWN MENU --- */
+.dropdown {
+    background-image: var(--bg-btn, linear-gradient(oklch(30% 0 0), oklch(25% 0 0)));
+    space: 1em;
+    height: 2em;
+    border-radius: var(--radius, 5px);
+    box-shadow: var(--outset-border, 0px 0px 0px 1px oklch(0 0 0));
+    border-top: 1px solid var(--highlight, oklch(100% 0 0 / 0.2));
+    child-top: 1s;
+    child-bottom: 1s;
+    child-left: 0.6em;
+    display: row;
+}
+
+.dropdown:active {
+    background-image: none;
+    background-color: var(--bg-dark, oklch(25% 0 0));
+    border-top: 1px transparent;
+}
+
+.dropdown > .text {
+    width: auto;
+    height: auto;
+}
+
+.dropdown > .arrow {
+    left: 1s;
+    width: auto;
+    height: 3s;
+    top: 1s;
+    bottom: 1s;
+    left: 1s;
+    min-left: 0.5em;
+    right: 0.6em;
+    child-left: 0.5em;
+    border-left: 1px var(--highlight, oklch(100% 0 0 / 0.2));
+    child-top: 1s;
+    child-bottom: 1s;
+    color: var(--highlight, oklch(100% 0 0 / 0.2));
+}
+
+.dropdown > .menu {
+    background-color: var(--bg-primary, oklch(30% 0 0));
+    space: 1em;
+    height: 2em;
+    border-radius: var(--radius, 5px);
+    box-shadow: var(--outset-border, 0px 0px 0px 1px oklch(0 0 0));
+    display: none;
+}
+
+.dropdown > .menu > .item {
+    child-top: 1s;
+    child-bottom: 1s;
+    child-left: 0.6em;
+}
+
+.dropdown > .menu > .item:hover {
+    background-color: var(--primary, oklch(50% 0.14 250.0));
+    background-image: var(--bg-btn-hover, linear-gradient(oklch(50% 0.14 250.0), oklch(40% 0.14 250.0)));
+}
+
+/* --- LABEL --- */
+.label {
+    space: 1em;
+    height: auto;
+    width: auto;
+}
+
+/* --- PERFORMANCE DISPLAY --- */
+.perfdisplay {
+    height: 200px;
+}
+
+/* --- PROGRESS BAR --- */
+.progress-bar-bg {
+    background-color: var(--bg-dark, oklch(25% 0 0));
+    border-radius: 100px;
+    box-shadow: var(--inset-border, 0px 2px 0px 0px oklch(100% 0 0 / 0.2), 0px 0px 0px 1px oklch(0 0 0));
+    height: 1.5em;
+    space: 1em;
+}
+
+.progress-bar-fg {
+    background-image: var(--bg-btn-hover, linear-gradient(oklch(50% 0.14 250.0), oklch(40% 0.14 250.0)));
+}
+
+/* --- SLIDER --- */
+.slider {
+    space: 1em;
+    height: 2em;
+}
+
+.slider:disabled {
+    background-color: red;
+}
+
+.slider > .thumb {
+    position: self-directed;
+    width: 1.1em;
+    height: 1.1em;
+    border-radius: 100px;
+    space: 1s 0;
+    background-color: var(--bg-light, oklch(35% 0 0));
+    box-shadow: var(--outset-border, 0px 0px 0px 1px oklch(0 0 0));
+    min-left: 2px;
+    min-right: 2px;
+}
+
+.slider > .track {
+    background-color: var(--bg-dark, oklch(25% 0 0));
+    height: 0.4em;
+    border-radius: var(--radius, 5px);
+    box-shadow: var(--outset-border, 0px 0px 0px 1px oklch(0 0 0));
+    space: 1s 0.5em;
+    color: var(--primary, oklch(50% 0.14 250.0));
+}
+
+/* --- TEXT BOX --- */
+.text-box {
+    background-color: var(--bg-dark, oklch(25% 0 0));
+    border-radius: var(--radius, 5px);
+    box-shadow: var(--inset-border, 0px 2px 0px 0px oklch(100% 0 0 / 0.2), 0px 0px 0px 1px oklch(0 0 0));
+    child-left: 0.5em;
+    child-top: 0.3em;
+    child-bottom: 1s;
+    height: 2em;
+    space: 1em;
+    selection-color: var(--primary, oklch(50% 0.14 250.0));
+}
+
+.text-box:focus {
+    outline: var(--focus-outline, 1px solid oklch(50% 0.14 250.0));
+    outline-offset: var(--focus-outline-offset, 2px);
+}

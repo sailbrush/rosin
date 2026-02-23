@@ -1,42 +1,40 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use rosin::prelude::*;
-use rosin::widgets::*;
+use rosin::{prelude::*, widgets::*};
 
-pub struct State {
+struct State {
     style: Stylesheet,
-    label: DynLabel,
-    count: u32,
+    count: Var<i32>,
 }
 
-pub fn main_view(state: &State) -> View<State, WindowHandle> {
-    ui!(state.style.clone(), "root" [
-        "text" (state.label.view())
-        "bump" (button("+", |s: &mut State, _ctx| {
-            s.count += 1;
-            let phase = s.label.set_text(&s.count.to_string());
-            Some(phase)
-        }))
-    ])
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            style: stylesheet!("examples/styles/counter.css"),
+            count: Var::new(0),
+        }
+    }
+}
+
+fn main_view(state: &State, ui: &mut Ui<State, WindowHandle>) {
+    ui.node().id(id!()).style_sheet(&state.style).classes("root").children(|ui| {
+        label(ui, id!(), *state.count).classes("number");
+        button(ui, id!(), "Count", |s, _| {
+            *s.count.write() += 1;
+        });
+    });
 }
 
 #[rustfmt::skip]
 fn main() {
-    let view = new_viewfn!(main_view);
+    env_logger::init();
 
-    let window = WindowDesc::new(view)
-        .with_title("Rosin Window")
-        .with_size(500.0, 500.0);
+    let window = WindowDesc::new(callback!(main_view))
+        .title("Counter Example")
+        .size(400, 300)
+        .min_size(250, 150);
 
-    let mut rl = ResourceLoader::default();
-
-    let state = State {
-        style: load_css!(rl, "examples/counter.css"),
-        label: DynLabel::new("0"),
-        count: 0,
-    };
-
-    AppLauncher::new(rl, window)
-        .run(state)
+    AppLauncher::new(window)
+        .run(State::default(), TranslationMap::default())
         .expect("Failed to launch");
 }

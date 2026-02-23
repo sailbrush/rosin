@@ -1,0 +1,47 @@
+.root {
+    background-color: transparent;
+    child-between:10px;
+    child-bottom:1s;
+    child-left:1s; 
+    child-right:1s;
+    child-top:1s;
+}
+
+.number {
+    child-left:1s;
+    child-right:1s;
+    color:#000;
+    font-size:40px;
+    height:auto;
+    width:1s;
+    space:1s 1s 1em 1s;
+}
+
+.button {
+    background-color: #202020;
+    background-image: linear-gradient(to bottom, rgba(255, 255, 255, 0.04), transparent);
+    box-shadow: 0 1px 0px 1px rgba(255, 255, 255, 0.05), 0 0 0 1px rgb(0, 0, 0);
+    border-top: 1px rgba(255, 255, 255, 0.15);
+    border-bottom: 1px rgba(0, 0, 0, 0.05);
+    border-radius:5px;
+    child-bottom:1s;
+    child-left:1s; 
+    child-right:1s;
+    child-top:0.7s;
+    color:#FFF;
+    font-size:20px;
+    width:120px;
+    text-shadow: 0px 2px #000000cb;
+    text-align: center;
+    space: 1s;
+}
+
+.button:hover {
+    background-color:#303030;
+}
+
+.button:active {
+    background-color:#101010;
+    border-top-color: transparent;
+    background-image: linear-gradient(to top, rgba(255, 255, 255, 0.04), transparent);
+}

@@ -1,0 +1,609 @@
+/* A big complicated CSS file for testing */
+.classc > .classk {
+    max-height: 300px;
+    min-width: 100px;
+    child-left: 21px;
+    color: #ffffff;
+    max-left: 44px;
+    outline-color: #999999;
+    max-width: 300px;
+    max-height: 250px;
+}
+.classd:hover, .classl:focus, .classv {
+    max-top: 39px;
+    border-top: 5px solid #ffcc00;
+    border-top: 6px #ff00ff;
+    min-width: 100px;
+    min-child-between: 4px;
+    font-style: normal;
+}
+.classw {
+    word-spacing: 15px;
+    max-child-top: 36px;
+    position: parent-directed;
+    min-child-right: 3px;
+    outline-width: 3px;
+    border: 3px #ff00ff;
+    min-child-left: 4px;
+    border-bottom-width: 2px;
+}
+.classi:hover, .classo:focus, .classi > .classg {
+    border-width: 2px 4px 6px 8px;
+    max-width: 400px;
+    max-right: 48px;
+    max-child-left: 28px;
+    border-bottom-right-radius: 15px;
+    font-weight: normal;
+    child-between: 5px;
+    color: currentColor;
+}
+.classl > .classe {
+    max-width: 500px;
+    min-right: 35px;
+    space: 10px 20px 30px 40px;
+    left: 15px;
+    outline-width: 1px;
+    child-right: 1s;
+    text-shadow: 2px 2px 4px rgb(128, 0, 255), 1px 1px 2px #ff0000;
+    background-image: linear-gradient(to right, #ffcc00, rgb(10, 20, 30)), linear-gradient(to bottom, #00ff00, #0000ff);
+    border-right: 5px #0000ff;
+    max-width: 500px;
+    text-shadow: 2px 2px 4px #000000, 1px 1px 2px #ff0000;
+    font-style: normal;
+    child-left: 7px;
+    border-left-width: 5px;
+    font-weight: bold;
+}
+.classa:active, .classe:focus {
+    min-width: 100px;
+    opacity: 0.9;
+    border-right-color: #ff00ff;
+    child-between: 10px;
+    text-shadow: 2px 2px 4px #000000, 1px 1px 2px #ff0000;
+    flex-basis: 70.0;
+    min-child-between: 4px;
+    outline-width: 1px;
+    max-bottom: 20px;
+    background-color: #00ff00;
+}
+.classb:active, .classr > .classz {
+    background-image: linear-gradient(to right, #ffcc00, #ff0000), linear-gradient(to bottom, #00ff00, #0000ff);
+    outline-offset: 3px;
+    flex-basis: 70.0;
+    max-right: 48px;
+    font-style: oblique;
+    color: #888888;
+    child-top: 9px;
+    border-top-right-radius: 35px;
+    font-family: Arial, sans-serif;
+}
+.classb:focus, .classo .classr, .classp:hover {
+    max-top: 52px;
+    border-right-color: #0000ff;
+    top: 40px;
+    min-child-right: 3px;
+    word-spacing: 15px;
+    left: 30px;
+    left: 30px;
+    border-left-color: #00ff00;
+    max-child-bottom: 24px;
+}
+.classj:active {
+    box-shadow: 10px 10px 5px #888888, 5px 5px 10px #000000;
+    border-radius: 20px 25px 30px 35px;
+    box-shadow: 10px 10px 5px #888888, 5px 5px 10px #000000;
+    child-bottom: 18px;
+    border-radius: 10px 20px 15px 5px;
+    outline-color: #333333;
+    min-child-left: 4px;
+    border-bottom-width: 2px;
+    max-child-right: 24px;
+    color: #000000;
+    outline-offset: 4px;
+    min-right: 25px;
+}
+.classk {
+    opacity: 0.8;
+    child-right: 24px;
+    bottom: 20px;
+    word-spacing: 10px;
+    max-child-top: 27px;
+    border-bottom-left-radius: 15px;
+    outline-offset: 3px;
+    child-between: 15px;
+    min-bottom: 10px;
+    outline-width: 1px;
+    min-child-left: 2px;
+    border-bottom-left-radius: 20px;
+    bottom: 10px;
+}
+.classy {
+    min-child-between: 4px;
+    height: 200px;
+    background-image: linear-gradient(to right, #ffcc00, #ff0000), linear-gradient(to bottom, #00ff00, #0000ff);
+    min-height: 75px;
+    outline: 2px #ff0000;
+    right: 30px;
+    min-right: 15px;
+    min-left: 20px;
+    min-left: 10px;
+    right: 30px;
+}
+.classd > .classw, .classv {
+    border-radius: 20px 25px 30px 35px;
+    child-right: 16px;
+    border-bottom-width: 4px;
+    border-right-width: 6px;
+    max-child-left: 28px;
+    border-top-width: 5px;
+}
+.classu, .classx:hover, .classi:focus {
+    min-bottom: 15px;
+    color: #000000;
+    border-bottom-width: 4px;
+    top: 60px;
+    left: 45px;
+    border-bottom-color: #0000ff;
+    border-bottom-width: 3px;
+    border-top-width: 7px;
+    border-right: 5px #0000ff;
+    min-width: 200px;
+    max-child-top: 18px;
+    max-top: 26px;
+    outline-offset: 3px;
+    max-child-top: 27px;
+    child-right: 24px;
+}
+.classu:focus {
+    max-width: 300px;
+    top: 40px;
+    z-index: 300;
+    letter-spacing: 4px;
+    min-child-top: 4.5px;
+    width: 500px;
+    border-top-right-radius: 30px;
+}
+.classx:focus, .classn, .classk .classp {
+    border-top-color: #ff0000;
+    border-bottom-left-radius: 15px;
+    border-top: 5px solid #ffcc00;
+    min-child-left: 6px;
+    child-right: 8px;
+    max-top: 39px;
+    max-bottom: 25px;
+    max-height: 200px;
+    text-shadow: 2px 2px 4px #000000, 1px 1px 2px #ff0000;
+}
+.classo .classz, .classb:active, .classa > .classx {
+    max-width: 400px;
+    border-top: 6px #ff00ff;
+    border-left-color: #0000ff;
+    top: 40px;
+    min-child-top: 1.5px;
+    border-color: #0000ff;
+    border: 3px #ff00ff;
+    child-right: 8px;
+    width: 400px;
+}
+.classm:focus, .classv > .classx {
+    min-right: 35px;
+    width: 600px;
+    border-right: 4px solid #ff00ff;
+    z-index: 100;
+    border-right-width: 4px;
+    border-left-width: 4px;
+    max-child-right: 24px;
+    color: #ffffff;
+    left: 30px;
+}
+.classe:active {
+    child-left: 7px;
+    min-height: 100px;
+    box-shadow: 5px 5px 10px #000000;
+    right: 30px;
+    border-bottom: 2px #00ff00;
+    outline-width: 1px;
+    right: 40px;
+    background-image: linear-gradient(to right, #ffcc00, #ff0000);
+    font-style: oblique;
+    space: 5px 15px 25px 35px;
+    max-width: 500px;
+    child-bottom: 12px;
+}
+.classh:focus, .classp:active {
+    max-child-left: 14px;
+    background-color: #ff00ff;
+    font-size: 16px;
+    child-right: 16px;
+    text-shadow: 2px 2px 4px #000000, 1px 1px 2px #ff0000;
+    outline-color: #666666;
+    child-left: 14px;
+    outline-width: 3px;
+    border-right: 4px solid #ff00ff;
+    max-child-right: 32px;
+}
+.classn:focus {
+    min-child-left: 2px;
+    min-width: 200px;
+    background-color: #00ff00;
+    border-bottom-width: 4px;
+    width: 500px;
+    min-height: 50px;
+    child-right: 8px;
+    box-shadow: 10px 10px 5px #888888, 5px 5px 10px #000000;
+    max-left: 44px;
+    outline: 1px solid #000000;
+    border-bottom-width: 2px;
+    border-top-left-radius: 30px;
+    max-child-between: 10px;
+    min-width: 200px;
+    border-width: 2px 4px 6px 8px;
+}
+.classs:hover, .classm, .classb:active {
+    position: fixed;
+    min-child-between: 12px;
+    outline-color: #333333;
+    min-child-right: 3px;
+    border-bottom-right-radius: 25px;
+}
+.classl:focus, .classm > .classm, .classt:active {
+    border-top-right-radius: 25px;
+    border-right-color: #0000ff;
+    child-between: 10px;
+    font: italic bold 26px/1.5 Arial, sans-serif;
+    border-top: 6px #ff00ff;
+    min-width: 200px;
+    background-image: linear-gradient(to right, #ffcc00, #ff0000), linear-gradient(to bottom, #00ff00, #0000ff);
+    min-height: 100px;
+    font-style: normal;
+    child-left: 7px;
+    min-child-left: 2px;
+}
+.classx:focus, .classa {
+    letter-spacing: 4px;
+    border-right: 4px solid #ff00ff;
+    border-bottom: 2px #00ff00;
+    border-top-right-radius: 30px;
+    left: 45px;
+    border-top-width: 6px;
+    border: 3px #ff00ff;
+    outline: 2px #ff0000;
+    top: 60px;
+}
+.classr > .classs {
+    border-left: 4px #00ff00;
+    right: 50px;
+    max-height: 250px;
+    right: 50px;
+    right: 40px;
+    min-child-top: 4.5px;
+    min-top: 20px;
+    max-child-top: 18px;
+    outline-offset: 3px;
+    child-bottom: 12px;
+    word-spacing: 5px;
+}
+.classu:hover {
+    outline-color: #999999;
+    max-child-right: 24px;
+    max-child-top: 27px;
+    child-top: 18px;
+    outline: 2px #ff0000;
+    bottom: 30px;
+    border-left-width: 3px;
+    child-right: 8px;
+    border-bottom-width: 4px;
+    border-top-right-radius: 30px;
+}
+.classj, .classy:hover {
+    font-style: oblique;
+    border-top-right-radius: 30px;
+    border-radius: 10px 20px 15px 5px;
+    max-right: 48px;
+    height: 200px;
+    border-right-width: 5px;
+    border-top-left-radius: 20px;
+    border-left: 4px #00ff00;
+    child-bottom: 12px;
+    max-child-right: 32px;
+    border-bottom-right-radius: 15px;
+    outline: 1px solid #000000;
+    max-child-left: 14px;
+}
+.classs .classj, .classw, .classr:active {
+    max-bottom: 25px;
+    border-left-width: 3px;
+    max-child-right: 16px;
+    color: #ffffff;
+    border-top-left-radius: 30px;
+    right: 40px;
+    background-image: linear-gradient(to right, #ffcc00, #ff0000), linear-gradient(to bottom, #00ff00, #0000ff);
+    outline-color: #666666;
+    font-weight: normal;
+    line-height: 1.5;
+    bottom: 30px;
+}
+.classf:hover, .classh > .classy, .classe:focus {
+    space: 10px 20px 30px 40px;
+    min-child-left: 4px;
+    border-top-color: #ffcc00;
+    border-radius: 10px 20px 15px 5px;
+    border-bottom-left-radius: 10px;
+    border-bottom-left-radius: 10px;
+    border-radius: 10px 20px 15px 5px;
+    border-left-width: 4px;
+}
+.classu .classw, .classa:focus {
+    top: 60px;
+    min-child-right: 2px;
+    min-child-right: 3px;
+    right: 30px;
+    max-child-left: 14px;
+    border: 2px solid #ffcc00;
+    top: 60px;
+    flex-basis: 60;
+    border-radius: 20px 25px 30px 35px;
+    max-bottom: 20px;
+}
+.classb:hover, .classv, .classb:focus {
+    border-top-left-radius: 25px;
+    min-right: 35px;
+    line-height: 1.7;
+    right: 30px;
+    top: 60px;
+    border-right-color: #0000ff;
+    max-left: 22px;
+    border: 2px solid #ffcc00;
+}
+.classj:active, .classf, .classm .classp {
+    min-width: 100px;
+    min-child-left: 6px;
+    outline: 1px solid #000000;
+    z-index: 200;
+    border-right: 5px #0000ff;
+    background-color: #ff0000;
+    min-child-right: 1px;
+    border-bottom-color: #ff0000;
+    left: 30px;
+    flex-basis: 60;
+}
+.classy .classw {
+    child-bottom: 18px;
+    min-width: 100px;
+    font: normal 18px/2.0 Times New Roman, serif;
+    border-width: 3px 5px 7px 9px;
+    border-bottom-right-radius: 20px;
+    flex-basis: 50;
+    border-color: #00ff00;
+    font-size: 16px;
+    border-bottom-right-radius: 20px;
+    max-height: 250px;
+    max-top: 26px;
+}
+.classl .classq, .classs, .classh > .classk {
+    border: 2px solid #ffcc00;
+    font-style: normal;
+    child-bottom: 12px;
+    background-image: linear-gradient(to right, #ffcc00, #ff0000), linear-gradient(to bottom, #00ff00, #0000ff);
+    max-child-top: 18px;
+    border-radius: 20px 25px 30px 35px;
+    border-left: 4px #00ff00;
+    border-right-width: 5px;
+    min-child-top: 4.5px;
+    outline-color: #999999;
+    line-height: 1.5;
+    background-image: linear-gradient(to right, #ffcc00, #ff0000), linear-gradient(to bottom, #00ff00, #0000ff);
+    border-top-left-radius: 30px;
+}
+.classv:hover, .classo > .classq {
+    display: none;
+    min-child-between: 8px;
+    border-top: 5px solid #ffcc00;
+    opacity: 0.8;
+    max-height: 300px;
+    outline-offset: 2px;
+    child-right: 24px;
+    min-child-right: 1px;
+    outline: 1px solid #000000;
+    outline: 2px #ff0000;
+    border-top: 6px #ff00ff;
+    child-bottom: 12px;
+    position: fixed;
+    opacity: 0.8;
+    min-bottom: 15px;
+}
+.classn:active {
+    border-bottom-color: #00ff00;
+    border-bottom: 3px solid #ff0000;
+    font-family: Times New Roman, serif;
+    letter-spacing: 4px;
+    letter-spacing: 2px;
+    child-bottom: 18px;
+}
+.classx:active {
+    max-top: 26px;
+    border-color: #00ff00;
+    border-top: 6px #ff00ff;
+    font-family: Arial, sans-serif;
+    border: 2px solid #ffcc00;
+    max-right: 48px;
+    font-weight: bold;
+    color: #888888;
+    border-top-width: 5px;
+    box-shadow: 10px 10px 5px #888888, 5px 5px 10px #000000;
+    border-bottom-width: 2px;
+    min-top: 30px;
+    child-bottom: 18px;
+}
+.classu:focus, .classv:active, .classh {
+    border-radius: 10px 20px 15px 5px;
+    border-right-color: #ff00ff;
+    border-bottom-right-radius: 20px;
+    text-shadow: 2px 2px 4px #000000;
+    border-bottom-right-radius: 20px;
+    height: 150px;
+    min-child-bottom: 9px;
+    border-top-color: #ffcc00;
+    border-top-color: #ff00ff;
+    border-top-color: #ff0000;
+    min-left: 10px;
+    left: 45px;
+    display: column;
+    border-top-color: #ff00ff;
+}
+.classe:active, .classi:hover {
+    display: column-reverse;
+    border: 3px #ff00ff;
+    width: 600px;
+    border-bottom: 2px #00ff00;
+    outline-color: #666666;
+    border-right-width: 6px;
+    left: 45px;
+    min-right: 35px;
+    min-child-left: 4px;
+    border-left: 4px #00ff00;
+    border-bottom-color: #00ff00;
+    min-top: 40px;
+    border-top: 5px solid #ffcc00;
+}
+.classp > .classz, .classe:active, .classx {
+    border-top-right-radius: 35px;
+    border-top-width: 6px;
+    max-child-bottom: 18px;
+    height: 150px;
+    border-top: 6px #ff00ff;
+}
+.classl, .classy:hover {
+    left: 30px;
+    border-right-color: #0000ff;
+    border-right-width: 5px;
+    position: self-directed;
+    outline-offset: 3px;
+}
+.classm:focus, .classh > .classt {
+    background-color: #ff0000;
+    text-shadow: 2px 2px 4px #000000;
+    border-bottom-color: #ff0000;
+    border-left-width: 5px;
+    top: 60px;
+    line-height: 1.7;
+    min-child-between: 4px;
+    line-height: 1.6;
+    font: italic bold 16px/1.5 Arial, sans-serif;
+    right: 50px;
+    line-height: 1.6;
+    max-width: 500px;
+    min-child-between: 8px;
+}
+.classp:active, .classc {
+    max-top: 39px;
+    line-height: 1.6;
+    border-bottom-right-radius: 25px;
+    font-family: Arial, sans-serif;
+    child-between: 5px;
+    outline: 2px #ff0000;
+    max-child-right: 16px;
+    min-child-top: 1.5px;
+    word-spacing: 15px;
+    background-image: linear-gradient(to right, #ffcc00, #ff0000);
+    display: row;
+}
+.classm .classy, .classg:hover {
+    position: self-directed;
+    border-bottom: 2px #00ff00;
+    outline: 1px solid #000000;
+    color: #ffffff;
+    border-top-right-radius: 30px;
+    border-left-color: #0000ff;
+    left: 15px;
+    font: normal 18px/2.0 Times New Roman, serif;
+    background-image: linear-gradient(to right, #ffcc00, #ff0000), linear-gradient(to bottom, #00ff00, #0000ff);
+    border-top-left-radius: 25px;
+    outline-offset: 4px;
+    border-bottom-left-radius: 10px;
+    border-left-width: 3px;
+}
+.classz:hover, .classm > .classb, .classi:active {
+    flex-basis: 60;
+    line-height: 1.5;
+    min-top: 30px;
+    font-weight: bold;
+    min-child-bottom: 9px;
+    outline-offset: 4px;
+    border-top-right-radius: 35px;
+    border-bottom-width: 3px;
+    max-child-top: 27px;
+    max-height: 250px;
+    outline-color: #666666;
+    min-left: 30px;
+    left: 15px;
+}
+.classl:hover, .classi .classa, .classq:active {
+    border-right-color: #ffcc00;
+    max-child-right: 24px;
+    font-weight: normal;
+    border-top-right-radius: 25px;
+    display: row-reverse;
+    child-between: 10px;
+    outline: 2px #ff0000;
+    min-child-left: 4px;
+    border-bottom-width: 4px;
+    max-left: 44px;
+}
+.classk:focus, .classx .classq, .classl {
+    opacity: 1.0;
+    border: 3px #ff00ff;
+    border-top: 6px #ff00ff;
+    font-size: 16px;
+    border-top-right-radius: 35px;
+    child-left: 14px;
+    border-top-color: #ff0000;
+}
+.classp:hover, .classz:active {
+    letter-spacing: 4px;
+    min-right: 35px;
+    border-bottom-right-radius: 15px;
+    max-child-left: 21px;
+    flex-basis: 70.0;
+    border-top-width: 5px;
+    min-right: 25px;
+    border-right-width: 6px;
+    border-right: 4px solid #ff00ff;
+    min-width: 100px;
+}
+.classi, .classg:focus {
+    flex-basis: 70.0;
+    child-left: 21px;
+    max-child-between: 15px;
+    min-bottom: 15px;
+    border-bottom-color: #00ff00;
+    opacity: 0.8;
+    child-right: 8px;
+    max-width: 400px;
+    max-left: 33px;
+    box-shadow: 5px 5px 10px #000000;
+    min-child-top: 4.5px;
+    width: 500px;
+    border-color: #00ff00;
+    border-top-color: #ffcc00;
+    border-top-width: 6px;
+}
+.classk .classn {
+    position: self-directed;
+    text-shadow: 2px 2px 4px #000000, 1px 1px 2px #ff0000;
+    max-right: 24px;
+    border-left-width: 3px;
+    border-right: 4px solid #ff00ff;
+    box-shadow: 10px 10px 5px #888888, 5px 5px 10px #000000;
+    background-color: #ff0000;
+    min-top: 40px;
+    child-top: 18px;
+}
+.classm {
+    min-child-left: 2px;
+    top: 60px;
+    max-top: 39px;
+    font-size: 18px;
+    outline-width: 3px;
+    max-left: 44px;
+}

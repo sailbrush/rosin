@@ -1,19 +1,64 @@
 [package]
 name = "rosin-core"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["TimTom <timtom.business@gmail.com>"]
-edition = "2021"
-description = "Rosin is a GUI framework for Rust that aims to be extremely easy to use."
+edition = "2024"
+description = "Rosin is a GUI library that aims to be extremely easy to use."
 documentation = "https://github.com/sailbrush/rosin"
 homepage = "https://github.com/sailbrush/rosin"
 repository = "https://github.com/sailbrush/rosin"
 readme = "README.md"
 keywords = ["GUI"]
 categories = ["gui"]
-license = "MIT"
+license = "Apache-2.0 OR MIT"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)'] }
+
+[target.'cfg(loom)'.dependencies]
+loom = "0.7.2"
 
 [dependencies]
-bumpalo = { version = "3.6", features = ["collections"] }
-cssparser = "0.28"
-druid-shell = { git = "https://github.com/linebender/druid.git" }
-keyboard-types = "0.6"
+accesskit = "0.24.0"
+bumpalo = { version = "3.20.2", features = ["collections"] }
+cssparser = "0.35.0"
+cssparser-color = "0.3.0"
+fixed_decimal = { version = "0.7.1", features = ["ryu"], optional = true }
+fluent-bundle = "0.16.0"
+icu = { version = "2.1.1", features = ["compiled_data"], optional = true }
+intl-memoizer = { version = "0.5.3", optional = true }
+keyboard-types = "0.8.3"
+kurbo = { version = "0.13.0", default-features = false }
+lazy_static = "1.5.0"
+log = "0.4"
+parking_lot = "0.12.5"
+parley = { version = "0.7", features = ["std"], default-features = false }
+qfilter = "0.2.1"
+serde = { version = "1.0", features = ["derive"], optional = true }
+slotmap = "1.1.1"
+smallstr = "0.3.1"
+smallvec = "1.15.1"
+sys-locale = "0.3.1"
+time = { version = "0.3.45", features = ["serde"], optional = true }
+unic-langid = { version = "0.9.5", features = ["macros"] }
+vello = "0.7.0" # also bump the version in the readme badge, and the kurbo version
+vello_encoding = "0.7.0"
+
+[dev-dependencies]
+env_logger = "0.11.9"
+serde_json = "1.0"
+criterion = "0.8.1"
+
+[features]
+default = ["system_fonts"]
+icu = ["dep:icu", "dep:fixed_decimal", "dep:intl-memoizer", "dep:time"]
+serde = ["dep:serde", "keyboard-types/serde", "kurbo/serde"]
+system_fonts = ["parley/system"]
+
+[[bench]]
+name = "parse_stylesheet"
+harness = false
+
+[[bench]]
+name = "selector_matching"
+harness = false

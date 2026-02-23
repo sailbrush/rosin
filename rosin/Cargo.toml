@@ -1,21 +1,42 @@
 [package]
 name = "rosin"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["TimTom <timtom.business@gmail.com>"]
-edition = "2021"
-description = "Rosin is a GUI framework for Rust that aims to be extremely easy to use."
+edition = "2024"
+description = "Rosin is a GUI library that aims to be extremely easy to use."
 documentation = "https://github.com/sailbrush/rosin"
 homepage = "https://github.com/sailbrush/rosin"
 repository = "https://github.com/sailbrush/rosin"
 readme = "README.md"
 keywords = ["GUI"]
 categories = ["gui"]
-license = "MIT"
+license = "Apache-2.0 OR MIT"
 
 [dependencies]
-rosin-core = { version = "0.2.0", path = "../rosin-core" }
-druid-shell = { git = "https://github.com/linebender/druid.git" }
-libloading = "0.7"
+libloading = { version = "0.9.0", optional = true }
+pollster = "0.4.0"
+raw-window-handle = "0.6.2"
+rosin-core = { path = "../rosin-core", default-features = false }
+rosin-derive = { path = "../rosin-derive", optional = true }
+serde = { version = "1.0", features = ["derive", "rc"], optional = true }
+serde_json = { version = "1.0", optional = true }
+
+[dev-dependencies]
+env_logger = "0.11.8"
+
+[target.'cfg(target_os="macos")'.dependencies]
+accesskit_macos = "0.25.0"
+block2 = "0.6.2"
+dispatch2 = "0.3.0"
+objc2 = "0.6.3"
+objc2-app-kit = { version = "0.3.2", features = ["objc2-uniform-type-identifiers", "objc2-quartz-core", "NSApplication", "NSAlert", "NSControl", "NSCursor", "NSImage", "NSButton", "NSResponder", "NSEvent", "NSWindow", "NSView", "NSGraphics", "NSTrackingArea", "NSMenu", "NSMenuItem", "NSRunningApplication"] }
+objc2-foundation = { version = "0.3.2", features = ["NSArray", "NSEnumerator", "NSThread", "NSTimer", "NSProcessInfo", "NSBundle"] }
+objc2-quartz-core = { version = "0.3.2", features = ["CALayer", "CAMetalLayer"] }
+objc2-uniform-type-identifiers = { version = "0.3.2" }
 
 [features]
-hot-reload = []
+default = ["system_fonts"]
+icu = ["rosin-core/icu"]
+serde = ["rosin-core/serde"]
+system_fonts = ["rosin-core/system_fonts"]
+hot-reload = ["dep:libloading", "dep:serde", "dep:serde_json", "rosin-core/serde", "dep:rosin-derive"]
