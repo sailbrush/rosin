@@ -221,7 +221,8 @@ impl Stylesheet {
                     }
                 }
                 Err((error, css)) => {
-                    let msg = format_args!("Failed to parse CSS rule: `{}`", css.lines().next().unwrap_or(""));
+                    let rule = css.lines().next().unwrap_or("");
+                    let msg = format_args!("Failed to parse CSS rule: `{}`", rule);
                     css::log_error(msg, error.location, file_name);
                 }
             }
