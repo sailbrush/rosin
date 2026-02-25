@@ -28,7 +28,7 @@ fluent-bundle = "0.16.0"
 icu = { version = "2.1.1", features = ["compiled_data"], optional = true }
 intl-memoizer = { version = "0.5.3", optional = true }
 keyboard-types = "0.8.3"
-kurbo = { version = "0.13.0", default-features = false }
+kurbo = { version = "*", default-features = false } # let vello select the version
 lazy_static = "1.5.0"
 log = "0.4"
 parking_lot = "0.12.5"
@@ -39,9 +39,9 @@ slotmap = "1.1.1"
 smallstr = "0.3.1"
 smallvec = "1.15.1"
 sys-locale = "0.3.1"
-time = { version = "0.3.45", features = ["serde"], optional = true }
+time = { version = "0.3.47", features = ["serde"], optional = true }
 unic-langid = { version = "0.9.5", features = ["macros"] }
-vello = "0.7.0" # also bump the version in the readme badge, and the kurbo version
+vello = "0.7.0" # also bump the version in the readme badge
 vello_encoding = "0.7.0"
 
 [dev-dependencies]
