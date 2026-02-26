@@ -2,6 +2,12 @@ use std::sync::OnceLock;
 use std::{cell::RefCell, rc::Rc};
 
 use crate::prelude::*;
+use crate::linux::*;
+
+use gtk4::Application;
+use gtk4::prelude::GtkWindowExt;
+use gtk4::gio::prelude::ApplicationExtManual;
+use gtk4::ApplicationWindow;
 
 static _APP_STARTED: OnceLock<()> = OnceLock::new();
 
@@ -41,7 +47,29 @@ impl<S: Sync + 'static> AppLauncher<S> {
     // No hot-reload, no serde requirement
     #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
     pub fn run(self, _state: S, _translation_map: TranslationMap) -> Result<(), LaunchError> {
-        // TODO
+        use gtk4::gio::prelude::ApplicationExt;
+
+        gtk4::init();
+
+        let app = Application::builder()
+        .application_id("org.rosin.default")
+        .build();
+        app.connect_activate(move |app| {
+            for desc in &self.windows {
+                let height = desc.size.height as i32;
+                let width = desc.size.width as i32;
+                let title = desc.title.clone();
+
+
+                let window = ApplicationWindow::builder()
+                    .application(app)
+                    .default_width(width)
+                    .default_height(height)
+                    .title(title.as_deref().unwrap_or("rosin-app"))
+                    .build();
+                window.present();
+            }});
+        app.run();
         Ok(())
     }
 
