@@ -1,26 +1,11 @@
-use std::{fs::File, os::unix::io::AsFd};
 
-use wayland_client::{
-    delegate_noop,
-    protocol::{
-        wl_buffer, wl_compositor, wl_keyboard, wl_registry, wl_seat, wl_shm, wl_shm_pool,
-        wl_surface,
-    },
-    Connection, Dispatch, QueueHandle, WEnum,
-};
+use wayland_client::Connection;
 use std::sync::OnceLock;
 use std::rc::Rc;
 use std::cell::RefCell;
 use crate::linux::wayland_state::WaylandState;
 use crate::prelude::*;
 use crate::linux::wayland_state::*;
-use wayland_protocols::xdg::shell::client::{xdg_surface, xdg_toplevel, xdg_wm_base};
-use crate::{
-    log::error,
-    prelude::*,
-    vello::{self, AaSupport},
-    wgpu::{self, ExperimentalFeatures},
-};
 
 static _APP_STARTED: OnceLock<()> = OnceLock::new();
 
@@ -60,7 +45,7 @@ impl<S: Sync + 'static> AppLauncher<S> {
     // No hot-reload, no serde requirement
     #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
     pub fn run(self, _state: S, _translation_map: TranslationMap) -> Result<(), LaunchError> {
-        use crate::linux::wayland_state;
+        
 
         let conn = Connection::connect_to_env().unwrap();
 
@@ -69,7 +54,7 @@ impl<S: Sync + 'static> AppLauncher<S> {
 
         let display = conn.display();
         display.get_registry(&qhandle, ());
-        let winDesc = window_desc_to_wayland(self.windows[0].clone());
+        let win_desc = window_desc_to_wayland(self.windows[0].clone());
 
         let mut state = WaylandState {
             running: true,
@@ -77,8 +62,9 @@ impl<S: Sync + 'static> AppLauncher<S> {
             buffer: None,
             wm_base: None,
             xdg_surface: None,
+            xdg_decorations: None,
             configured: false,
-            window_desc: winDesc
+            window_desc: win_desc
         };
 
         println!("Starting the example window app, press <ESC> to quit.");

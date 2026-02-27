@@ -1,20 +1,23 @@
 //code here is based off https://docs.rs/crate/wayland-client/latest/source/examples/simple_window.rs
 
 //TODO: 
-use std::{fs::File, os::unix::io::AsFd};
 use crate::kurbo::Point;
 use crate::kurbo::Size;
 use wayland_client::{
+    protocol::wl_buffer,
+    protocol::wl_compositor,
+    protocol::wl_keyboard,
+    protocol::wl_registry,
+    protocol::wl_seat,
+    protocol::wl_shm,
+    protocol::wl_shm_pool,
+    protocol::wl_surface,
     delegate_noop,
-    protocol::{
-        wl_buffer, wl_compositor, wl_keyboard, wl_registry, wl_seat, wl_shm, wl_shm_pool,
-        wl_surface,
-    },
     Connection, Dispatch, QueueHandle, WEnum,
 };
 
+use wayland_protocols::xdg::decoration::zv1::client::zxdg_toplevel_decoration_v1;
 use wayland_protocols::xdg::shell::client::{xdg_surface, xdg_toplevel, xdg_wm_base};
-
 use crate::desc::WindowDesc;
 use crate::prelude::*;
 
@@ -32,7 +35,7 @@ pub(crate) struct WaylandWindowDesc {
 }
 
 pub(crate) fn window_desc_to_wayland<S: Sync + 'static>(desc: WindowDesc<S>) -> WaylandWindowDesc {
-    let mut retVal: WaylandWindowDesc = WaylandWindowDesc {
+    let ret_val: WaylandWindowDesc = WaylandWindowDesc {
          title: desc.title, 
          menu: desc.menu, 
          size: desc.size, 
@@ -44,7 +47,7 @@ pub(crate) fn window_desc_to_wayland<S: Sync + 'static>(desc: WindowDesc<S>) -> 
          minimize_button: desc.maximize_button, 
          maximize_button: desc.minimize_button
     };
-    return retVal;
+    return ret_val;
 }
 
 pub(crate) struct WaylandState {
@@ -53,6 +56,7 @@ pub(crate) struct WaylandState {
     pub(crate) buffer: Option<wl_buffer::WlBuffer>,
     pub(crate) wm_base: Option<xdg_wm_base::XdgWmBase>,
     pub(crate) xdg_surface: Option<(xdg_surface::XdgSurface, xdg_toplevel::XdgToplevel)>,
+    pub(crate) xdg_decorations: Option<zxdg_toplevel_decoration_v1::ZxdgToplevelDecorationV1>,
     pub(crate) configured: bool,
     pub(crate) window_desc: WaylandWindowDesc
 }
@@ -79,7 +83,7 @@ impl Dispatch<wl_registry::WlRegistry, ()> for WaylandState {
                     }
                 }
                 "wl_shm" => {
-                    let shm = registry.bind::<wl_shm::WlShm, _, _>(name, 1, qh, ());
+                    let _shm = registry.bind::<wl_shm::WlShm, _, _>(name, 1, qh, ());
                     //this is where drawing goes, i think?
                 }
                 "wl_seat" => {
@@ -114,6 +118,7 @@ impl WaylandState {
 
         let xdg_surface = wm_base.get_xdg_surface(base_surface, qh, ());
         let toplevel = xdg_surface.get_toplevel(qh, ());
+        
         toplevel.set_title(String::from(self.window_desc.title.as_ref().unwrap().as_ref()));
 
         base_surface.commit();
@@ -192,14 +197,14 @@ impl Dispatch<wl_seat::WlSeat, ()> for WaylandState {
 
 impl Dispatch<wl_keyboard::WlKeyboard, ()> for WaylandState {
     fn event(
-        state: &mut Self,
+        _state: &mut Self,
         _: &wl_keyboard::WlKeyboard,
         event: wl_keyboard::Event,
         _: &(),
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
-        if let wl_keyboard::Event::Key { key, .. } = event {
+        if let wl_keyboard::Event::Key { key: _, .. } = event {
             // TODO: Process Keyboard Event
         }
     }
