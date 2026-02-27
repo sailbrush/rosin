@@ -1,13 +1,26 @@
+use std::{fs::File, os::unix::io::AsFd};
+
+use wayland_client::{
+    delegate_noop,
+    protocol::{
+        wl_buffer, wl_compositor, wl_keyboard, wl_registry, wl_seat, wl_shm, wl_shm_pool,
+        wl_surface,
+    },
+    Connection, Dispatch, QueueHandle, WEnum,
+};
 use std::sync::OnceLock;
-use std::{cell::RefCell, rc::Rc};
-
+use std::rc::Rc;
+use std::cell::RefCell;
+use crate::linux::wayland_state::WaylandState;
 use crate::prelude::*;
-use crate::linux::*;
-
-use gtk4::Application;
-use gtk4::prelude::GtkWindowExt;
-use gtk4::gio::prelude::ApplicationExtManual;
-use gtk4::ApplicationWindow;
+use crate::linux::wayland_state::*;
+use wayland_protocols::xdg::shell::client::{xdg_surface, xdg_toplevel, xdg_wm_base};
+use crate::{
+    log::error,
+    prelude::*,
+    vello::{self, AaSupport},
+    wgpu::{self, ExperimentalFeatures},
+};
 
 static _APP_STARTED: OnceLock<()> = OnceLock::new();
 
@@ -28,7 +41,7 @@ impl<S: Sync + 'static> AppLauncher<S> {
             _translation_map: None,
             wgpu_config: WgpuConfig::default(),
             _state: None,
-
+    
             #[cfg(all(feature = "hot-reload", debug_assertions))]
             hot_reloader: RefCell::new(None),
         }
@@ -47,29 +60,32 @@ impl<S: Sync + 'static> AppLauncher<S> {
     // No hot-reload, no serde requirement
     #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
     pub fn run(self, _state: S, _translation_map: TranslationMap) -> Result<(), LaunchError> {
-        use gtk4::gio::prelude::ApplicationExt;
+        use crate::linux::wayland_state;
 
-        gtk4::init();
+        let conn = Connection::connect_to_env().unwrap();
 
-        let app = Application::builder()
-        .application_id("org.rosin.default")
-        .build();
-        app.connect_activate(move |app| {
-            for desc in &self.windows {
-                let height = desc.size.height as i32;
-                let width = desc.size.width as i32;
-                let title = desc.title.clone();
+        let mut event_queue = conn.new_event_queue();
+        let qhandle = event_queue.handle();
 
+        let display = conn.display();
+        display.get_registry(&qhandle, ());
+        let winDesc = window_desc_to_wayland(self.windows[0].clone());
 
-                let window = ApplicationWindow::builder()
-                    .application(app)
-                    .default_width(width)
-                    .default_height(height)
-                    .title(title.as_deref().unwrap_or("rosin-app"))
-                    .build();
-                window.present();
-            }});
-        app.run();
+        let mut state = WaylandState {
+            running: true,
+            base_surface: None,
+            buffer: None,
+            wm_base: None,
+            xdg_surface: None,
+            configured: false,
+            window_desc: winDesc
+        };
+
+        println!("Starting the example window app, press <ESC> to quit.");
+
+        while state.running {
+            event_queue.blocking_dispatch(&mut state).unwrap();
+        }
         Ok(())
     }
 

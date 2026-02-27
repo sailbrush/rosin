@@ -36,7 +36,10 @@ objc2-uniform-type-identifiers = { version = "0.3.2" }
 
 
 [target.'cfg(target_os="linux")'.dependencies]
-gtk4 = "0.11.0"
+wayland-backend = "0.3.0"
+wayland-client = "0.31.1"
+wayland-cursor = "0.31.0"
+wayland-protocols = { version = "0.32.1", features = ["client", "staging", "unstable"] }
 
 [features]
 default = ["system_fonts"]
