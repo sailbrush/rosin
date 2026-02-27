@@ -254,6 +254,7 @@ impl<'i> DeclarationParser<'i> for PropertiesParser {
             "child-bottom" => parse_property(parser, parse_positive_unit, Property::ChildBottom),
             "child-left" => parse_property(parser, parse_positive_unit, Property::ChildLeft),
             "child-right" => parse_property(parser, parse_positive_unit, Property::ChildRight),
+            "child-space" => parse_shorthand(parser, parse_child_space_sh, Property::ChildSpace),
             "child-top" => parse_property(parser, parse_positive_unit, Property::ChildTop),
             "color" => parse_property(parser, parse_color, Property::Color),
             "display" => parse_property(parser, parse_display, Property::Display),
@@ -412,6 +413,7 @@ const BORDER_RADII: &[fn(PropertyValue<Length>) -> Property] = &[
 ];
 
 const SPACE_PROPS: &[fn(PropertyValue<Unit>) -> Property] = &[Property::Top, Property::Right, Property::Bottom, Property::Left];
+const CHILD_SPACE_PROPS: &[fn(PropertyValue<Unit>) -> Property] = &[Property::ChildTop, Property::ChildRight, Property::ChildBottom, Property::ChildLeft];
 
 fn push_property_array<T: Clone>(props: &[fn(PropertyValue<T>) -> Property], v: PropertyValue<T>, out: &mut Props) {
     for prop in props {
@@ -1679,6 +1681,28 @@ pub(crate) fn parse_space_sh<'i>(parser: &mut Parser<'i, '_>) -> Result<Props, c
     result.push(Property::Right(right));
     result.push(Property::Bottom(bottom));
     result.push(Property::Left(left));
+
+    Ok(result)
+}
+
+pub(crate) fn parse_child_space_sh<'i>(parser: &mut Parser<'i, '_>) -> Result<Props, cssparser::ParseError<'i, CustomParseError>> {
+    let mut result = Props::with_capacity(4);
+
+    if is_keyword_exhausted(parser, "initial") {
+        push_property_array(CHILD_SPACE_PROPS, PropertyValue::Initial, &mut result);
+        return Ok(result);
+    }
+
+    if is_keyword_exhausted(parser, "inherit") {
+        push_property_array(CHILD_SPACE_PROPS, PropertyValue::Inherit, &mut result);
+        return Ok(result);
+    }
+
+    let [top, right, bottom, left] = quad_values(parser, parse_unit)?;
+    result.push(Property::ChildTop(top));
+    result.push(Property::ChildRight(right));
+    result.push(Property::ChildBottom(bottom));
+    result.push(Property::ChildLeft(left));
 
     Ok(result)
 }

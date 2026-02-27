@@ -183,6 +183,7 @@
 //! | `child-bottom` | `<positive-unit>` |
 //! | `child-left` | `<positive-unit>` |
 //! | `child-right` | `<positive-unit>` |
+//! | `child-space` | `<unit>{1,4}` |
 //! | `child-top` | `<positive-unit>` |
 //! | `color` | `<color>` |
 //! | `display` | `none \| row \| row-reverse \| column \| column-reverse` |

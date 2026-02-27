@@ -476,6 +476,58 @@ fn space() {
 }
 
 #[test]
+fn child_space() {
+    // Normal Use
+    let styles = apply_css_to_tree(".root { child-space: 2s 3s 4s 5s; }", single_node_tree);
+    assert_eq!(styles[0].child_top, Unit::Stretch(2.0));
+    assert_eq!(styles[0].child_right, Unit::Stretch(3.0));
+    assert_eq!(styles[0].child_bottom, Unit::Stretch(4.0));
+    assert_eq!(styles[0].child_left, Unit::Stretch(5.0));
+
+    // One Value
+    let styles = apply_css_to_tree(".root { child-space: 2s; }", single_node_tree);
+    assert_eq!(styles[0].child_top, Unit::Stretch(2.0));
+    assert_eq!(styles[0].child_right, Unit::Stretch(2.0));
+    assert_eq!(styles[0].child_bottom, Unit::Stretch(2.0));
+    assert_eq!(styles[0].child_left, Unit::Stretch(2.0));
+
+    // Initial
+    let styles =
+        apply_css_to_tree(".parent { child-space: 3s 4s 5s 6s; } .child { child-space: initial; }", one_child_tree);
+    assert_eq!(styles[0].child_top, Unit::Stretch(3.0));
+    assert_eq!(styles[0].child_right, Unit::Stretch(4.0));
+    assert_eq!(styles[0].child_bottom, Unit::Stretch(5.0));
+    assert_eq!(styles[0].child_left, Unit::Stretch(6.0));
+    assert_eq!(styles[1].child_top, Style::default().child_top);
+    assert_eq!(styles[1].child_right, Style::default().child_right);
+    assert_eq!(styles[1].child_bottom, Style::default().child_bottom);
+    assert_eq!(styles[1].child_left, Style::default().child_left);
+
+    // Inherit
+    let styles =
+        apply_css_to_tree(".parent { child-space: 3s 4s 5s 6s; } .child { child-space: inherit; }", one_child_tree);
+    assert_eq!(styles[0].child_top, Unit::Stretch(3.0));
+    assert_eq!(styles[0].child_right, Unit::Stretch(4.0));
+    assert_eq!(styles[0].child_bottom, Unit::Stretch(5.0));
+    assert_eq!(styles[0].child_left, Unit::Stretch(6.0));
+    assert_eq!(styles[1].child_top, Unit::Stretch(3.0));
+    assert_eq!(styles[1].child_right, Unit::Stretch(4.0));
+    assert_eq!(styles[1].child_bottom, Unit::Stretch(5.0));
+    assert_eq!(styles[1].child_left, Unit::Stretch(6.0));
+
+    // Default (uninherited)
+    let styles = apply_css_to_tree(".parent { child-space: 4s 5s 6s 7s; }", one_child_tree);
+    assert_eq!(styles[0].child_top, Unit::Stretch(4.0));
+    assert_eq!(styles[0].child_right, Unit::Stretch(5.0));
+    assert_eq!(styles[0].child_bottom, Unit::Stretch(6.0));
+    assert_eq!(styles[0].child_left, Unit::Stretch(7.0));
+    assert_eq!(styles[1].child_top, Style::default().child_top);
+    assert_eq!(styles[1].child_right, Style::default().child_right);
+    assert_eq!(styles[1].child_bottom, Style::default().child_bottom);
+    assert_eq!(styles[1].child_left, Style::default().child_left);
+}
+
+#[test]
 fn z_index() {
     // Auto
     let styles = apply_css_to_tree(".root { z-index: auto; }", single_node_tree);
