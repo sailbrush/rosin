@@ -1,12 +1,28 @@
-
-use wayland_client::Connection;
-use std::sync::OnceLock;
-use std::rc::Rc;
-use std::cell::RefCell;
-use crate::linux::wayland_state::WaylandState;
+use crate::linux::wayland_state::RosinWaylandWindow;
 use crate::prelude::*;
-use crate::linux::wayland_state::*;
+use pollster::FutureExt;
+use rosin_core::wgpu::{self, ExperimentalFeatures};
+use smithay_client_toolkit::shell::WaylandSurface;
+use smithay_client_toolkit::{
+    activation::ActivationState,
+    compositor::CompositorState,
+    output::OutputState,
+    registry::RegistryState,
+    seat::SeatState,
+    shell::xdg::{XdgShell, window::WindowDecorations},
+    shm::{Shm, slot::SlotPool},
+};
+use std::cell::RefCell;
+use std::ops::Deref;
+use std::rc::Rc;
+use std::sync::OnceLock;
+use wayland_client::Connection;
+use wayland_client::QueueHandle;
+use wayland_client::globals::registry_queue_init;
 
+
+use rosin_core::vello::{self, AaSupport};
+use smithay_client_toolkit::activation::RequestData;
 static _APP_STARTED: OnceLock<()> = OnceLock::new();
 
 pub(crate) struct AppLauncher<S: Sync + 'static> {
@@ -26,7 +42,7 @@ impl<S: Sync + 'static> AppLauncher<S> {
             _translation_map: None,
             wgpu_config: WgpuConfig::default(),
             _state: None,
-    
+
             #[cfg(all(feature = "hot-reload", debug_assertions))]
             hot_reloader: RefCell::new(None),
         }
@@ -41,37 +57,113 @@ impl<S: Sync + 'static> AppLauncher<S> {
         self.windows.push(window);
         self
     }
-
+    // based on https://github.com/Smithay/client-toolkit/blob/master/examples/wgpu.rs
     // No hot-reload, no serde requirement
     #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
     pub fn run(self, _state: S, _translation_map: TranslationMap) -> Result<(), LaunchError> {
-        
-
         let conn = Connection::connect_to_env().unwrap();
+        let (globals, mut event_queue) = registry_queue_init(&conn).unwrap();
+        let qh: QueueHandle<RosinWaylandWindow> = event_queue.handle();
 
-        let mut event_queue = conn.new_event_queue();
-        let qhandle = event_queue.handle();
+        let compositor_state = CompositorState::bind(&globals, &qh).expect("wl_compositor not available");
+        let xdg_shell_state = XdgShell::bind(&globals, &qh).expect("xdg shell not available");
+        //implement multi-window later?
+        //for desc in self.windows
+        {
+            use crate::linux::util::panic_and_print;
 
-        let display = conn.display();
-        display.get_registry(&qhandle, ());
-        let win_desc = window_desc_to_wayland(self.windows[0].clone());
+            let desc = &self.windows[0];
+            let surface = compositor_state.create_surface(&qh);
+            let window = xdg_shell_state.create_window(surface, WindowDecorations::RequestServer, &qh);
+            window.set_title(desc.title.clone().unwrap().deref());
+            window.set_app_id("rosin.default.id");
+            window.set_min_size(Some((desc.min_size.unwrap_or(desc.size).width as u32, desc.min_size.unwrap_or(desc.size).height as u32)));
+            window.set_max_size(Some((desc.max_size.unwrap_or(desc.size).width as u32, desc.max_size.unwrap_or(desc.size).height as u32)));
 
-        let mut state = WaylandState {
-            running: true,
-            base_surface: None,
-            buffer: None,
-            wm_base: None,
-            xdg_surface: None,
-            xdg_decorations: None,
-            configured: false,
-            window_desc: win_desc
-        };
+            window.commit();
 
-        println!("Starting the example window app, press <ESC> to quit.");
 
-        while state.running {
-            event_queue.blocking_dispatch(&mut state).unwrap();
+            let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+                backends: self.wgpu_config.backends,
+                ..Default::default()
+            });
+            let adapter = match instance
+                .request_adapter(&wgpu::RequestAdapterOptions {
+                    power_preference: self.wgpu_config.power_preference,
+                    force_fallback_adapter: false,
+                    compatible_surface: None,
+                })
+                .block_on()
+            {
+                Ok(adapter) => adapter,
+                Err(e) => panic_and_print("Adapter creation failed".to_string()),
+            };
+
+            let (device, queue) = match adapter
+                .request_device(&wgpu::DeviceDescriptor {
+                    label: Some("RosinDevice"),
+                    required_features: self.wgpu_config.features,
+                    required_limits: self.wgpu_config.limits.clone(),
+                    memory_hints: self.wgpu_config.memory_hints.clone(),
+                    trace: wgpu::Trace::Off,
+                    experimental_features: ExperimentalFeatures::disabled(),
+                })
+                .block_on()
+            {
+                Ok((device, queue)) => (device, queue),
+                Err(e) => panic_and_print("device creation failed".to_string()),
+            };
+
+            let compositor = Compositor {
+                blitter: RefCell::new(None),
+                custom: RefCell::new(None),
+            };
+
+            let vello_renderer = {
+                let renderer = match vello::Renderer::new(
+                    &device,
+                    vello::RendererOptions {
+                        use_cpu: false,
+                        antialiasing_support: AaSupport::all(),
+                        num_init_threads: None,
+                        pipeline_cache: None,
+                    },
+                ) {
+                    Ok(r) => r,
+                    Err(e) => panic_and_print("vello creation failed".to_string()),
+                };
+
+                Rc::new(RefCell::new(renderer))
+            };
+
+            let gpu_ctx = Rc::new(GpuCtx {
+                instance,
+                adapter,
+                device,
+                queue,
+                compositor,
+            });
+            let mut simple_window = RosinWaylandWindow {
+                registry_state: RegistryState::new(&globals),
+                seat_state: SeatState::new(&globals, &qh),
+                output_state: OutputState::new(&globals, &qh),
+
+                exit: false,
+                width: desc.size.width as u32,
+                height: desc.size.height as u32,
+                window,
+                gpu_ctx,
+                vello_renderer,
+            };
+
+            loop {
+                if simple_window.exit {
+                    println!("exiting example");
+                    break;
+                }
+            }
         }
+
         Ok(())
     }
 

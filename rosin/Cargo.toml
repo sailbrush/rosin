@@ -40,6 +40,7 @@ wayland-backend = "0.3.0"
 wayland-client = "0.31.1"
 wayland-cursor = "0.31.0"
 wayland-protocols = { version = "0.32.1", features = ["client", "staging", "unstable"] }
+smithay-client-toolkit = "0.20.0"
 
 [features]
 default = ["system_fonts"]

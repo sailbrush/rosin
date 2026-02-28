@@ -1,211 +1,102 @@
-//code here is based off https://docs.rs/crate/wayland-client/latest/source/examples/simple_window.rs
-
-//TODO: 
-use crate::kurbo::Point;
-use crate::kurbo::Size;
+use smithay_client_toolkit::{
+    compositor::*, output::*, registry::*, seat::*, shell::xdg::window::{Window, WindowConfigure, WindowHandler}, shm::{Shm, ShmHandler}, *
+};
 use wayland_client::{
-    protocol::wl_buffer,
-    protocol::wl_compositor,
-    protocol::wl_keyboard,
-    protocol::wl_registry,
-    protocol::wl_seat,
-    protocol::wl_shm,
-    protocol::wl_shm_pool,
-    protocol::wl_surface,
-    delegate_noop,
-    Connection, Dispatch, QueueHandle, WEnum,
+    Connection, QueueHandle,
+    protocol::{wl_output, wl_seat, wl_surface},
 };
 
-use wayland_protocols::xdg::decoration::zv1::client::zxdg_toplevel_decoration_v1;
-use wayland_protocols::xdg::shell::client::{xdg_surface, xdg_toplevel, xdg_wm_base};
-use crate::desc::WindowDesc;
-use crate::prelude::*;
+use crate::gpu::GpuCtx;
+use rosin_core::vello::{self};
+use std::cell::RefCell;
+use std::rc::Rc;
+// based on https://github.com/Smithay/client-toolkit/blob/master/examples/wgpu.rs
+pub(crate) struct RosinWaylandWindow {
+    pub(crate) registry_state: RegistryState,
+    pub(crate) seat_state: SeatState,
+    pub(crate) output_state: OutputState,
 
-pub(crate) struct WaylandWindowDesc {
-    pub(crate) title: Option<std::sync::Arc<str>>,
-    pub(crate) menu: Option<MenuDesc>,
-    pub(crate) size: Size,
-    pub(crate) min_size: Option<Size>,
-    pub(crate) max_size: Option<Size>,
-    pub(crate) resizeable: bool,
-    pub(crate) position: Option<Point>,
-    pub(crate) close_button: bool,
-    pub(crate) minimize_button: bool,
-    pub(crate) maximize_button: bool,
+    pub(crate) exit: bool,
+    pub(crate) width: u32,
+    pub(crate) height: u32,
+    pub(crate) window: Window,
+    pub(crate) gpu_ctx: Rc<GpuCtx>,
+    pub(crate) vello_renderer: Rc<RefCell<vello::Renderer>>,
 }
+impl CompositorHandler for RosinWaylandWindow {
+    fn scale_factor_changed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _surface: &wl_surface::WlSurface, _new_factor: i32) {
+        // Not needed for this example.
+    }
 
-pub(crate) fn window_desc_to_wayland<S: Sync + 'static>(desc: WindowDesc<S>) -> WaylandWindowDesc {
-    let ret_val: WaylandWindowDesc = WaylandWindowDesc {
-         title: desc.title, 
-         menu: desc.menu, 
-         size: desc.size, 
-         min_size: desc.min_size, 
-         max_size: desc.max_size, 
-         resizeable: desc.resizeable, 
-         position: desc.position, 
-         close_button: desc.close_button, 
-         minimize_button: desc.maximize_button, 
-         maximize_button: desc.minimize_button
-    };
-    return ret_val;
-}
+    fn transform_changed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _surface: &wl_surface::WlSurface, _new_transform: wl_output::Transform) {
+        // Not needed for this example.
+    }
 
-pub(crate) struct WaylandState {
-    pub(crate) running: bool,
-    pub(crate) base_surface: Option<wl_surface::WlSurface>,
-    pub(crate) buffer: Option<wl_buffer::WlBuffer>,
-    pub(crate) wm_base: Option<xdg_wm_base::XdgWmBase>,
-    pub(crate) xdg_surface: Option<(xdg_surface::XdgSurface, xdg_toplevel::XdgToplevel)>,
-    pub(crate) xdg_decorations: Option<zxdg_toplevel_decoration_v1::ZxdgToplevelDecorationV1>,
-    pub(crate) configured: bool,
-    pub(crate) window_desc: WaylandWindowDesc
-}
+    fn frame(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _surface: &wl_surface::WlSurface, _time: u32) {}
 
-impl Dispatch<wl_registry::WlRegistry, ()> for WaylandState {
-    fn event(
-        state: &mut Self,
-        registry: &wl_registry::WlRegistry,
-        event: wl_registry::Event,
-        _: &(),
-        _: &Connection,
-        qh: &QueueHandle<Self>,
-    ) {
-        if let wl_registry::Event::Global { name, interface, .. } = event {
-            match &interface[..] {
-                "wl_compositor" => {
-                    let compositor =
-                        registry.bind::<wl_compositor::WlCompositor, _, _>(name, 1, qh, ());
-                    let surface = compositor.create_surface(qh, ());
-                    state.base_surface = Some(surface);
+    fn surface_enter(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _surface: &wl_surface::WlSurface, _output: &wl_output::WlOutput) {
+        // Not needed for this example.
+    }
 
-                    if state.wm_base.is_some() && state.xdg_surface.is_none() {
-                        state.init_xdg_surface(qh);
-                    }
-                }
-                "wl_shm" => {
-                    let _shm = registry.bind::<wl_shm::WlShm, _, _>(name, 1, qh, ());
-                    //this is where drawing goes, i think?
-                }
-                "wl_seat" => {
-                    registry.bind::<wl_seat::WlSeat, _, _>(name, 1, qh, ());
-                }
-                "xdg_wm_base" => {
-                    let wm_base = registry.bind::<xdg_wm_base::XdgWmBase, _, _>(name, 1, qh, ());
-                    state.wm_base = Some(wm_base);
-
-                    if state.base_surface.is_some() && state.xdg_surface.is_none() {
-                        state.init_xdg_surface(qh);
-                    }
-                }
-                _ => {}
-            }
-        }
+    fn surface_leave(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _surface: &wl_surface::WlSurface, _output: &wl_output::WlOutput) {
+        // Not needed for this example.
     }
 }
 
-// Ignore events from these object types in this example.
-delegate_noop!(WaylandState: ignore wl_compositor::WlCompositor);
-delegate_noop!(WaylandState: ignore wl_surface::WlSurface);
-delegate_noop!(WaylandState: ignore wl_shm::WlShm);
-delegate_noop!(WaylandState: ignore wl_shm_pool::WlShmPool);
-delegate_noop!(WaylandState: ignore wl_buffer::WlBuffer);
+impl OutputHandler for RosinWaylandWindow {
+    fn output_state(&mut self) -> &mut OutputState {
+        &mut self.output_state
+    }
 
+    fn new_output(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: wl_output::WlOutput) {}
 
-impl WaylandState {
-    fn init_xdg_surface(&mut self, qh: &QueueHandle<WaylandState>) {
-        let wm_base = self.wm_base.as_ref().unwrap();
-        let base_surface = self.base_surface.as_ref().unwrap();
+    fn update_output(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: wl_output::WlOutput) {}
 
-        let xdg_surface = wm_base.get_xdg_surface(base_surface, qh, ());
-        let toplevel = xdg_surface.get_toplevel(qh, ());
-        
-        toplevel.set_title(String::from(self.window_desc.title.as_ref().unwrap().as_ref()));
+    fn output_destroyed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: wl_output::WlOutput) {}
+}
 
-        base_surface.commit();
+impl WindowHandler for RosinWaylandWindow {
+    fn request_close(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &Window) {
+        self.exit = true;
+    }
 
-        self.xdg_surface = Some((xdg_surface, toplevel));
+    fn configure(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _window: &Window, configure: WindowConfigure, _serial: u32) {
+        let (new_width, new_height) = configure.new_size;
+        self.width = new_width.map_or(self.width, |v| v.get());
+        self.height = new_height.map_or(self.height, |v| v.get());
+
     }
 }
 
-impl Dispatch<xdg_wm_base::XdgWmBase, ()> for WaylandState {
-    fn event(
-        _: &mut Self,
-        wm_base: &xdg_wm_base::XdgWmBase,
-        event: xdg_wm_base::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-        if let xdg_wm_base::Event::Ping { serial } = event {
-            wm_base.pong(serial);
-        }
+impl SeatHandler for RosinWaylandWindow {
+    fn seat_state(&mut self) -> &mut SeatState {
+        &mut self.seat_state
     }
+
+    fn new_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat) {}
+
+    fn new_capability(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _seat: wl_seat::WlSeat, _capability: Capability) {}
+
+    fn remove_capability(&mut self, _conn: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat, _capability: Capability) {}
+
+    fn remove_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat) {}
 }
 
-impl Dispatch<xdg_surface::XdgSurface, ()> for WaylandState {
-    fn event(
-        state: &mut Self,
-        xdg_surface: &xdg_surface::XdgSurface,
-        event: xdg_surface::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-        if let xdg_surface::Event::Configure { serial, .. } = event {
-            xdg_surface.ack_configure(serial);
-            state.configured = true;
-            let surface = state.base_surface.as_ref().unwrap();
-            if let Some(ref buffer) = state.buffer {
-                surface.attach(Some(buffer), 0, 0);
-                surface.commit();
-            }
-        }
-    }
-}
 
-impl Dispatch<xdg_toplevel::XdgToplevel, ()> for WaylandState {
-    fn event(
-        state: &mut Self,
-        _: &xdg_toplevel::XdgToplevel,
-        event: xdg_toplevel::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-        if let xdg_toplevel::Event::Close = event {
-            state.running = false;
-        }
-    }
-}
 
-impl Dispatch<wl_seat::WlSeat, ()> for WaylandState {
-    fn event(
-        _: &mut Self,
-        seat: &wl_seat::WlSeat,
-        event: wl_seat::Event,
-        _: &(),
-        _: &Connection,
-        qh: &QueueHandle<Self>,
-    ) {
-        if let wl_seat::Event::Capabilities { capabilities: WEnum::Value(capabilities) } = event {
-            if capabilities.contains(wl_seat::Capability::Keyboard) {
-                seat.get_keyboard(qh, ());
-            }
-        }
-    }
-}
+delegate_compositor!(RosinWaylandWindow);
+delegate_output!(RosinWaylandWindow);
 
-impl Dispatch<wl_keyboard::WlKeyboard, ()> for WaylandState {
-    fn event(
-        _state: &mut Self,
-        _: &wl_keyboard::WlKeyboard,
-        event: wl_keyboard::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-        if let wl_keyboard::Event::Key { key: _, .. } = event {
-            // TODO: Process Keyboard Event
-        }
+delegate_seat!(RosinWaylandWindow);
+
+delegate_xdg_shell!(RosinWaylandWindow);
+delegate_xdg_window!(RosinWaylandWindow);
+
+delegate_registry!(RosinWaylandWindow);
+
+impl ProvidesRegistryState for RosinWaylandWindow {
+    fn registry(&mut self) -> &mut RegistryState {
+        &mut self.registry_state
     }
+    registry_handlers![OutputState];
 }
