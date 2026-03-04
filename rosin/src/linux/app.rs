@@ -4,13 +4,11 @@ use pollster::FutureExt;
 use rosin_core::wgpu::{self, ExperimentalFeatures};
 use smithay_client_toolkit::shell::WaylandSurface;
 use smithay_client_toolkit::{
-    activation::ActivationState,
     compositor::CompositorState,
     output::OutputState,
     registry::RegistryState,
     seat::SeatState,
     shell::xdg::{XdgShell, window::WindowDecorations},
-    shm::{Shm, slot::SlotPool},
 };
 use std::cell::RefCell;
 use std::ops::Deref;
@@ -19,10 +17,12 @@ use std::sync::OnceLock;
 use wayland_client::Connection;
 use wayland_client::QueueHandle;
 use wayland_client::globals::registry_queue_init;
-
-
+use wayland_client::Proxy;
+use raw_window_handle::{RawDisplayHandle, RawWindowHandle, WaylandDisplayHandle, WaylandWindowHandle};
+use wayland_backend::client::ObjectId;
+use crate::linux::util::panic_and_print;
 use rosin_core::vello::{self, AaSupport};
-use smithay_client_toolkit::activation::RequestData;
+use std::ptr::NonNull;
 static _APP_STARTED: OnceLock<()> = OnceLock::new();
 
 pub(crate) struct AppLauncher<S: Sync + 'static> {
@@ -70,8 +70,6 @@ impl<S: Sync + 'static> AppLauncher<S> {
         //implement multi-window later?
         //for desc in self.windows
         {
-            use crate::linux::util::panic_and_print;
-
             let desc = &self.windows[0];
             let surface = compositor_state.create_surface(&qh);
             let window = xdg_shell_state.create_window(surface, WindowDecorations::RequestServer, &qh);
@@ -82,9 +80,8 @@ impl<S: Sync + 'static> AppLauncher<S> {
 
             window.commit();
 
-
             let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-                backends: self.wgpu_config.backends,
+                backends: wgpu::Backends::VULKAN,
                 ..Default::default()
             });
             let adapter = match instance
@@ -143,6 +140,33 @@ impl<S: Sync + 'static> AppLauncher<S> {
                 queue,
                 compositor,
             });
+            let vello_texture = {
+                let view_formats = [];
+                gpu_ctx.device.create_texture(&wgpu::TextureDescriptor {
+                    label: None,
+                    size: wgpu::Extent3d {
+                        width: desc.size.width as u32,
+                        height: desc.size.height as u32,
+                        depth_or_array_layers: 1,
+                    },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: wgpu::TextureFormat::Rgba8Unorm,
+                    usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
+                    view_formats: view_formats.as_slice(),
+                })
+            };
+            let raw_display_handle = RawDisplayHandle::Wayland(WaylandDisplayHandle::new(NonNull::new(conn.backend().display_ptr() as *mut _).unwrap()));
+            let raw_window_handle = RawWindowHandle::Wayland(WaylandWindowHandle::new(NonNull::new(window.wl_surface().id().as_ptr() as *mut _).unwrap()));
+            let wgpu_surface: wgpu::Surface<'static> = unsafe {
+                gpu_ctx.instance
+                    .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
+                        raw_display_handle,
+                        raw_window_handle,
+                    })
+                    .unwrap()
+            };
             let mut simple_window = RosinWaylandWindow {
                 registry_state: RegistryState::new(&globals),
                 seat_state: SeatState::new(&globals, &qh),
@@ -154,9 +178,12 @@ impl<S: Sync + 'static> AppLauncher<S> {
                 window,
                 gpu_ctx,
                 vello_renderer,
+                tex_to_render: vello_texture,
+                surface: wgpu_surface
             };
 
             loop {
+                event_queue.blocking_dispatch(&mut simple_window).unwrap();
                 if simple_window.exit {
                     println!("exiting example");
                     break;

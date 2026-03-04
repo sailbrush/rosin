@@ -7,7 +7,7 @@ use wayland_client::{
 };
 
 use crate::gpu::GpuCtx;
-use rosin_core::vello::{self};
+use rosin_core::{vello::{self}, wgpu};
 use std::cell::RefCell;
 use std::rc::Rc;
 // based on https://github.com/Smithay/client-toolkit/blob/master/examples/wgpu.rs
@@ -22,6 +22,8 @@ pub(crate) struct RosinWaylandWindow {
     pub(crate) window: Window,
     pub(crate) gpu_ctx: Rc<GpuCtx>,
     pub(crate) vello_renderer: Rc<RefCell<vello::Renderer>>,
+    pub(crate) tex_to_render: wgpu::Texture,
+    pub(crate) surface: wgpu::Surface<'static>
 }
 impl CompositorHandler for RosinWaylandWindow {
     fn scale_factor_changed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _surface: &wl_surface::WlSurface, _new_factor: i32) {
@@ -32,7 +34,10 @@ impl CompositorHandler for RosinWaylandWindow {
         // Not needed for this example.
     }
 
-    fn frame(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _surface: &wl_surface::WlSurface, _time: u32) {}
+    fn frame(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _surface: &wl_surface::WlSurface, _time: u32) {
+        // drawing goes here
+        println!("frame");
+    }
 
     fn surface_enter(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _surface: &wl_surface::WlSurface, _output: &wl_output::WlOutput) {
         // Not needed for this example.
@@ -64,7 +69,53 @@ impl WindowHandler for RosinWaylandWindow {
         let (new_width, new_height) = configure.new_size;
         self.width = new_width.map_or(self.width, |v| v.get());
         self.height = new_height.map_or(self.height, |v| v.get());
+        println!("configure");
+        let adapter = &self.gpu_ctx.adapter;
+        let surface = &self.surface;
+        let device = &self.gpu_ctx.device;
+        let queue = &self.gpu_ctx.queue;
 
+        let cap = surface.get_capabilities(&adapter);
+        let surface_config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: cap.formats[0],
+            view_formats: vec![cap.formats[0]],
+            alpha_mode: wgpu::CompositeAlphaMode::Auto,
+            width: self.width,
+            height: self.height,
+            desired_maximum_frame_latency: 2,
+            // Wayland is inherently a mailbox system.
+            present_mode: wgpu::PresentMode::Mailbox,
+        };
+
+        surface.configure(&self.gpu_ctx.device, &surface_config);
+
+        // We don't plan to render much in this example, just clear the surface.
+        let surface_texture =
+            surface.get_current_texture().expect("failed to acquire next swapchain texture");
+        let texture_view =
+            surface_texture.texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let mut encoder = device.create_command_encoder(&Default::default());
+        {
+            let color_attachment = wgpu::RenderPassColorAttachment {
+                view: &texture_view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLUE),
+                    store: wgpu::StoreOp::Store,
+                },
+                depth_slice: None,
+            };
+
+            let _renderpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: None,
+                color_attachments: &[Some(color_attachment)].as_slice(),
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+        }
     }
 }
 
