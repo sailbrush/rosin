@@ -57,7 +57,7 @@
 //! ## Spacing
 //!
 //! The `left`, `right`, `top`, and `bottom` CSS properties define extra space around a node in the parent's flow, similar to margins in standard CSS.
-//! 
+//!
 //! The `space` shorthand property sets all four values.
 //!
 //! - If neither side is set on an axis, the spacing defaults to 0.
@@ -75,7 +75,7 @@
 //!
 //! The `child-left`, `child-right`, `child-top`, and `child-bottom` CSS properties define default spacing applied
 //! at the outer edges of each child, similar to padding in standard CSS.
-//! 
+//!
 //! The `child-space` shorthand property sets all four values.
 //!
 //! Related constraints:
