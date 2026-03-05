@@ -69,6 +69,7 @@ pub(crate) fn draw_text(scene: &mut Scene, style: &Style, origin: Point, layout:
                             .draw_glyphs(font)
                             .font_size(style.font_size)
                             .brush(shadow.color.unwrap_or(style.color))
+                            .hint(true)
                             .draw(
                                 &peniko::Style::Fill(Fill::NonZero),
                                 glyph_run.glyphs().map(|parley_glyph| {
@@ -92,7 +93,7 @@ pub(crate) fn draw_text(scene: &mut Scene, style: &Style, origin: Point, layout:
                 let run_y = glyph_run.baseline();
                 let font = glyph_run.run().font();
 
-                scene.draw_glyphs(font).font_size(style.font_size).brush(style.color).draw(
+                scene.draw_glyphs(font).font_size(style.font_size).brush(style.color).hint(true).draw(
                     &peniko::Style::Fill(Fill::NonZero),
                     glyph_run.glyphs().map(|parley_glyph| {
                         let x = run_x + parley_glyph.x + (origin.x as f32);
