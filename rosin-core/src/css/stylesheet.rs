@@ -747,7 +747,7 @@ fn rule_matches_node<S, H>(
                     }
 
                     is_first = false;
-                    prev_class = true;
+                    prev_class = false;
                     prev_child = false;
 
                     cmp_node = nodes[cmp_node].parent;
