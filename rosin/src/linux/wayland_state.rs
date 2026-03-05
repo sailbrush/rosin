@@ -116,6 +116,9 @@ impl WindowHandler for RosinWaylandWindow {
                 occlusion_query_set: None,
             });
         }
+        
+            queue.submit(Some(encoder.finish()));
+            surface_texture.present();
     }
 }
 

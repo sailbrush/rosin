@@ -81,7 +81,7 @@ impl<S: Sync + 'static> AppLauncher<S> {
             window.commit();
 
             let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-                backends: wgpu::Backends::VULKAN,
+                backends: wgpu::Backends::all(),
                 ..Default::default()
             });
             let adapter = match instance
@@ -167,7 +167,7 @@ impl<S: Sync + 'static> AppLauncher<S> {
                     })
                     .unwrap()
             };
-            let mut simple_window = RosinWaylandWindow {
+            let mut window = RosinWaylandWindow {
                 registry_state: RegistryState::new(&globals),
                 seat_state: SeatState::new(&globals, &qh),
                 output_state: OutputState::new(&globals, &qh),
@@ -183,8 +183,8 @@ impl<S: Sync + 'static> AppLauncher<S> {
             };
 
             loop {
-                event_queue.blocking_dispatch(&mut simple_window).unwrap();
-                if simple_window.exit {
+                event_queue.blocking_dispatch(&mut window).unwrap();
+                if window.exit {
                     println!("exiting example");
                     break;
                 }
