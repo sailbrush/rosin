@@ -577,7 +577,7 @@ fn measure_node<S, H>(ctx: &mut LayoutCtx<'_, S>, tree: &'_ Ui<S, H>, idx: usize
 
     let text_size = if let Some(text) = &tree.nodes[idx].text {
         let font_style = style.get_font_layout_style();
-        let max_width = (!intrinsic).then(|| (max_size.width as f32 - border_width - pad_left - pad_right).max(0.0));
+        let max_width = (!intrinsic && style.text_wrap != TextWrap::Nowrap).then(|| (max_size.width as f32 - border_width - pad_left - pad_right).max(0.0));
 
         let mut from_cache: Option<Size> = None;
         if let Some(cache) = ctx.text_cache.get_mut(&idx) {

@@ -573,6 +573,7 @@ pub(crate) fn style_pass<S, H>(
                     letter_spacing: parent_style.letter_spacing,
                     word_spacing: parent_style.word_spacing,
                     line_height: parent_style.line_height,
+                    text_wrap: parent_style.text_wrap,
                     ..Default::default()
                 }
             } else {

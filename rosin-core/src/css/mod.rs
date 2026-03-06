@@ -232,6 +232,7 @@
 //! | `space` | `<unit>{1,4}` |
 //! | `text-align` | `start \| end \| left \| right \| center \| justify` |
 //! | `text-shadow` | `none \| <text-shadow>#` |
+//! | `text-wrap` | `wrap \| nowrap` |
 //! | `top` | `<unit>` |
 //! | `transform` | `none \| <transform-function>+` |
 //! | `width` | `<positive-unit>` |

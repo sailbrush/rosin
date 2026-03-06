@@ -550,3 +550,29 @@ fn z_index() {
     assert_eq!(styles[0].z_index, 10);
     assert_eq!(styles[1].z_index, Style::default().z_index);
 }
+
+#[test]
+fn text_wrap() {
+    // Nowrap
+    let styles = apply_css_to_tree(".root { text-wrap: nowrap; }", single_node_tree);
+    assert_eq!(styles[0].text_wrap, TextWrap::Nowrap);
+
+    // Wrap
+    let styles = apply_css_to_tree(".root { text-wrap: wrap; }", single_node_tree);
+    assert_eq!(styles[0].text_wrap, TextWrap::Wrap);
+
+    // Initial
+    let styles = apply_css_to_tree(".child { text-wrap: nowrap; } .right { text-wrap: initial; }", two_child_tree);
+    assert_eq!(styles[1].text_wrap, TextWrap::Nowrap);
+    assert_eq!(styles[2].text_wrap, Style::default().text_wrap);
+
+    // Inherit
+    let styles = apply_css_to_tree(".parent { text-wrap: nowrap; } .child { text-wrap: inherit; }", one_child_tree);
+    assert_eq!(styles[0].text_wrap, TextWrap::Nowrap);
+    assert_eq!(styles[1].text_wrap, TextWrap::Nowrap);
+
+    // Default (inherited)
+    let styles = apply_css_to_tree(".parent { text-wrap: nowrap; }", one_child_tree);
+    assert_eq!(styles[0].text_wrap, TextWrap::Nowrap);
+    assert_eq!(styles[1].text_wrap, TextWrap::Nowrap);
+}

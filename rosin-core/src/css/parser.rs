@@ -303,6 +303,7 @@ impl<'i> DeclarationParser<'i> for PropertiesParser {
             "space" => parse_shorthand(parser, parse_space_sh, Property::Space),
             "text-align" => parse_property(parser, parse_text_align, Property::TextAlign),
             "text-shadow" => parse_property(parser, parse_text_shadow, Property::TextShadow),
+            "text-wrap" => parse_property(parser, parse_text_wrap, Property::TextWrap),
             "transform" => parse_property(parser, parse_transform, Property::Transform),
             "z-index" => parse_property(parser, parse_i32, Property::ZIndex),
             _ => Err(parser.new_error_for_next_token()),
@@ -1741,6 +1742,18 @@ pub(crate) fn parse_text_shadow<'i>(parser: &mut Parser<'i, '_>) -> Result<Prope
 
         Ok(text_shadow)
     })
+}
+
+pub(crate) fn parse_text_wrap<'i>(parser: &mut Parser<'i, '_>) -> Result<PropertyValue<TextWrap>, cssparser::ParseError<'i, CustomParseError>> {
+    match parser.next()? {
+        Token::Function(name) if name.eq_ignore_ascii_case("var") => Err(parser.new_custom_error(CustomParseError::VarFunction)),
+        Token::Ident(s) => Ok(PropertyValue::Exact(match_ignore_ascii_case! { s,
+            "wrap" => TextWrap::Wrap,
+            "nowrap" => TextWrap::Nowrap,
+            _ => return Err(parser.new_error_for_next_token()),
+        })),
+        _ => Err(parser.new_error_for_next_token()),
+    }
 }
 
 pub(crate) fn parse_transform<'i>(parser: &mut Parser<'i, '_>) -> Result<PropertyValue<Affine>, ParseError<'i, CustomParseError>> {
