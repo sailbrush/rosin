@@ -27,6 +27,12 @@ impl TypeHash for Stylesheet {
     }
 }
 
+impl TypeHash for LocalizedString {
+    fn get_typehash(_: u64) -> u64 {
+        17327289957262764182
+    }
+}
+
 impl TypeHash for NodeId {
     fn get_typehash(_: u64) -> u64 {
         5684255684596756112
