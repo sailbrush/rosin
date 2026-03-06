@@ -1,3 +1,4 @@
+use wayland_client::protocol::wl_registry::WlRegistry;
 use crate::linux::wayland_state::RosinWaylandWindow;
 use crate::prelude::*;
 use pollster::FutureExt;
@@ -14,22 +15,25 @@ use std::cell::RefCell;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::sync::OnceLock;
-use wayland_client::Connection;
+use wayland_client::{Connection, Dispatch};
 use wayland_client::QueueHandle;
-use wayland_client::globals::registry_queue_init;
+use wayland_client::globals::{registry_queue_init, GlobalListContents};
 use wayland_client::Proxy;
 use raw_window_handle::{RawDisplayHandle, RawWindowHandle, WaylandDisplayHandle, WaylandWindowHandle};
 use wayland_backend::client::ObjectId;
 use crate::linux::util::panic_and_print;
 use rosin_core::vello::{self, AaSupport};
 use std::ptr::NonNull;
+use std::borrow::BorrowMut;
+use rosin_core::prelude::Viewport;
+
 static _APP_STARTED: OnceLock<()> = OnceLock::new();
 
 pub(crate) struct AppLauncher<S: Sync + 'static> {
     windows: Vec<WindowDesc<S>>,
-    _translation_map: Option<TranslationMap>,
+    translation_map: Option<TranslationMap>,
     wgpu_config: WgpuConfig,
-    _state: Option<Rc<RefCell<S>>>,
+    state: Option<Rc<RefCell<S>>>,
 
     #[cfg(all(feature = "hot-reload", debug_assertions))]
     hot_reloader: RefCell<Option<crate::mac::hot::HotReloader>>,
@@ -39,9 +43,9 @@ impl<S: Sync + 'static> AppLauncher<S> {
     pub fn new(window: WindowDesc<S>) -> Self {
         Self {
             windows: vec![window],
-            _translation_map: None,
+            translation_map: None,
             wgpu_config: WgpuConfig::default(),
-            _state: None,
+            state: None,
 
             #[cfg(all(feature = "hot-reload", debug_assertions))]
             hot_reloader: RefCell::new(None),
@@ -60,10 +64,11 @@ impl<S: Sync + 'static> AppLauncher<S> {
     // based on https://github.com/Smithay/client-toolkit/blob/master/examples/wgpu.rs
     // No hot-reload, no serde requirement
     #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
-    pub fn run(self, _state: S, _translation_map: TranslationMap) -> Result<(), LaunchError> {
+    pub fn run(mut self, _state: S, _translation_map: TranslationMap) -> Result<(), LaunchError> {
+        self.state = Some(Rc::new(RefCell::new(_state)));
         let conn = Connection::connect_to_env().unwrap();
         let (globals, mut event_queue) = registry_queue_init(&conn).unwrap();
-        let qh: QueueHandle<RosinWaylandWindow> = event_queue.handle();
+        let qh: QueueHandle<RosinWaylandWindow<S>> = event_queue.handle();
 
         let compositor_state = CompositorState::bind(&globals, &qh).expect("wl_compositor not available");
         let xdg_shell_state = XdgShell::bind(&globals, &qh).expect("xdg shell not available");
@@ -140,6 +145,17 @@ impl<S: Sync + 'static> AppLauncher<S> {
                 queue,
                 compositor,
             });
+
+            let raw_display_handle = RawDisplayHandle::Wayland(WaylandDisplayHandle::new(NonNull::new(conn.backend().display_ptr() as *mut _).unwrap()));
+            let raw_window_handle = RawWindowHandle::Wayland(WaylandWindowHandle::new(NonNull::new(window.wl_surface().id().as_ptr() as *mut _).unwrap()));
+            let wgpu_surface: wgpu::Surface<'static> = unsafe {
+                gpu_ctx.instance
+                    .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
+                        raw_display_handle,
+                        raw_window_handle,
+                    })
+                    .unwrap()
+            };
             let vello_texture = {
                 let view_formats = [];
                 gpu_ctx.device.create_texture(&wgpu::TextureDescriptor {
@@ -157,17 +173,9 @@ impl<S: Sync + 'static> AppLauncher<S> {
                     view_formats: view_formats.as_slice(),
                 })
             };
-            let raw_display_handle = RawDisplayHandle::Wayland(WaylandDisplayHandle::new(NonNull::new(conn.backend().display_ptr() as *mut _).unwrap()));
-            let raw_window_handle = RawWindowHandle::Wayland(WaylandWindowHandle::new(NonNull::new(window.wl_surface().id().as_ptr() as *mut _).unwrap()));
-            let wgpu_surface: wgpu::Surface<'static> = unsafe {
-                gpu_ctx.instance
-                    .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
-                        raw_display_handle,
-                        raw_window_handle,
-                    })
-                    .unwrap()
-            };
-            let mut window = RosinWaylandWindow {
+            let mut viewport: Viewport<S, WindowHandle> = Viewport::new(desc.viewfn.func, desc.size, rosin_core::kurbo::Vec2 { x: 1.0f64, y: 1.0f64 }, _translation_map);
+            let state = self.state.clone().unwrap();
+            let mut window: RosinWaylandWindow<S> = RosinWaylandWindow {
                 registry_state: RegistryState::new(&globals),
                 seat_state: SeatState::new(&globals, &qh),
                 output_state: OutputState::new(&globals, &qh),
@@ -175,14 +183,17 @@ impl<S: Sync + 'static> AppLauncher<S> {
                 exit: false,
                 width: desc.size.width as u32,
                 height: desc.size.height as u32,
-                window,
                 gpu_ctx,
                 vello_renderer,
                 tex_to_render: vello_texture,
-                surface: wgpu_surface
+                surface: wgpu_surface,
+                viewport: viewport,
+                app_state: state,
+                window_handle: crate::linux::handle::WindowHandle::new()
             };
 
             loop {
+                println!("frame");
                 event_queue.blocking_dispatch(&mut window).unwrap();
                 if window.exit {
                     println!("exiting example");

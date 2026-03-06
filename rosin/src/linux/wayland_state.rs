@@ -1,17 +1,25 @@
 use smithay_client_toolkit::{
-    compositor::*, output::*, registry::*, seat::*, shell::xdg::window::{Window, WindowConfigure, WindowHandler}, shm::{Shm, ShmHandler}, *
+    compositor::*, output::*, registry::*, seat::*, shell::xdg::window::{Window, WindowConfigure, WindowHandler}, *
 };
 use wayland_client::{
-    Connection, QueueHandle,
-    protocol::{wl_output, wl_seat, wl_surface},
+    protocol::{wl_output, wl_seat, wl_surface}, Connection,
+    QueueHandle,
 };
 
 use crate::gpu::GpuCtx;
 use rosin_core::{vello::{self}, wgpu};
 use std::cell::RefCell;
+use std::mem::swap;
 use std::rc::Rc;
+use rosin_core::viewport::Viewport;
+use crate::linux::handle::WindowHandle;
+use crate::peniko;
+use crate::prelude::ViewFn;
+use crate::wgpu::{TextureFormat, TextureViewDescriptor};
+use crate::wgpu::util::TextureBlitter;
+
 // based on https://github.com/Smithay/client-toolkit/blob/master/examples/wgpu.rs
-pub(crate) struct RosinWaylandWindow {
+pub(crate) struct RosinWaylandWindow<S: Sync + 'static> {
     pub(crate) registry_state: RegistryState,
     pub(crate) seat_state: SeatState,
     pub(crate) output_state: OutputState,
@@ -19,13 +27,15 @@ pub(crate) struct RosinWaylandWindow {
     pub(crate) exit: bool,
     pub(crate) width: u32,
     pub(crate) height: u32,
-    pub(crate) window: Window,
     pub(crate) gpu_ctx: Rc<GpuCtx>,
     pub(crate) vello_renderer: Rc<RefCell<vello::Renderer>>,
     pub(crate) tex_to_render: wgpu::Texture,
-    pub(crate) surface: wgpu::Surface<'static>
+    pub(crate) surface: wgpu::Surface<'static>,
+    pub(crate) viewport: Viewport<S, crate::handle::WindowHandle>,
+    pub(crate) app_state: Rc<RefCell<S>>,
+    pub(crate) window_handle: WindowHandle
 }
-impl CompositorHandler for RosinWaylandWindow {
+impl<S: Sync + 'static> CompositorHandler for RosinWaylandWindow<S> {
     fn scale_factor_changed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _surface: &wl_surface::WlSurface, _new_factor: i32) {
         // Not needed for this example.
     }
@@ -35,8 +45,6 @@ impl CompositorHandler for RosinWaylandWindow {
     }
 
     fn frame(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _surface: &wl_surface::WlSurface, _time: u32) {
-        // drawing goes here
-        println!("frame");
     }
 
     fn surface_enter(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _surface: &wl_surface::WlSurface, _output: &wl_output::WlOutput) {
@@ -48,7 +56,7 @@ impl CompositorHandler for RosinWaylandWindow {
     }
 }
 
-impl OutputHandler for RosinWaylandWindow {
+impl<S: Sync + 'static> OutputHandler for RosinWaylandWindow<S> {
     fn output_state(&mut self) -> &mut OutputState {
         &mut self.output_state
     }
@@ -60,11 +68,11 @@ impl OutputHandler for RosinWaylandWindow {
     fn output_destroyed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: wl_output::WlOutput) {}
 }
 
-impl WindowHandler for RosinWaylandWindow {
+impl<S: Sync + 'static> WindowHandler for RosinWaylandWindow<S> {
     fn request_close(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &Window) {
         self.exit = true;
     }
-
+// this gets called whenever something with the window changes, ex resize, minimize, maximize, etc.
     fn configure(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _window: &Window, configure: WindowConfigure, _serial: u32) {
         let (new_width, new_height) = configure.new_size;
         self.width = new_width.map_or(self.width, |v| v.get());
@@ -93,8 +101,12 @@ impl WindowHandler for RosinWaylandWindow {
         // We don't plan to render much in this example, just clear the surface.
         let surface_texture =
             surface.get_current_texture().expect("failed to acquire next swapchain texture");
-        let texture_view =
-            surface_texture.texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let texture_view = self.tex_to_render.create_view(&TextureViewDescriptor::default());
+
+        let mut swap_tex_desc = TextureViewDescriptor::default();
+        swap_tex_desc.format = Some(cap.formats[0]);
+        let swapchain_view = surface_texture.texture.create_view(&swap_tex_desc);
 
         let mut encoder = device.create_command_encoder(&Default::default());
         {
@@ -116,13 +128,31 @@ impl WindowHandler for RosinWaylandWindow {
                 occlusion_query_set: None,
             });
         }
-        
+            let mut state = self.app_state.borrow_mut();
+
+
+        self.viewport.dispatch_event_queue(&mut state, &self.window_handle);
+
+            let scene = self.viewport.frame(&state);
+
+            let params = vello::RenderParams {
+                base_color: peniko::Color::TRANSPARENT,
+                width: self.width as u32,
+                height: self.height as u32,
+                antialiasing_method: vello::AaConfig::Msaa16,
+                };
+            self.vello_renderer.borrow_mut().render_to_texture(device, queue, scene, &texture_view, &params).expect("TODO: panic message");
+
+            let blitter = TextureBlitter::new(&self.gpu_ctx.device, cap.formats[0]);
+
+            blitter.copy(&self.gpu_ctx.device, &mut encoder, &texture_view, &swapchain_view);
+
             queue.submit(Some(encoder.finish()));
             surface_texture.present();
     }
 }
 
-impl SeatHandler for RosinWaylandWindow {
+impl<S: Sync + 'static> SeatHandler for RosinWaylandWindow<S> {
     fn seat_state(&mut self) -> &mut SeatState {
         &mut self.seat_state
     }
@@ -138,17 +168,17 @@ impl SeatHandler for RosinWaylandWindow {
 
 
 
-delegate_compositor!(RosinWaylandWindow);
-delegate_output!(RosinWaylandWindow);
+delegate_compositor!(@<S: Sync + 'static> RosinWaylandWindow<S>);
+delegate_output!(@<S: Sync + 'static> RosinWaylandWindow<S>);
 
-delegate_seat!(RosinWaylandWindow);
+delegate_seat!(@<S: Sync + 'static> RosinWaylandWindow<S>);
 
-delegate_xdg_shell!(RosinWaylandWindow);
-delegate_xdg_window!(RosinWaylandWindow);
+delegate_xdg_shell!(@<S: Sync + 'static> RosinWaylandWindow<S>);
+delegate_xdg_window!(@<S: Sync + 'static> RosinWaylandWindow<S>);
 
-delegate_registry!(RosinWaylandWindow);
+delegate_registry!(@<S: Sync + 'static> RosinWaylandWindow<S>);
 
-impl ProvidesRegistryState for RosinWaylandWindow {
+impl<S: Sync + 'static> ProvidesRegistryState for RosinWaylandWindow<S> {
     fn registry(&mut self) -> &mut RegistryState {
         &mut self.registry_state
     }

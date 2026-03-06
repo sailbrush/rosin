@@ -7,7 +7,8 @@ use crate::{
     prelude::*,
 };
 
-pub(crate) struct WindowHandle {}
+pub(crate) struct WindowHandle {
+}
 
 impl Clone for WindowHandle {
     fn clone(&self) -> Self {
@@ -28,6 +29,9 @@ impl HasDisplayHandle for WindowHandle {
 }
 
 impl WindowHandle {
+    pub fn new() -> Self {
+        Self {}
+    }
     pub fn set_input_handler(&self, _id: Option<NodeId>, _handler: Option<Box<dyn InputHandler + Send + Sync>>) {}
 
     pub fn get_logical_size(&self) -> Size {
