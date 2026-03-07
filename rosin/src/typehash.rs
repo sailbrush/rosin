@@ -546,7 +546,7 @@ impl<K: TypeHash, V: TypeHash> TypeHash for HashMap<K, V> {
             return 1;
         }
         K::get_typehash(depth - 1)
-            .wrapping_add(V::get_typehash(depth - 1) << 1)
+            .wrapping_add(V::get_typehash(depth - 1).wrapping_mul(3))
             .wrapping_add(1531269491)
             ^ 4180758651472523334
     }
@@ -558,8 +558,64 @@ impl<K: TypeHash, V: TypeHash> TypeHash for BTreeMap<K, V> {
             return 1;
         }
         K::get_typehash(depth - 1)
-            .wrapping_add(V::get_typehash(depth - 1) << 1)
+            .wrapping_add(V::get_typehash(depth - 1).wrapping_mul(3))
             .wrapping_add(90571190583)
             ^ 13082464548550978160
+    }
+}
+
+impl TypeHash for () {
+    fn get_typehash(_: u64) -> u64 {
+        16758006045190673909
+    }
+}
+
+impl<A: TypeHash> TypeHash for (A,) {
+    fn get_typehash(depth: u64) -> u64 {
+        if depth == 0 {
+            return 1;
+        }
+        A::get_typehash(depth - 1)
+            .wrapping_add(82183243201)
+            ^ 6769770974631404992
+    }
+}
+
+impl<A: TypeHash, B: TypeHash> TypeHash for (A, B) {
+    fn get_typehash(depth: u64) -> u64 {
+        if depth == 0 {
+            return 1;
+        }
+        A::get_typehash(depth - 1)
+            .wrapping_add(B::get_typehash(depth - 1).wrapping_mul(3))
+            .wrapping_add(89817698151)
+            ^ 14993135177434200140
+    }
+}
+
+impl<A: TypeHash, B: TypeHash, C: TypeHash> TypeHash for (A, B, C) {
+    fn get_typehash(depth: u64) -> u64 {
+        if depth == 0 {
+            return 1;
+        }
+        A::get_typehash(depth - 1)
+            .wrapping_add(B::get_typehash(depth - 1).wrapping_mul(3))
+            .wrapping_add(C::get_typehash(depth - 1).wrapping_mul(5))
+            .wrapping_add(30066924505)
+            ^ 15958054849146516796
+    }
+}
+
+impl<A: TypeHash, B: TypeHash, C: TypeHash, D: TypeHash> TypeHash for (A, B, C, D) {
+    fn get_typehash(depth: u64) -> u64 {
+        if depth == 0 {
+            return 1;
+        }
+        A::get_typehash(depth - 1)
+            .wrapping_add(B::get_typehash(depth - 1).wrapping_mul(3))
+            .wrapping_add(C::get_typehash(depth - 1).wrapping_mul(5))
+            .wrapping_add(D::get_typehash(depth - 1).wrapping_mul(7))
+            .wrapping_add(47796905919)
+            ^ 13214396272658929112
     }
 }
