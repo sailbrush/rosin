@@ -207,7 +207,7 @@ impl WindowHandle {
 
     /// Opens a default native modal dialog.
     pub fn alert(&self, title: &str, details: &str) {
-        self.0.alert::<CommandId>(None, None, title, details, &[])
+        self.0.alert::<CommandId>(None, None, title, details, &[].as_slice())
     }
 
     /// Opens a native modal dialog with an optional image and custom buttons.

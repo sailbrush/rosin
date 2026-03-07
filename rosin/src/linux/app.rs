@@ -75,6 +75,8 @@ impl<S: Sync + 'static> AppLauncher<S> {
         //implement multi-window later?
         //for desc in self.windows
         {
+            
+
             let desc = &self.windows[0];
             let surface = compositor_state.create_surface(&qh);
             let window = xdg_shell_state.create_window(surface, WindowDecorations::RequestServer, &qh);
@@ -173,8 +175,13 @@ impl<S: Sync + 'static> AppLauncher<S> {
                     view_formats: view_formats.as_slice(),
                 })
             };
-            let mut viewport: Viewport<S, WindowHandle> = Viewport::new(desc.viewfn.func, desc.size, rosin_core::kurbo::Vec2 { x: 1.0f64, y: 1.0f64 }, _translation_map);
+            let viewport: Viewport<S, WindowHandle> = Viewport::new(desc.viewfn.func, desc.size, rosin_core::kurbo::Vec2 { x: 1.0f64, y: 1.0f64 }, _translation_map);
             let state = self.state.clone().unwrap();
+
+            let wh = WindowHandle {
+                0: crate::linux::handle::WindowHandle { window_handle: window}
+            };
+
             let mut window: RosinWaylandWindow<S> = RosinWaylandWindow {
                 registry_state: RegistryState::new(&globals),
                 seat_state: SeatState::new(&globals, &qh),
@@ -189,7 +196,7 @@ impl<S: Sync + 'static> AppLauncher<S> {
                 surface: wgpu_surface,
                 viewport: viewport,
                 app_state: state,
-                window_handle: crate::linux::handle::WindowHandle::new()
+                window_handle: wh
             };
 
             loop {

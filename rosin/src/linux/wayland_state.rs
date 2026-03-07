@@ -33,7 +33,7 @@ pub(crate) struct RosinWaylandWindow<S: Sync + 'static> {
     pub(crate) surface: wgpu::Surface<'static>,
     pub(crate) viewport: Viewport<S, crate::handle::WindowHandle>,
     pub(crate) app_state: Rc<RefCell<S>>,
-    pub(crate) window_handle: WindowHandle
+    pub(crate) window_handle: crate::handle::WindowHandle
 }
 impl<S: Sync + 'static> CompositorHandler for RosinWaylandWindow<S> {
     fn scale_factor_changed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _surface: &wl_surface::WlSurface, _new_factor: i32) {
@@ -95,7 +95,6 @@ impl<S: Sync + 'static> WindowHandler for RosinWaylandWindow<S> {
             // Wayland is inherently a mailbox system.
             present_mode: wgpu::PresentMode::Mailbox,
         };
-
         surface.configure(&self.gpu_ctx.device, &surface_config);
 
         // We don't plan to render much in this example, just clear the surface.
@@ -131,16 +130,17 @@ impl<S: Sync + 'static> WindowHandler for RosinWaylandWindow<S> {
             let mut state = self.app_state.borrow_mut();
 
 
-        self.viewport.dispatch_event_queue(&mut state, &self.window_handle);
-
-            let scene = self.viewport.frame(&state);
 
             let params = vello::RenderParams {
-                base_color: peniko::Color::TRANSPARENT,
+                base_color: peniko::Color::BLACK,
                 width: self.width as u32,
                 height: self.height as u32,
                 antialiasing_method: vello::AaConfig::Msaa16,
                 };
+
+            self.viewport.dispatch_event_queue(&mut state, &self.window_handle);
+
+            let scene = self.viewport.frame(&state);
             self.vello_renderer.borrow_mut().render_to_texture(device, queue, scene, &texture_view, &params).expect("TODO: panic message");
 
             let blitter = TextureBlitter::new(&self.gpu_ctx.device, cap.formats[0]);

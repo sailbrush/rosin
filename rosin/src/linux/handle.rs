@@ -3,16 +3,18 @@ use std::{any::Any, time::Duration};
 use raw_window_handle::{DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle as RWHWindowHandle};
 
 use crate::{
-    kurbo::{Point, Size},
-    prelude::*,
+    kurbo::{Point, Size}, prelude::*
 };
 
 pub(crate) struct WindowHandle {
+    pub(crate) window_handle: smithay_client_toolkit::shell::xdg::window::Window
 }
 
 impl Clone for WindowHandle {
     fn clone(&self) -> Self {
-        Self {}
+        Self  {
+            window_handle: self.window_handle.clone()
+        }
     }
 }
 
@@ -29,9 +31,6 @@ impl HasDisplayHandle for WindowHandle {
 }
 
 impl WindowHandle {
-    pub fn new() -> Self {
-        Self {}
-    }
     pub fn set_input_handler(&self, _id: Option<NodeId>, _handler: Option<Box<dyn InputHandler + Send + Sync>>) {}
 
     pub fn get_logical_size(&self) -> Size {
@@ -68,9 +67,19 @@ impl WindowHandle {
 
     pub fn request_exit(&self) {}
 
-    pub fn set_max_size(&self, _size: Option<impl Into<Size>>) {}
+    pub fn set_max_size(&self, _size: Option<impl Into<Size>>) {
+        let size = _size.unwrap().into();
+        let w = size.width as u32;
+        let h = size.height as u32;
+        self.window_handle.set_max_size(Some((w, h)));
+    }
 
-    pub fn set_min_size(&self, _size: Option<impl Into<Size>>) {}
+    pub fn set_min_size(&self, _size: Option<impl Into<Size>>) {
+        let size = _size.unwrap().into();
+        let w = size.width as u32;
+        let h = size.height as u32;
+        self.window_handle.set_min_size(Some((w, h)));
+    }
 
     pub fn set_position(&self, _position: impl Into<Point>) {}
 
@@ -80,9 +89,13 @@ impl WindowHandle {
 
     pub fn set_title(&self, _title: impl Into<String>) {}
 
-    pub fn minimize(&self) {}
+    pub fn minimize(&self) {
+        self.window_handle.set_minimized();
+    }
 
-    pub fn maximize(&self) {}
+    pub fn maximize(&self) {
+        self.window_handle.set_maximized();
+    }
 
     pub fn restore(&self) {}
 
