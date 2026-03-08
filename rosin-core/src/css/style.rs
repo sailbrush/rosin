@@ -9,6 +9,8 @@ use vello::peniko::{
 
 use crate::css::properties::ColorProperty;
 
+// ---------- TextAlign ----------
+
 /// A `text-align` CSS value.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum TextAlign {
@@ -43,6 +45,24 @@ impl From<TextAlign> for Alignment {
             TextAlign::Right => Alignment::Right,
             TextAlign::Center => Alignment::Center,
             TextAlign::Justify => Alignment::Justify,
+        }
+    }
+}
+
+// ---------- TextWrap ----------
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum TextWrap {
+    #[default]
+    Wrap,
+    Nowrap,
+}
+
+impl Display for TextWrap {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TextWrap::Wrap => f.write_str("wrap"),
+            TextWrap::Nowrap => f.write_str("nowrap"),
         }
     }
 }
@@ -645,10 +665,11 @@ pub struct FontLayoutStyle {
     pub font_style: parley::style::FontStyle,
     pub font_weight: f32,
     pub font_width: f32,
-    pub line_height: Unit,
     pub letter_spacing: Option<Unit>,
-    pub word_spacing: Option<Unit>,
+    pub line_height: Unit,
     pub text_align: TextAlign,
+    pub text_wrap: TextWrap,
+    pub word_spacing: Option<Unit>,
 }
 
 // ---------- Layout Style ----------
@@ -711,6 +732,7 @@ pub(crate) struct LayoutStyle {
     pub position: Position,
     pub right: Unit,
     pub text_align: TextAlign,
+    pub text_wrap: TextWrap,
     pub top: Unit,
     pub width: Unit,
     pub word_spacing: Option<Unit>,
@@ -790,6 +812,7 @@ pub struct Style {
     pub selection_color: Option<peniko::Color>,
     pub text_align: TextAlign,
     pub text_shadow: Option<Arc<[TextShadow]>>,
+    pub text_wrap: TextWrap,
     pub top: Unit,
     pub transform: Affine,
     pub visibility: bool,
@@ -900,6 +923,7 @@ impl std::fmt::Debug for Style {
         diff!(right);
         diff!(text_align);
         diff!(text_shadow);
+        diff!(text_wrap);
         diff!(top);
         diff!(transform);
         diff!(visibility);
@@ -979,6 +1003,7 @@ impl Default for Style {
             selection_color: None,
             text_align: TextAlign::Start,
             text_shadow: None,
+            text_wrap: TextWrap::Wrap,
             top: Unit::Auto,
             transform: Affine::IDENTITY,
             visibility: true,
@@ -1000,6 +1025,7 @@ impl Style {
             letter_spacing: self.letter_spacing,
             line_height: self.line_height,
             text_align: self.text_align,
+            text_wrap: self.text_wrap,
             word_spacing: self.word_spacing,
         }
     }
@@ -1056,6 +1082,7 @@ impl Style {
             position: self.position,
             right: self.right,
             text_align: self.text_align,
+            text_wrap: self.text_wrap,
             top: self.top,
             width: self.width,
             word_spacing: self.word_spacing,

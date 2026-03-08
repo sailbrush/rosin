@@ -403,6 +403,7 @@ pub(crate) fn draw<S, H>(
                     // ---------- Draw Text ----------
                     if let Some(text) = &node.text {
                         let max_width = layout::max_content_width(style, rect);
+                        let wrap_width = if style.text_wrap == TextWrap::Nowrap { None } else { Some(max_width) };
                         let font_style = style.get_font_layout_style();
 
                         if let Some(cache) = tree.text_cache.get_mut(&idx) {
@@ -412,7 +413,7 @@ pub(crate) fn draw<S, H>(
                             if (cache.deps.any_changed_update() || cache.font_style != font_style)
                                 && let Some(resolved) = text.resolve(&translation_map)
                             {
-                                cache.layout = text::layout_text(&font_style, Some(max_width), &resolved);
+                                cache.layout = text::layout_text(&font_style, wrap_width, &resolved);
                                 cache.font_style = font_style;
                                 cache.max_width = Some(max_width);
 
@@ -421,7 +422,7 @@ pub(crate) fn draw<S, H>(
                                 (Some(a), b) => (a - b).abs() > 1.0,
                                 _ => true,
                             } {
-                                cache.layout.break_all_lines(Some(max_width));
+                                cache.layout.break_all_lines(wrap_width);
                                 cache.max_width = Some(max_width);
                             }
 
@@ -434,7 +435,7 @@ pub(crate) fn draw<S, H>(
                             let mut layout = None;
                             let deps = DependencyMap::default().read_scope(|| {
                                 if let Some(resolved) = text.resolve(&translation_map) {
-                                    layout = Some(text::layout_text(&font_style, Some(max_width), &resolved));
+                                    layout = Some(text::layout_text(&font_style, wrap_width, &resolved));
                                 }
                             });
 

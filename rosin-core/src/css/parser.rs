@@ -254,6 +254,7 @@ impl<'i> DeclarationParser<'i> for PropertiesParser {
             "child-bottom" => parse_property(parser, parse_positive_unit, Property::ChildBottom),
             "child-left" => parse_property(parser, parse_positive_unit, Property::ChildLeft),
             "child-right" => parse_property(parser, parse_positive_unit, Property::ChildRight),
+            "child-space" => parse_shorthand(parser, parse_child_space_sh, Property::ChildSpace),
             "child-top" => parse_property(parser, parse_positive_unit, Property::ChildTop),
             "color" => parse_property(parser, parse_color, Property::Color),
             "display" => parse_property(parser, parse_display, Property::Display),
@@ -302,6 +303,7 @@ impl<'i> DeclarationParser<'i> for PropertiesParser {
             "space" => parse_shorthand(parser, parse_space_sh, Property::Space),
             "text-align" => parse_property(parser, parse_text_align, Property::TextAlign),
             "text-shadow" => parse_property(parser, parse_text_shadow, Property::TextShadow),
+            "text-wrap" => parse_property(parser, parse_text_wrap, Property::TextWrap),
             "transform" => parse_property(parser, parse_transform, Property::Transform),
             "z-index" => parse_property(parser, parse_i32, Property::ZIndex),
             _ => Err(parser.new_error_for_next_token()),
@@ -412,6 +414,7 @@ const BORDER_RADII: &[fn(PropertyValue<Length>) -> Property] = &[
 ];
 
 const SPACE_PROPS: &[fn(PropertyValue<Unit>) -> Property] = &[Property::Top, Property::Right, Property::Bottom, Property::Left];
+const CHILD_SPACE_PROPS: &[fn(PropertyValue<Unit>) -> Property] = &[Property::ChildTop, Property::ChildRight, Property::ChildBottom, Property::ChildLeft];
 
 fn push_property_array<T: Clone>(props: &[fn(PropertyValue<T>) -> Property], v: PropertyValue<T>, out: &mut Props) {
     for prop in props {
@@ -1683,6 +1686,28 @@ pub(crate) fn parse_space_sh<'i>(parser: &mut Parser<'i, '_>) -> Result<Props, c
     Ok(result)
 }
 
+pub(crate) fn parse_child_space_sh<'i>(parser: &mut Parser<'i, '_>) -> Result<Props, cssparser::ParseError<'i, CustomParseError>> {
+    let mut result = Props::with_capacity(4);
+
+    if is_keyword_exhausted(parser, "initial") {
+        push_property_array(CHILD_SPACE_PROPS, PropertyValue::Initial, &mut result);
+        return Ok(result);
+    }
+
+    if is_keyword_exhausted(parser, "inherit") {
+        push_property_array(CHILD_SPACE_PROPS, PropertyValue::Inherit, &mut result);
+        return Ok(result);
+    }
+
+    let [top, right, bottom, left] = quad_values(parser, parse_unit)?;
+    result.push(Property::ChildTop(top));
+    result.push(Property::ChildRight(right));
+    result.push(Property::ChildBottom(bottom));
+    result.push(Property::ChildLeft(left));
+
+    Ok(result)
+}
+
 pub(crate) fn parse_text_align<'i>(parser: &mut Parser<'i, '_>) -> Result<PropertyValue<TextAlign>, cssparser::ParseError<'i, CustomParseError>> {
     match parser.next()? {
         Token::Function(name) if name.eq_ignore_ascii_case("var") => Err(parser.new_custom_error(CustomParseError::VarFunction)),
@@ -1717,6 +1742,18 @@ pub(crate) fn parse_text_shadow<'i>(parser: &mut Parser<'i, '_>) -> Result<Prope
 
         Ok(text_shadow)
     })
+}
+
+pub(crate) fn parse_text_wrap<'i>(parser: &mut Parser<'i, '_>) -> Result<PropertyValue<TextWrap>, cssparser::ParseError<'i, CustomParseError>> {
+    match parser.next()? {
+        Token::Function(name) if name.eq_ignore_ascii_case("var") => Err(parser.new_custom_error(CustomParseError::VarFunction)),
+        Token::Ident(s) => Ok(PropertyValue::Exact(match_ignore_ascii_case! { s,
+            "wrap" => TextWrap::Wrap,
+            "nowrap" => TextWrap::Nowrap,
+            _ => return Err(parser.new_error_for_next_token()),
+        })),
+        _ => Err(parser.new_error_for_next_token()),
+    }
 }
 
 pub(crate) fn parse_transform<'i>(parser: &mut Parser<'i, '_>) -> Result<PropertyValue<Affine>, ParseError<'i, CustomParseError>> {
