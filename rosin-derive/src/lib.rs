@@ -77,7 +77,7 @@ pub fn type_hash_derive(input: TokenStream) -> TokenStream {
                     per_field.push(quote! {
                         h.write_tag_str(b"field", #fname);
                         h.write_usize(core::mem::offset_of!(Self, #ident));
-                        h.write_u64(<#fty as ::rosin::typehash::TypeHash>::get_typehash(depth - 1));
+                        h.write_u64(<#fty as TypeHash>::get_typehash(depth - 1));
                     });
                 }
 
@@ -96,7 +96,7 @@ pub fn type_hash_derive(input: TokenStream) -> TokenStream {
                     per_field.push(quote! {
                         h.write_tag(b"field");
                         h.write_u64(#idx);
-                        h.write_u64(<#fty as ::rosin::typehash::TypeHash>::get_typehash(depth - 1));
+                        h.write_u64(<#fty as TypeHash>::get_typehash(depth - 1));
                     });
                 }
 
@@ -128,7 +128,7 @@ pub fn type_hash_derive(input: TokenStream) -> TokenStream {
                             let fty = &f.ty;
                             pf.push(quote! {
                                 h.write_tag_str(b"field", #fname);
-                                h.write_u64(<#fty as ::rosin::typehash::TypeHash>::get_typehash(depth - 1));
+                                h.write_u64(<#fty as TypeHash>::get_typehash(depth - 1));
                             });
                         }
                         quote! {
@@ -146,7 +146,7 @@ pub fn type_hash_derive(input: TokenStream) -> TokenStream {
                             pf.push(quote! {
                                 h.write_tag(b"field");
                                 h.write_u64(#idx);
-                                h.write_u64(<#fty as ::rosin::typehash::TypeHash>::get_typehash(depth - 1));
+                                h.write_u64(<#fty as TypeHash>::get_typehash(depth - 1));
                             });
                         }
                         quote! {
@@ -178,7 +178,7 @@ pub fn type_hash_derive(input: TokenStream) -> TokenStream {
     };
 
     let expanded = quote! {
-        impl #impl_generics ::rosin::typehash::TypeHash for #name #ty_generics #where_clause {
+        impl #impl_generics TypeHash for #name #ty_generics #where_clause {
             fn get_typehash(depth: u64) -> u64 {
                 use core::mem::{size_of, align_of};
 
