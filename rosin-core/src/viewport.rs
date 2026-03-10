@@ -841,7 +841,9 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
             return None;
         }
 
-        let start_active_nodes = self.active_nodes.clone();
+        self.temp.reset();
+
+        let start_active_nodes: BumpVec<NodeId> = BumpVec::from_iter_in(self.active_nodes.iter().copied(), &self.temp);
         let start_focused_node = self.focused_node;
 
         let mut dispatch_info = DispatchInfo::default();
@@ -1091,17 +1093,13 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
         self.active_nodes.sort();
         self.active_nodes.dedup();
 
-        // Nodes that lost :active
-        for &nid in &start_active_nodes {
-            if !self.active_nodes.contains(&nid) {
-                dirtied |= self.curr_tree.add_dirty_root_by_nid(Some(nid), css::ACTIVE_DIRTY);
-            }
-        }
-        // Nodes that gained :active
-        for &nid in &self.active_nodes {
-            if !start_active_nodes.contains(&nid) {
-                dirtied |= self.curr_tree.add_dirty_root_by_nid(Some(nid), css::ACTIVE_DIRTY);
-            }
+        let mut gained_active: BumpVec<NodeId> = BumpVec::with_capacity_in(self.active_nodes.len(), &self.temp);
+        let mut lost_active: BumpVec<NodeId> = BumpVec::with_capacity_in(start_active_nodes.len(), &self.temp);
+
+        sorted_iter_diff(self.active_nodes.iter(), start_active_nodes.iter(), &mut gained_active, &mut lost_active);
+
+        for &nid in gained_active.iter().chain(lost_active.iter()) {
+            dirtied |= self.curr_tree.add_dirty_root_by_nid(Some(nid), css::ACTIVE_DIRTY);
         }
 
         if self.focused_node != start_focused_node {
