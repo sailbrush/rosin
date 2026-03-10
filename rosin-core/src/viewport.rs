@@ -694,9 +694,6 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
         self.curr_hot_indexes.clear(); // nothing is hot because we're leaving the window
 
         self.queue_pointer_leave_enter_events(EventInfo::None);
-
-        // Clear last pointer event because it's used for delta calculations
-        self.last_pointer_event = None;
     }
 
     pub fn queue_pointer_wheel_event(&mut self, event: &PointerEvent) {
