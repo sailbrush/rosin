@@ -575,9 +575,7 @@ impl<A: TypeHash> TypeHash for (A,) {
         if depth == 0 {
             return 1;
         }
-        A::get_typehash(depth - 1)
-            .wrapping_add(82183243201)
-            ^ 6769770974631404992
+        A::get_typehash(depth - 1).wrapping_add(82183243201) ^ 6769770974631404992
     }
 }
 
@@ -617,5 +615,11 @@ impl<A: TypeHash, B: TypeHash, C: TypeHash, D: TypeHash> TypeHash for (A, B, C, 
             .wrapping_add(D::get_typehash(depth - 1).wrapping_mul(7))
             .wrapping_add(47796905919)
             ^ 13214396272658929112
+    }
+}
+
+impl TypeHash for rosin_core::kurbo::Vec2 {
+    fn get_typehash(_: u64) -> u64 {
+        12530978722039632348
     }
 }
