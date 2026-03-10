@@ -10,6 +10,7 @@ static NEXT_NODE_ID: AtomicU64 = AtomicU64::new(1);
 /// A unique identifier for a node.
 ///
 /// In view callbacks, create NodeIds with the [`crate::id`] macro.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub struct NodeId(pub(crate) NonZeroU64);
 
