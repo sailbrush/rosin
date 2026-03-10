@@ -335,7 +335,7 @@ impl PerfInfo {
 /// It also provides a handle to the platform, allowing the callback
 /// to trigger system-level actions like opening URLs or changing the cursor.
 pub struct EventCtx<'a, H> {
-    pub(crate) active_node: Option<NodeId>,
+    pub(crate) active_nodes: &'a mut Vec<NodeId>,
     pub(crate) captured_node: Option<NodeId>,
     pub(crate) emit_change: bool,
     pub(crate) event_type: On,
@@ -364,18 +364,54 @@ impl<'a, H> EventCtx<'a, H> {
         self.handle
     }
 
-    /// Sets the currently active node. This makes `:active` CSS selectors apply to the node. Purely cosmetic.
+    /// Marks the node active. This makes `:active` CSS selectors apply to this node. Purely cosmetic.
     ///
-    /// You can pass `None` to deactivate.
+    /// - In debug builds, this will log an error if there is no id for the node.
     #[inline]
-    pub fn set_active(&mut self, id: Option<NodeId>) {
-        self.active_node = id;
+    #[track_caller]
+    pub fn set_active(&mut self) {
+        if let Some(id) = self.id {
+            self.active_nodes.push(id);
+        } else if cfg!(debug_assertions) {
+            log::error!("set_active() must be called on a node with an id: {}", Location::caller());
+        }
+    }
+
+    /// Marks a node active by id. This makes `:active` CSS selectors apply to that node. Purely cosmetic.
+    #[inline]
+    pub fn set_active_node(&mut self, id: NodeId) {
+        self.active_nodes.push(id);
+    }
+
+    /// Marks the node inactive. This makes `:active` CSS selectors no longer apply to this node. Purely cosmetic.
+    ///
+    /// - In debug builds, this will log an error if there is no id for the node.
+    #[inline]
+    #[track_caller]
+    pub fn unset_active(&mut self) {
+        if let Some(id) = self.id {
+            self.active_nodes.retain(|n| *n != id);
+        } else if cfg!(debug_assertions) {
+            log::error!("unset_active() must be called on a node with an id: {}", Location::caller());
+        }
+    }
+
+    /// Marks a node inactive by id. This makes `:active` CSS selectors no longer apply to that node. Purely cosmetic.
+    #[inline]
+    pub fn unset_active_node(&mut self, id: NodeId) {
+        self.active_nodes.retain(|n| *n != id);
+    }
+
+    /// Marks all nodes inactive. This makes `:active` CSS selectors no longer apply to any node. Purely cosmetic.
+    #[inline]
+    pub fn clear_active(&mut self) {
+        self.active_nodes.clear();
     }
 
     /// Returns `true` if the current node is active.
     #[inline]
     pub fn is_active(&self) -> bool {
-        self.id.is_some() && self.id == self.active_node
+        if let Some(id) = &self.id { self.active_nodes.contains(id) } else { false }
     }
 
     /// Returns `true` if the current node is enabled.
@@ -500,6 +536,7 @@ impl<'a, H> EventCtx<'a, H> {
 
     /// Stop a pointer event from bubbling up to ancestor nodes.
     /// [`On::PointerEnter`] and [`On::PointerLeave`] events do not bubble.
+    ///
     /// - In debug builds, this will log an error if called from a non-pointer event.
     #[inline]
     #[track_caller]

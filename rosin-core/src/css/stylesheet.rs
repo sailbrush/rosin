@@ -384,7 +384,7 @@ pub(crate) fn style_pre_pass<S, H>(temp: &Bump, tree: &mut Ui<S, H>, ancestor_cl
 
                 if !rule.has_pseudos {
                     // Static rule, build var delta
-                    if rule_matches_node(rule, &tree.nodes, idx, None, None, &[], ancestor_classes, None) {
+                    if rule_matches_node(rule, &tree.nodes, idx, None, &[], &[], ancestor_classes, None) {
                         for (name, value) in &rule.variables {
                             // later overwrites earlier
                             var_delta.insert(Arc::clone(name), Arc::clone(value));
@@ -394,7 +394,7 @@ pub(crate) fn style_pre_pass<S, H>(temp: &Bump, tree: &mut Ui<S, H>, ancestor_cl
                     // Dynamic rule, compute invalidation flags
                     let start = pseudos.len();
 
-                    let matched = rule_matches_node(rule, &tree.nodes, idx, None, None, &[], ancestor_classes, Some(&mut pseudos));
+                    let matched = rule_matches_node(rule, &tree.nodes, idx, None, &[], &[], ancestor_classes, Some(&mut pseudos));
                     if !matched {
                         pseudos.truncate(start);
                         continue;
@@ -430,7 +430,7 @@ pub(crate) fn style_pass<S, H>(
     tree: &mut Ui<S, H>,
     state: &S,
     focused_node: Option<NodeId>,
-    active_node: Option<NodeId>,
+    active_nodes: &[NodeId],
     hot_nodes: &[usize],
     ancestor_classes: &mut Filter,
 ) -> bool {
@@ -512,7 +512,7 @@ pub(crate) fn style_pass<S, H>(
                         continue;
                     }
 
-                    if rule_matches_node(rule, nodes, node_idx, focused_node, active_node, hot_nodes, ancestor_classes, None) {
+                    if rule_matches_node(rule, nodes, node_idx, focused_node, active_nodes, hot_nodes, ancestor_classes, None) {
                         var_ctx.push_vars(node_idx, &rule.variables);
                     }
                 }
@@ -604,7 +604,7 @@ pub(crate) fn style_pass<S, H>(
                 for &rule_idx in candidate_rules.iter() {
                     let rule = &inner.rules[rule_idx];
 
-                    if rule_matches_node(rule, nodes, idx, focused_node, active_node, hot_nodes, ancestor_classes, None) {
+                    if rule_matches_node(rule, nodes, idx, focused_node, active_nodes, hot_nodes, ancestor_classes, None) {
                         matched_rules.push((sheet_stack_idx, rule_idx));
 
                         if rule.has_pseudos && !rule.variables.is_empty() {
@@ -720,7 +720,7 @@ fn rule_matches_node<S, H>(
     nodes: &[Node<S, H>],
     idx: usize,
     focused_node: Option<NodeId>,
-    active_node: Option<NodeId>,
+    active_nodes: &[NodeId],
     hot_nodes: &[usize],
     ancestor_classes: &Filter,
     mut pseudo_out: Option<&mut Vec<(PseudoKind, usize)>>,
@@ -811,8 +811,8 @@ fn rule_matches_node<S, H>(
                         prev_child = false;
                         prev_class = false;
                         continue 'selector;
-                    } else if let (Some(cmp_nid), Some(active_nid)) = (nodes[cmp_node].nid, active_node)
-                        && cmp_nid == active_nid
+                    } else if let Some(cmp_nid) = nodes[cmp_node].nid
+                        && active_nodes.contains(&cmp_nid)
                     {
                         prev_child = false;
                         prev_class = false;

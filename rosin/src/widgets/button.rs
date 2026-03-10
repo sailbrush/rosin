@@ -40,22 +40,22 @@ pub fn button<S, H>(ui: &mut Ui<S, H>, id: NodeId, text: impl Into<UIString>, ca
         .event(On::PointerDown, |_, ctx| {
             ctx.set_focus(None);
             ctx.begin_pointer_capture();
-            ctx.set_active(ctx.id());
+            ctx.set_active();
         })
         .event(On::PointerLeave, |_, ctx| {
             if ctx.is_pointer_captured() {
-                ctx.set_active(None);
+                ctx.unset_active();
             }
         })
         .event(On::PointerEnter, |_, ctx| {
             if ctx.is_pointer_captured() {
-                ctx.set_active(ctx.id());
+                ctx.set_active();
             }
         })
         .event(On::PointerUp, move |s, ctx| {
             if ctx.is_pointer_captured() {
                 ctx.end_pointer_capture();
-                ctx.set_active(None);
+                ctx.unset_active();
 
                 let Some(pointer) = ctx.pointer() else {
                     return;

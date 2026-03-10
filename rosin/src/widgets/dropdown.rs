@@ -66,7 +66,7 @@ impl<T: Send + Sync + PartialEq + Copy + 'static> DropDown<T> {
 
                     ctx.stop_propagation();
                     ctx.set_focus(ctx.id());
-                    ctx.set_active(ctx.id());
+                    ctx.set_active();
                 }
             })
             .event(On::PointerWheel, {
@@ -82,7 +82,7 @@ impl<T: Send + Sync + PartialEq + Copy + 'static> DropDown<T> {
                     transform.set(None);
                     ctx.set_focus(None);
                 }
-                ctx.set_active(None);
+                ctx.unset_active();
             })
             .on_style(move |_, style| {
                 if transform.get().flatten().is_none() {

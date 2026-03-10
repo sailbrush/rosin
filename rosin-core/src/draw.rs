@@ -33,7 +33,7 @@ pub(crate) fn draw<S, H>(
     did_layout: bool,
     perf_info: &PerfInfo,
     scale: Vec2,
-    active_node: Option<NodeId>,
+    active_nodes: &[NodeId],
     focused_node: Option<NodeId>,
     translation_map: TranslationMap,
     scene: &mut Scene,
@@ -386,7 +386,7 @@ pub(crate) fn draw<S, H>(
                         fragment.reset();
                         let mut ctx = CanvasCtx {
                             did_layout,
-                            is_active: active_node.is_some() && active_node == node.nid,
+                            is_active: node.nid.is_some_and(|nid| active_nodes.contains(&nid)),
                             is_focused: focused_node.is_some() && focused_node == node.nid,
                             is_enabled,
                             perf_info,

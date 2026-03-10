@@ -93,7 +93,7 @@ pub struct Viewport<S: Sync + 'static, H: Clone + 'static> {
     phase: Phase,
 
     /// The currently active node
-    active_node: Option<NodeId>,
+    active_nodes: Vec<NodeId>,
 
     /// The currently focused node
     focused_node: Option<NodeId>,
@@ -199,7 +199,7 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
             size,
             scale,
             phase: Phase::Build,
-            active_node: None,
+            active_nodes: Vec::new(),
             focused_node: None,
             capture: None,
             last_pointer_event: None,
@@ -260,8 +260,8 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
         self.focused_node
     }
 
-    pub fn get_active_node(&self) -> Option<NodeId> {
-        self.active_node
+    pub fn get_active_nodes(&self) -> &[NodeId] {
+        &self.active_nodes
     }
 
     pub fn get_size(&self) -> Size {
@@ -841,7 +841,7 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
             return None;
         }
 
-        let start_active_node = self.active_node;
+        let start_active_nodes = self.active_nodes.clone();
         let start_focused_node = self.focused_node;
 
         let mut dispatch_info = DispatchInfo::default();
@@ -870,7 +870,7 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
 
             let (has_callback, mut ctx) = if qe.event_type == On::Destroy {
                 let mut ctx = EventCtx {
-                    active_node: self.active_node,
+                    active_nodes: &mut self.active_nodes,
                     captured_node: self.capture,
                     emit_change: false,
                     event_type: qe.event_type,
@@ -894,7 +894,7 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
                 (self.prev_tree.nodes[qe.idx].run_callbacks(qe.event_type, state, &mut ctx), ctx)
             } else {
                 let mut ctx = EventCtx {
-                    active_node: self.active_node,
+                    active_nodes: &mut self.active_nodes,
                     captured_node: self.capture,
                     emit_change: false,
                     event_type: qe.event_type,
@@ -930,8 +930,6 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
             if !intercept_ax_focus {
                 dispatch_info.callback_count += 1;
             }
-
-            self.active_node = ctx.active_node;
 
             // We cannot blindly set self.capture = ctx.captured_node, because a node (like a TextBox losing focus)
             // might try to release the capture (ctx.captured_node = None) even if it doesn't currently own it.
@@ -1090,10 +1088,20 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
 
         let mut dirtied = false;
 
-        if self.active_node != start_active_node {
-            // Previously active loses :active, new active gains :active
-            dirtied |= self.curr_tree.add_dirty_root_by_nid(start_active_node, css::ACTIVE_DIRTY);
-            dirtied |= self.curr_tree.add_dirty_root_by_nid(self.active_node, css::ACTIVE_DIRTY);
+        self.active_nodes.sort();
+        self.active_nodes.dedup();
+
+        // Nodes that lost :active
+        for &nid in &start_active_nodes {
+            if !self.active_nodes.contains(&nid) {
+                dirtied |= self.curr_tree.add_dirty_root_by_nid(Some(nid), css::ACTIVE_DIRTY);
+            }
+        }
+        // Nodes that gained :active
+        for &nid in &self.active_nodes {
+            if !start_active_nodes.contains(&nid) {
+                dirtied |= self.curr_tree.add_dirty_root_by_nid(Some(nid), css::ACTIVE_DIRTY);
+            }
         }
 
         if self.focused_node != start_focused_node {
@@ -1160,16 +1168,12 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
             self.curr_tree.finish();
             perf_info.node_count = self.curr_tree.nodes.len();
 
+            self.active_nodes.retain(|nid| self.curr_tree.nid_map.contains_key(nid));
+
             if let Some(nid) = self.focused_node
                 && !self.curr_tree.nid_map.contains_key(&nid)
             {
                 self.focused_node = None;
-            }
-
-            if let Some(nid) = self.active_node
-                && !self.curr_tree.nid_map.contains_key(&nid)
-            {
-                self.active_node = None;
             }
 
             if let Some(nid) = self.capture
@@ -1235,7 +1239,7 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
                 &mut self.curr_tree,
                 state,
                 self.focused_node,
-                self.active_node,
+                &self.active_nodes,
                 &self.curr_hot_indexes,
                 &mut self.ancestor_classes,
             );
@@ -1277,7 +1281,7 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
                             &mut self.curr_tree,
                             state,
                             self.focused_node,
-                            self.active_node,
+                            &self.active_nodes,
                             &self.curr_hot_indexes,
                             &mut self.ancestor_classes,
                         );
@@ -1314,7 +1318,7 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
                 did_layout,
                 &self.perf_info,
                 self.scale,
-                self.active_node,
+                &self.active_nodes,
                 self.focused_node,
                 self.translation_map.clone(),
                 &mut self.scene_cache,
