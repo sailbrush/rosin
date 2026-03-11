@@ -8,6 +8,10 @@ pub struct ScrollArea {
 }
 
 impl ScrollArea {
+    pub fn reset(&self) {
+        self.offset.set(Vec2::ZERO);
+    }
+
     pub fn view<'a, S, H>(&self, ui: &'a mut Ui<S, H>, id: NodeId, func: impl FnOnce(&mut Ui<S, H>)) -> &'a mut Ui<S, H> {
         let offset = self.offset.downgrade();
         ui.node()
