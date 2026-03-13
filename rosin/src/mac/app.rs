@@ -61,7 +61,13 @@ impl<S: Sync + 'static> AppLauncher<S> {
     where
         S: serde::Serialize + serde::de::DeserializeOwned + crate::typehash::TypeHash + 'static,
     {
+        use crate::mac::window::*;
         use std::{env, fs};
+
+        fn resolve(view: &RosinView) -> &ViewIvars {
+            DeclaredClass::ivars(view)
+        }
+        set_ivars_accessor(resolve as *mut ());
 
         if let Some(loader) = crate::mac::hot::HotReloader::new() {
             'hot_reload: {

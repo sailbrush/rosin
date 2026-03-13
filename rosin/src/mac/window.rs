@@ -37,6 +37,32 @@ use crate::{
     vello, wgpu,
 };
 
+#[cfg(all(feature = "hot-reload", debug_assertions))]
+static IVARS_FN: std::sync::atomic::AtomicPtr<()> = std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
+
+#[cfg(all(feature = "hot-reload", debug_assertions))]
+pub(crate) fn set_ivars_accessor(ptr: *mut ()) {
+    IVARS_FN.store(ptr, std::sync::atomic::Ordering::Release);
+}
+
+#[cfg(all(feature = "hot-reload", debug_assertions))]
+pub(crate) fn ivars_accessor_ptr() -> *mut () {
+    IVARS_FN.load(std::sync::atomic::Ordering::Acquire)
+}
+
+#[cfg(not(all(feature = "hot-reload", debug_assertions)))]
+#[inline(always)]
+pub(crate) fn view_ivars(view: &RosinView) -> &ViewIvars {
+    view.ivars()
+}
+
+#[cfg(all(feature = "hot-reload", debug_assertions))]
+#[inline(always)]
+pub(crate) fn view_ivars(view: &RosinView) -> &ViewIvars {
+    let f: fn(&RosinView) -> &ViewIvars = unsafe { std::mem::transmute(IVARS_FN.load(std::sync::atomic::Ordering::Acquire)) };
+    f(view)
+}
+
 pub(crate) fn create_window<S: Sync + 'static>(
     mtm: MainThreadMarker,
     desc: &WindowDesc<S>,
@@ -154,7 +180,7 @@ pub(crate) fn create_window<S: Sync + 'static>(
     ns_window.setAcceptsMouseMovedEvents(true);
 
     let handle = crate::platform::handle::WindowHandle::new(mtm, ns_view.clone());
-    *ns_view.ivars().handle.borrow_mut() = Some(WindowHandle(handle));
+    *view_ivars(&ns_view).handle.borrow_mut() = Some(WindowHandle(handle));
 
     if let Some(menu) = &desc.menu {
         ns_view.set_main_menu(Some(menu.clone()));
@@ -175,7 +201,7 @@ pub(crate) fn create_window<S: Sync + 'static>(
             },
         )
     };
-    *ns_view.ivars().a11y_adapter.borrow_mut() = Some(adapter);
+    *view_ivars(&ns_view).a11y_adapter.borrow_mut() = Some(adapter);
 
     unsafe {
         ns_window.performSelectorOnMainThread_withObject_waitUntilDone(sel!(makeKeyAndOrderFront:), None, false);
@@ -189,10 +215,10 @@ pub(crate) fn create_window<S: Sync + 'static>(
 
         if cfg!(debug_assertions) {
             let reload = NSTimer::scheduledTimerWithTimeInterval_target_selector_userInfo_repeats(1.0 / 5.0, &ns_view, sel!(reload_assets), None, true);
-            *ns_view.ivars().reload_timer.borrow_mut() = Some(reload);
+            *view_ivars(&ns_view).reload_timer.borrow_mut() = Some(reload);
         };
 
-        *ns_view.ivars().display_link.borrow_mut() = Some(anim);
+        *view_ivars(&ns_view).display_link.borrow_mut() = Some(anim);
     }
 }
 
@@ -204,7 +230,7 @@ impl ActionHandler for RosinA11yActionHandler {
     fn do_action(&mut self, request: ActionRequest) {
         // SAFETY: accesskit_macos delivers actions on the main thread for the view.
         let view = unsafe { &*self.view };
-        view.ivars().viewport.borrow_mut().accessibility_action_event(view, request);
+        view_ivars(view).viewport.borrow_mut().accessibility_action_event(view, request);
     }
 }
 
@@ -222,7 +248,7 @@ impl accesskit::ActivationHandler for RosinA11yActivationHandler {
         let view = unsafe { &*self.view };
 
         // Ask the viewport for a full tree.
-        match view.ivars().viewport.borrow_mut().build_accesskit_update() {
+        match view_ivars(view).viewport.borrow_mut().build_accesskit_update() {
             Ok(update) => return Some(update),
             Err(e) => error!("AccessKit initial tree build failed: {e}"),
         }
@@ -312,18 +338,31 @@ pub(crate) trait ViewportTrait {
 
 impl<'a, S: Sync + 'static> ViewportTrait for ViewportContainer<'a, S> {
     fn create_window(&mut self, mtm: MainThreadMarker, view: &RosinView, desc: Box<dyn Any + Send + Sync>) {
-        let Ok(desc) = &desc.downcast::<WindowDesc<S>>() else {
-            error!("Failed to create window: WindowDesc is generic over the wrong type.");
-            return;
+        let desc: Box<WindowDesc<S>> = match desc.downcast::<WindowDesc<S>>() {
+            Ok(desc) => desc,
+            Err(_desc) => {
+                #[cfg(all(feature = "hot-reload", debug_assertions))]
+                {
+                    let raw: *mut (dyn Any + Send + Sync) = Box::into_raw(_desc);
+                    // SAFETY: Assume that layout is the same when hot-reloading.
+                    //         This won't catch misuse of the API.
+                    unsafe { Box::from_raw(raw as *mut () as *mut WindowDesc<S>) }
+                }
+                #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
+                {
+                    error!("Failed to create window: WindowDesc is generic over the wrong type.");
+                    return;
+                }
+            }
         };
 
         create_window(
             mtm,
-            desc,
+            &desc,
             self.app_state.clone(),
             self.viewport.get_translation_map(),
-            view.ivars().gpu_ctx.clone(),
-            view.ivars().vello_renderer.clone(),
+            view_ivars(view).gpu_ctx.clone(),
+            view_ivars(view).vello_renderer.clone(),
         );
     }
 
@@ -337,9 +376,9 @@ impl<'a, S: Sync + 'static> ViewportTrait for ViewportContainer<'a, S> {
     }
 
     fn dispatch_and_redraw(&mut self, view: &RosinView) {
-        view.ivars().gained_focus.set(false);
+        view_ivars(view).gained_focus.set(false);
 
-        let handle_ref = view.ivars().handle.borrow();
+        let handle_ref = view_ivars(view).handle.borrow();
         let Some(handle) = handle_ref.as_ref() else {
             return;
         };
@@ -357,16 +396,16 @@ impl<'a, S: Sync + 'static> ViewportTrait for ViewportContainer<'a, S> {
 
     fn anim_frame(&mut self, view: &RosinView) {
         let this_frame = Instant::now();
-        if let Some(last_frame) = view.ivars().last_frame.get() {
+        if let Some(last_frame) = view_ivars(view).last_frame.get() {
             let frame_time = this_frame.duration_since(last_frame);
             self.viewport.queue_animation_events(frame_time);
         }
-        view.ivars().last_frame.set(Some(this_frame));
+        view_ivars(view).last_frame.set(Some(this_frame));
         self.dispatch_and_redraw(view);
     }
 
     fn update_layer(&mut self, view: &RosinView) {
-        let handle_ref = view.ivars().handle.borrow();
+        let handle_ref = view_ivars(view).handle.borrow();
         let Some(handle) = handle_ref.as_ref() else {
             return;
         };
@@ -395,14 +434,14 @@ impl<'a, S: Sync + 'static> ViewportTrait for ViewportContainer<'a, S> {
             self.viewport.set_scale(scale);
         }
 
-        if self.viewport.is_idle() && !view.ivars().needs_config.get() && !self.wgpu_deps_changed {
+        if self.viewport.is_idle() && !view_ivars(view).needs_config.get() && !self.wgpu_deps_changed {
             // There are rare situations where update_layer() will be called twice for a single refresh
             // and we don't need to update the layer in that case.
             return;
         }
         self.wgpu_deps_changed = false;
 
-        let gpu_ctx = &view.ivars().gpu_ctx;
+        let gpu_ctx = &view_ivars(view).gpu_ctx;
 
         let Some(layer) = view.layer().and_then(|layer| {
             if !layer.isKindOfClass(CAMetalLayer::class()) {
@@ -444,7 +483,7 @@ impl<'a, S: Sync + 'static> ViewportTrait for ViewportContainer<'a, S> {
             return;
         };
 
-        if properties_changed || view.ivars().needs_config.get() {
+        if properties_changed || view_ivars(view).needs_config.get() {
             let capabilities = surface.get_capabilities(&gpu_ctx.adapter);
             let format = match capabilities
                 .formats
@@ -486,14 +525,14 @@ impl<'a, S: Sync + 'static> ViewportTrait for ViewportContainer<'a, S> {
                 view_formats: &[],
             });
 
-            *view.ivars().vello_texture.borrow_mut() = new_vello_texture;
+            *view_ivars(view).vello_texture.borrow_mut() = new_vello_texture;
             layer.setContentsScale(ns_window.backingScaleFactor());
         }
 
         let surface_texture = match surface.get_current_texture() {
             Ok(tex) => tex,
             Err(wgpu::SurfaceError::Outdated | wgpu::SurfaceError::Lost | wgpu::SurfaceError::Timeout | wgpu::SurfaceError::Other) => {
-                view.ivars().needs_config.set(true);
+                view_ivars(view).needs_config.set(true);
                 return;
             }
             Err(wgpu::SurfaceError::OutOfMemory) => {
@@ -501,7 +540,7 @@ impl<'a, S: Sync + 'static> ViewportTrait for ViewportContainer<'a, S> {
                 return;
             }
         };
-        view.ivars().needs_config.set(false);
+        view_ivars(view).needs_config.set(false);
 
         let mut state = self.app_state.borrow_mut();
         let scene = self.viewport.frame(&state);
@@ -531,7 +570,7 @@ impl<'a, S: Sync + 'static> ViewportTrait for ViewportContainer<'a, S> {
             gpu_ctx.queue.submit(Some(encoder.finish()));
         }
 
-        let vello_texture_view = view.ivars().vello_texture.borrow().create_view(&wgpu::TextureViewDescriptor {
+        let vello_texture_view = view_ivars(view).vello_texture.borrow().create_view(&wgpu::TextureViewDescriptor {
             label: None,
             format: Some(wgpu::TextureFormat::Rgba8Unorm),
             dimension: Some(wgpu::TextureViewDimension::D2),
@@ -550,14 +589,13 @@ impl<'a, S: Sync + 'static> ViewportTrait for ViewportContainer<'a, S> {
             antialiasing_method: vello::AaConfig::Msaa16,
         };
 
-        if let Err(e) = view
-            .ivars()
+        if let Err(e) = view_ivars(view)
             .vello_renderer
             .borrow_mut()
             .render_to_texture(&gpu_ctx.device, &gpu_ctx.queue, scene, &vello_texture_view, &params)
         {
             error!("Failed to render to texture: {e:?}");
-            view.ivars().needs_config.set(true);
+            view_ivars(view).needs_config.set(true);
             return;
         }
 
@@ -709,7 +747,7 @@ impl<'a, S: Sync + 'static> ViewportTrait for ViewportContainer<'a, S> {
 
         // Accessibility update
         let queued_events = 'qe: {
-            let mut adapter_ref = view.ivars().a11y_adapter.borrow_mut();
+            let mut adapter_ref = view_ivars(view).a11y_adapter.borrow_mut();
             let Some(adapter) = adapter_ref.as_mut() else {
                 break 'qe None;
             };
@@ -734,7 +772,7 @@ impl<'a, S: Sync + 'static> ViewportTrait for ViewportContainer<'a, S> {
 
     fn close(&mut self, view: &RosinView) -> bool {
         let stop_window_close = {
-            let handle_ref = view.ivars().handle.borrow();
+            let handle_ref = view_ivars(view).handle.borrow();
             let Some(handle) = handle_ref.as_ref() else {
                 return true;
             };
@@ -748,15 +786,17 @@ impl<'a, S: Sync + 'static> ViewportTrait for ViewportContainer<'a, S> {
         };
 
         if !stop_window_close {
-            if let Some(dl) = view.ivars().display_link.borrow_mut().take() {
+            if let Some(dl) = view_ivars(view).display_link.borrow_mut().take() {
                 dl.invalidate();
             }
-            if let Some(t) = view.ivars().reload_timer.borrow_mut().take() {
+            if let Some(t) = view_ivars(view).reload_timer.borrow_mut().take() {
                 t.invalidate();
             }
 
             // Drop anything that holds references to the NSWindow or NSView to ensure deallocation
-            *view.ivars().handle.borrow_mut() = None;
+            *view_ivars(view).a11y_adapter.borrow_mut() = None;
+            *view_ivars(view).handle.borrow_mut() = None;
+            *view_ivars(view).main_menu.borrow_mut() = None;
             self.surface = None;
             true
         } else {
@@ -767,19 +807,19 @@ impl<'a, S: Sync + 'static> ViewportTrait for ViewportContainer<'a, S> {
     fn window_event(&mut self, kind: WindowEvent, view: &RosinView) {
         match kind {
             WindowEvent::DidChangeBackingProperties => {
-                view.ivars().needs_config.set(true);
+                view_ivars(view).needs_config.set(true);
             }
             WindowEvent::DidBecomeKey => {
-                view.ivars().gained_focus.set(true);
+                view_ivars(view).gained_focus.set(true);
                 self.viewport.queue_got_focus_event();
 
                 let mtm = unsafe { MainThreadMarker::new_unchecked() };
-                let menu = view.ivars().main_menu.borrow();
+                let menu = view_ivars(view).main_menu.borrow();
                 NSApp(mtm).setMainMenu(menu.as_deref());
 
                 // Keep AccessKit's window focus state in sync.
                 let queued_events = {
-                    let mut adapter_ref = view.ivars().a11y_adapter.borrow_mut();
+                    let mut adapter_ref = view_ivars(view).a11y_adapter.borrow_mut();
                     adapter_ref.as_mut().and_then(|adapter| adapter.update_view_focus_state(true))
                 };
                 if let Some(queued) = queued_events {
@@ -793,7 +833,7 @@ impl<'a, S: Sync + 'static> ViewportTrait for ViewportContainer<'a, S> {
 
                 // Keep AccessKit's window focus state in sync.
                 let queued_events = {
-                    let mut adapter_ref = view.ivars().a11y_adapter.borrow_mut();
+                    let mut adapter_ref = view_ivars(view).a11y_adapter.borrow_mut();
                     adapter_ref.as_mut().and_then(|adapter| adapter.update_view_focus_state(false))
                 };
                 if let Some(queued) = queued_events {
@@ -818,7 +858,7 @@ impl<'a, S: Sync + 'static> ViewportTrait for ViewportContainer<'a, S> {
         }
 
         let mut event = util::convert_pointer_event(ns_event, view);
-        event.did_focus_window = view.ivars().gained_focus.get();
+        event.did_focus_window = view_ivars(view).gained_focus.get();
         match kind {
             PointerEvent::Down => {
                 self.viewport.queue_pointer_down_event(&event);
@@ -840,7 +880,7 @@ impl<'a, S: Sync + 'static> ViewportTrait for ViewportContainer<'a, S> {
     }
 
     fn keyboard_event(&mut self, ns_event: &NSEvent, view: &RosinView) {
-        let is_composing = view.ivars().input_handler.borrow().as_deref().and_then(|h| h.composition_range()).is_some();
+        let is_composing = view_ivars(view).input_handler.borrow().as_deref().and_then(|h| h.composition_range()).is_some();
 
         if let Some(event) = util::convert_keyboard_event(ns_event, is_composing) {
             self.viewport.queue_keyboard_event(&event);
@@ -934,58 +974,64 @@ impl<'a, S: Sync + 'static> ViewportTrait for ViewportContainer<'a, S> {
 
 impl RosinView {
     #[cfg(all(feature = "hot-reload", debug_assertions))]
+    #[deprecated = "Use view_ivars() instead of .ivars(), direct calls can crash under hot-reload"]
+    pub(crate) fn ivars(&self) -> &ViewIvars {
+        panic!("direct .ivars() called in hot-reload build")
+    }
+
+    #[cfg(all(feature = "hot-reload", debug_assertions))]
     pub fn use_library(&self, new_lib: &libloading::Library) {
-        self.ivars().viewport.borrow_mut().use_library(new_lib);
+        view_ivars(self).viewport.borrow_mut().use_library(new_lib);
         self.request_redraw();
     }
 
     #[cfg(all(feature = "hot-reload", debug_assertions))]
     pub fn serializable_window_desc(&self) -> super::hot::SerializableWindowDesc {
-        self.ivars().viewport.borrow().serializable_window_desc(self)
+        view_ivars(self).viewport.borrow().serializable_window_desc(self)
     }
 
     pub(crate) fn set_input_handler(&self, id: Option<NodeId>, handler: Option<Box<dyn InputHandler + Send + Sync>>) {
-        self.ivars().input_handler_node.set(id);
-        *self.ivars().input_handler.borrow_mut() = handler;
+        view_ivars(self).input_handler_node.set(id);
+        *view_ivars(self).input_handler.borrow_mut() = handler;
     }
 
     pub(crate) fn set_main_menu(&self, desc: Option<MenuDesc>) {
         if let Some(desc) = desc {
-            let translation_map = self.ivars().viewport.borrow().translation_map();
+            let translation_map = view_ivars(self).viewport.borrow().translation_map();
             let ns_menu = self.create_ns_menu(desc, &translation_map);
-            *self.ivars().main_menu.borrow_mut() = Some(ns_menu);
+            *view_ivars(self).main_menu.borrow_mut() = Some(ns_menu);
         } else {
-            *self.ivars().main_menu.borrow_mut() = None;
+            *view_ivars(self).main_menu.borrow_mut() = None;
         }
 
-        if let Some(handle) = self.ivars().handle.borrow().as_ref()
+        if let Some(handle) = view_ivars(self).handle.borrow().as_ref()
             && handle.is_active()
         {
             let mtm = unsafe { MainThreadMarker::new_unchecked() };
-            let menu = self.ivars().main_menu.borrow();
+            let menu = view_ivars(self).main_menu.borrow();
             NSApp(mtm).setMainMenu(menu.as_deref());
         }
     }
 
     pub(crate) fn show_context_menu(&self, node: NodeId, desc: MenuDesc, pos: rosin_core::vello::kurbo::Point) {
-        let translation_map = self.ivars().viewport.borrow().translation_map();
+        let translation_map = view_ivars(self).viewport.borrow().translation_map();
         let ns_menu = self.create_ns_menu(desc, &translation_map);
 
-        self.ivars().context_menu_node.set(Some(node));
+        view_ivars(self).context_menu_node.set(Some(node));
 
         if let Some(ns_view) = self.window().and_then(|w| w.contentView()) {
             let window_point = NSPoint::new(pos.x, pos.y);
             ns_menu.popUpMenuPositioningItem_atLocation_inView(None, window_point, Some(&ns_view));
         }
 
-        self.ivars().context_menu_node.set(None);
+        view_ivars(self).context_menu_node.set(None);
     }
 
     fn set_display_link_active(&self, active: bool) {
-        if let Some(dl) = self.ivars().display_link.borrow().as_deref() {
+        if let Some(dl) = view_ivars(self).display_link.borrow().as_deref() {
             if dl.isPaused() && active {
                 // When toggling, reset last_frame so we don't get a huge delta after being paused.
-                self.ivars().last_frame.set(None);
+                view_ivars(self).last_frame.set(None);
             }
             dl.setPaused(!active);
         }
@@ -1004,8 +1050,8 @@ impl RosinView {
     }
 
     fn queue_change_event(&self) {
-        if let Some(id) = self.ivars().input_handler_node.get() {
-            self.ivars().viewport.borrow_mut().change_event(id);
+        if let Some(id) = view_ivars(self).input_handler_node.get() {
+            view_ivars(self).viewport.borrow_mut().change_event(id);
         }
     }
 
@@ -1031,24 +1077,24 @@ impl RosinView {
     }
 
     fn key_down(&self, ns_event: &NSEvent) {
-        if self.ivars().input_handler.borrow().is_some() {
-            self.ivars().key_down_consumed.set(false);
+        if view_ivars(self).input_handler.borrow().is_some() {
+            view_ivars(self).key_down_consumed.set(false);
             let events = [ns_event];
             let events_array = NSArray::from_slice(&events);
             self.interpretKeyEvents(&events_array);
 
-            if !self.ivars().key_down_consumed.get() {
-                self.ivars().viewport.borrow_mut().keyboard_event(ns_event, self);
+            if !view_ivars(self).key_down_consumed.get() {
+                view_ivars(self).viewport.borrow_mut().keyboard_event(ns_event, self);
             }
             return;
         }
 
-        self.ivars().viewport.borrow_mut().keyboard_event(ns_event, self);
+        view_ivars(self).viewport.borrow_mut().keyboard_event(ns_event, self);
     }
 
     // copy text, no need to redraw
     fn copy(&self, _sender: &AnyObject) {
-        let mut handler_ref = self.ivars().input_handler.borrow_mut();
+        let mut handler_ref = view_ivars(self).input_handler.borrow_mut();
         if let Some(handler) = handler_ref.as_deref_mut() {
             handler.handle_action(Action::Copy);
         }
@@ -1056,40 +1102,40 @@ impl RosinView {
 
     // cut text, queue change event, and request redraw
     fn cut(&self, _sender: &AnyObject) {
-        let mut handler_ref = self.ivars().input_handler.borrow_mut();
+        let mut handler_ref = view_ivars(self).input_handler.borrow_mut();
         if let Some(handler) = handler_ref.as_deref_mut()
             && handler.handle_action(Action::Cut)
         {
             self.queue_change_event();
-            self.ivars().viewport.borrow_mut().dispatch_and_redraw(self);
+            view_ivars(self).viewport.borrow_mut().dispatch_and_redraw(self);
         }
     }
 
     // paste text, queue change event, and request redraw
     fn paste(&self, _sender: &AnyObject) {
-        let mut handler_ref = self.ivars().input_handler.borrow_mut();
+        let mut handler_ref = view_ivars(self).input_handler.borrow_mut();
         if let Some(handler) = handler_ref.as_deref_mut()
             && handler.handle_action(Action::Paste)
         {
             self.queue_change_event();
-            self.ivars().viewport.borrow_mut().dispatch_and_redraw(self);
+            view_ivars(self).viewport.borrow_mut().dispatch_and_redraw(self);
         }
     }
 
     // select text and request redraw
     fn select_all(&self, _sender: &AnyObject) {
-        let mut handler_ref = self.ivars().input_handler.borrow_mut();
+        let mut handler_ref = view_ivars(self).input_handler.borrow_mut();
         if let Some(handler) = handler_ref.as_deref_mut()
             && handler.handle_action(Action::Select(SelectionUnit::All))
         {
-            self.ivars().viewport.borrow_mut().dispatch_and_redraw(self);
+            view_ivars(self).viewport.borrow_mut().dispatch_and_redraw(self);
         }
     }
 
     fn insert_text(&self, string: &AnyObject, replacement_range: NSRange) {
-        self.ivars().key_down_consumed.set(true);
+        view_ivars(self).key_down_consumed.set(true);
 
-        let mut handler_ref = self.ivars().input_handler.borrow_mut();
+        let mut handler_ref = view_ivars(self).input_handler.borrow_mut();
         if let Some(handler) = handler_ref.as_deref_mut() {
             let text = util::extract_string(string);
             let text_len = text.len();
@@ -1116,11 +1162,11 @@ impl RosinView {
 
         self.queue_change_event();
         self.invalidate_ime_rects();
-        self.ivars().viewport.borrow_mut().dispatch_and_redraw(self);
+        view_ivars(self).viewport.borrow_mut().dispatch_and_redraw(self);
     }
 
     fn do_command_by_selector(&self, selector: Sel) {
-        let mut handler_ref = self.ivars().input_handler.borrow_mut();
+        let mut handler_ref = view_ivars(self).input_handler.borrow_mut();
         let Some(handler) = handler_ref.as_deref_mut() else {
             return;
         };
@@ -1133,21 +1179,21 @@ impl RosinView {
             return;
         }
 
-        self.ivars().key_down_consumed.set(true);
+        view_ivars(self).key_down_consumed.set(true);
 
         if action.edits_text() {
             self.queue_change_event();
         }
 
         self.invalidate_ime_rects();
-        self.ivars().viewport.borrow_mut().dispatch_and_redraw(self);
+        view_ivars(self).viewport.borrow_mut().dispatch_and_redraw(self);
     }
 
     fn set_marked_text(&self, string: &AnyObject, selected_range: NSRange, replacement_range: NSRange) {
         // Ensure we always update IME/candidate window geometry after any marked-text change.
-        self.ivars().key_down_consumed.set(true);
+        view_ivars(self).key_down_consumed.set(true);
 
-        let mut handler_ref = self.ivars().input_handler.borrow_mut();
+        let mut handler_ref = view_ivars(self).input_handler.borrow_mut();
         let Some(handler) = handler_ref.as_deref_mut() else {
             return;
         };
@@ -1200,22 +1246,22 @@ impl RosinView {
         }
 
         self.invalidate_ime_rects();
-        self.ivars().viewport.borrow_mut().dispatch_and_redraw(self);
+        view_ivars(self).viewport.borrow_mut().dispatch_and_redraw(self);
     }
 
     fn unmark_text(&self) {
-        self.ivars().key_down_consumed.set(true);
+        view_ivars(self).key_down_consumed.set(true);
 
-        let mut handler_ref = self.ivars().input_handler.borrow_mut();
+        let mut handler_ref = view_ivars(self).input_handler.borrow_mut();
         if let Some(handler) = handler_ref.as_deref_mut() {
             handler.set_composition_range(None);
         }
         self.invalidate_ime_rects();
-        self.ivars().viewport.borrow_mut().dispatch_and_redraw(self);
+        view_ivars(self).viewport.borrow_mut().dispatch_and_redraw(self);
     }
 
     fn selected_range(&self) -> NSRange {
-        let handler_ref = self.ivars().input_handler.borrow();
+        let handler_ref = view_ivars(self).input_handler.borrow();
         if let Some(handler) = handler_ref.as_deref() {
             let range = handler.selection();
             let len_utf16_start = handler.utf8_range_utf16_len(0..range.start).unwrap_or(0);
@@ -1227,7 +1273,7 @@ impl RosinView {
     }
 
     fn marked_range(&self) -> NSRange {
-        let handler_ref = self.ivars().input_handler.borrow();
+        let handler_ref = view_ivars(self).input_handler.borrow();
         if let Some(handler) = handler_ref.as_deref()
             && let Some(range) = handler.composition_range()
         {
@@ -1239,7 +1285,7 @@ impl RosinView {
     }
 
     fn has_marked_text(&self) -> Bool {
-        let handler_ref = self.ivars().input_handler.borrow();
+        let handler_ref = view_ivars(self).input_handler.borrow();
         if let Some(handler) = handler_ref.as_deref() {
             Bool::new(handler.composition_range().is_some())
         } else {
@@ -1248,7 +1294,7 @@ impl RosinView {
     }
 
     fn attributed_substring(&self, proposed_range: NSRange, actual_range: *mut NSRange) -> *mut NSAttributedString {
-        let handler_ref = self.ivars().input_handler.borrow();
+        let handler_ref = view_ivars(self).input_handler.borrow();
         if let Some(handler) = handler_ref.as_deref()
             && let Some(range) = handler.utf16_range_to_utf8_range(util::range_from_ns(proposed_range))
         {
@@ -1273,7 +1319,7 @@ impl RosinView {
     }
 
     fn first_rect_for_character_range(&self, range: NSRange, actual_range: *mut NSRange) -> NSRect {
-        let handler_ref = self.ivars().input_handler.borrow();
+        let handler_ref = view_ivars(self).input_handler.borrow();
         if let Some(handler) = handler_ref.as_deref()
             && let Some(utf8_range) = handler.utf16_range_to_utf8_range(util::range_from_ns(range))
             && let Some(rect) = handler.bounding_box_for_range(utf8_range.clone())
@@ -1302,7 +1348,7 @@ impl RosinView {
     }
 
     fn character_index_for_point(&self, point: NSPoint) -> usize {
-        let handler_ref = self.ivars().input_handler.borrow();
+        let handler_ref = view_ivars(self).input_handler.borrow();
         if let Some(handler) = handler_ref.as_deref()
             && let Some(win) = self.window()
         {
@@ -1429,7 +1475,7 @@ define_class!(
         #[unsafe(method(displayLayer:))]
         fn __display_layer(&self, _layer: &CALayer) {
             // Looks like this can be called multiple times per frame.
-            self.ivars().viewport.borrow_mut().update_layer(self);
+            view_ivars(self).viewport.borrow_mut().update_layer(self);
         }
     }
 
@@ -1445,7 +1491,21 @@ define_class!(
         /// to savechanges). If you return `NO`, the window remains open.
         #[unsafe(method(windowShouldClose:))]
         fn __window_should_close(&self, _sender: &NSWindow) -> bool {
-            self.ivars().viewport.borrow_mut().close(self)
+            view_ivars(self).viewport.borrow_mut().close(self)
+        }
+
+        /// Tells the delegate that the window is about to close.
+        ///
+        /// Parameter:
+        /// * `notification` – A notification named `NSWindowWillCloseNotification`.
+        ///
+        /// You can retrieve the NSWindow object in question by sending `object` to notification.
+        #[unsafe(method(windowWillClose:))]
+        fn __window_will_close(&self, _notification: &NSNotification) {
+            if let Some(ns_window) = self.window() {
+                ns_window.setDelegate(None);
+                ns_window.setContentView(None);
+            }
         }
 
         /// Tells the delegate that the window's backing properties changed.
@@ -1457,7 +1517,7 @@ define_class!(
         /// (for example, when moving the window to a display with a different resolution or color profile).
         #[unsafe(method(windowDidChangeBackingProperties:))]
         fn __window_did_change_backing_properties(&self, _notification: &NSNotification) {
-            self.ivars().viewport.borrow_mut().window_event(WindowEvent::DidChangeBackingProperties, self);
+            view_ivars(self).viewport.borrow_mut().window_event(WindowEvent::DidChangeBackingProperties, self);
         }
 
         /// Tells the delegate that the window has become the key window.
@@ -1467,7 +1527,7 @@ define_class!(
         /// The notification's object is the window that became key.
         #[unsafe(method(windowDidBecomeKey:))]
         fn __window_did_become_key(&self, _notification: &NSNotification) {
-            self.ivars().viewport.borrow_mut().window_event(WindowEvent::DidBecomeKey, self);
+            view_ivars(self).viewport.borrow_mut().window_event(WindowEvent::DidBecomeKey, self);
         }
 
         /// Tells the delegate that the window has resigned key window status.
@@ -1476,7 +1536,7 @@ define_class!(
         /// * `notification` – An `NSNotification` sent when the window resigned key status.
         #[unsafe(method(windowDidResignKey:))]
         fn __window_did_resign_key(&self, _notification: &NSNotification) {
-            self.ivars().viewport.borrow_mut().window_event(WindowEvent::DidResignKey, self);
+            view_ivars(self).viewport.borrow_mut().window_event(WindowEvent::DidResignKey, self);
         }
     }
 
@@ -1630,21 +1690,21 @@ define_class!(
         // Note: custom method not in NSView
         #[unsafe(method(anim_frame:))]
         fn __anim_frame(&self, _sender: &CADisplayLink) {
-            self.ivars().viewport.borrow_mut().anim_frame(self);
+            view_ivars(self).viewport.borrow_mut().anim_frame(self);
         }
 
         // Note: custom method not in NSView
         #[unsafe(method(reload_assets))]
         fn __reload_assets(&self) {
-            self.ivars().viewport.borrow_mut().reload_assets(self);
+            view_ivars(self).viewport.borrow_mut().reload_assets(self);
         }
 
         // Note: custom method not in NSView
         #[unsafe(method(menuItemClicked:))]
         fn __menu_item_clicked(&self, sender: &NSMenuItem) {
             let tag = sender.tag();
-            let node = self.ivars().context_menu_node.get();
-            self.ivars().viewport.borrow_mut().command_event(self, node, CommandId(tag as u32));
+            let node = view_ivars(self).context_menu_node.get();
+            view_ivars(self).viewport.borrow_mut().command_event(self, node, CommandId(tag as u32));
         }
 
         /// Returns a Boolean value indicating whether the view uses a flipped coordinate system.
@@ -1721,7 +1781,7 @@ define_class!(
         /// The default implementation simply passes this message to the next responder.
         #[unsafe(method(mouseDown:))]
         fn __mouse_down(&self, ns_event: &NSEvent) {
-            self.ivars().viewport.borrow_mut().input_event(PointerEvent::Down, ns_event, self);
+            view_ivars(self).viewport.borrow_mut().input_event(PointerEvent::Down, ns_event, self);
         }
 
         /// Informs the receiver that the user has released the left mouse button.
@@ -1732,7 +1792,7 @@ define_class!(
         /// The default implementation simply passes this message to the next responder.
         #[unsafe(method(mouseUp:))]
         fn __mouse_up(&self, ns_event: &NSEvent) {
-            self.ivars().viewport.borrow_mut().input_event(PointerEvent::Up, ns_event, self);
+            view_ivars(self).viewport.borrow_mut().input_event(PointerEvent::Up, ns_event, self);
         }
 
         /// Informs the receiver that the user dragged the mouse with the left button held down.
@@ -1743,7 +1803,7 @@ define_class!(
         /// The default implementation simply passes this message to the next responder.
         #[unsafe(method(mouseDragged:))]
         fn __mouse_dragged(&self, ns_event: &NSEvent) {
-            self.ivars().viewport.borrow_mut().input_event(PointerEvent::Move, ns_event, self);
+            view_ivars(self).viewport.borrow_mut().input_event(PointerEvent::Move, ns_event, self);
         }
 
         /// Informs the receiver that the user has pressed the right mouse button.
@@ -1754,7 +1814,7 @@ define_class!(
         /// The default implementation simply passes this message to the next responder.
         #[unsafe(method(rightMouseDown:))]
         fn __right_mouse_down(&self, ns_event: &NSEvent) {
-            self.ivars().viewport.borrow_mut().input_event(PointerEvent::Down, ns_event, self);
+            view_ivars(self).viewport.borrow_mut().input_event(PointerEvent::Down, ns_event, self);
         }
 
         /// Informs the receiver that the user has released the right mouse button.
@@ -1765,7 +1825,7 @@ define_class!(
         /// The default implementation simply passes this message to the next responder.
         #[unsafe(method(rightMouseUp:))]
         fn __right_mouse_up(&self, ns_event: &NSEvent) {
-            self.ivars().viewport.borrow_mut().input_event(PointerEvent::Up, ns_event, self);
+            view_ivars(self).viewport.borrow_mut().input_event(PointerEvent::Up, ns_event, self);
         }
 
         /// Informs the receiver that the user dragged the mouse with the right button held down.
@@ -1776,7 +1836,7 @@ define_class!(
         /// The default implementation simply passes this message to the next responder.
         #[unsafe(method(rightMouseDragged:))]
         fn __right_mouse_dragged(&self, ns_event: &NSEvent) {
-            self.ivars().viewport.borrow_mut().input_event(PointerEvent::Move, ns_event, self);
+            view_ivars(self).viewport.borrow_mut().input_event(PointerEvent::Move, ns_event, self);
         }
 
         /// Informs the receiver that the user has pressed an auxiliary mouse button (neither left nor right).
@@ -1787,7 +1847,7 @@ define_class!(
         /// The default implementation simply passes this message to the next responder.
         #[unsafe(method(otherMouseDown:))]
         fn __other_mouse_down(&self, ns_event: &NSEvent) {
-            self.ivars().viewport.borrow_mut().input_event(PointerEvent::Down, ns_event, self);
+            view_ivars(self).viewport.borrow_mut().input_event(PointerEvent::Down, ns_event, self);
         }
 
         /// Informs the receiver that the user has released an auxiliary mouse button.
@@ -1798,7 +1858,7 @@ define_class!(
         /// The default implementation simply passes this message to the next responder.
         #[unsafe(method(otherMouseUp:))]
         fn __other_mouse_up(&self, ns_event: &NSEvent) {
-            self.ivars().viewport.borrow_mut().input_event(PointerEvent::Up, ns_event, self);
+            view_ivars(self).viewport.borrow_mut().input_event(PointerEvent::Up, ns_event, self);
         }
 
         /// Informs the receiver that the user dragged the mouse with an auxiliary button held down.
@@ -1809,7 +1869,7 @@ define_class!(
         /// The default implementation simply passes this message to the next responder.
         #[unsafe(method(otherMouseDragged:))]
         fn __other_mouse_dragged(&self, ns_event: &NSEvent) {
-            self.ivars().viewport.borrow_mut().input_event(PointerEvent::Move, ns_event, self);
+            view_ivars(self).viewport.borrow_mut().input_event(PointerEvent::Move, ns_event, self);
         }
 
         /// Informs the receiver that the mouse cursor has moved within the view (with no buttons pressed).
@@ -1820,7 +1880,7 @@ define_class!(
         /// The default implementation simply passes this message to the next responder.
         #[unsafe(method(mouseMoved:))]
         fn __mouse_moved(&self, ns_event: &NSEvent) {
-            self.ivars().viewport.borrow_mut().input_event(PointerEvent::Move, ns_event, self);
+            view_ivars(self).viewport.borrow_mut().input_event(PointerEvent::Move, ns_event, self);
         }
 
         /// Informs the receiver that the mouse cursor has exited the view's boundary.
@@ -1831,7 +1891,7 @@ define_class!(
         /// The default implementation simply passes this message to the next responder.
         #[unsafe(method(mouseExited:))]
         fn __mouse_exited(&self, ns_event: &NSEvent) {
-            self.ivars().viewport.borrow_mut().input_event(PointerEvent::Leave, ns_event, self);
+            view_ivars(self).viewport.borrow_mut().input_event(PointerEvent::Leave, ns_event, self);
         }
 
         /// Informs the receiver that the mouse cursor has entered the view's boundary.
@@ -1842,7 +1902,7 @@ define_class!(
         /// The default implementation simply passes this message to the next responder.
         #[unsafe(method(mouseEntered:))]
         fn __mouse_entered(&self, ns_event: &NSEvent) {
-            self.ivars().viewport.borrow_mut().input_event(PointerEvent::Move, ns_event, self);
+            view_ivars(self).viewport.borrow_mut().input_event(PointerEvent::Move, ns_event, self);
         }
 
         /// Informs the receiver of a scroll-wheel event.
@@ -1853,7 +1913,7 @@ define_class!(
         /// The default implementation simply passes this message to the next responder.
         #[unsafe(method(scrollWheel:))]
         fn __scroll_wheel(&self, ns_event: &NSEvent) {
-            self.ivars().viewport.borrow_mut().input_event(PointerEvent::Wheel, ns_event, self);
+            view_ivars(self).viewport.borrow_mut().input_event(PointerEvent::Wheel, ns_event, self);
         }
 
         /// Informs the receiver that the user pressed a key (key-down event).
@@ -1876,7 +1936,7 @@ define_class!(
         /// The default implementation simply passes this message to the next responder.
         #[unsafe(method(keyUp:))]
         fn __key_up(&self, ns_event: &NSEvent) {
-            self.ivars().viewport.borrow_mut().keyboard_event(ns_event, self);
+            view_ivars(self).viewport.borrow_mut().keyboard_event(ns_event, self);
         }
 
         /// Informs the receiver that the state of the modifier keys changed.
@@ -1887,7 +1947,7 @@ define_class!(
         /// The default implementation simply passes this message to the next responder.
         #[unsafe(method(flagsChanged:))]
         fn __flags_changed(&self, ns_event: &NSEvent) {
-            self.ivars().viewport.borrow_mut().keyboard_event(ns_event, self);
+            view_ivars(self).viewport.borrow_mut().keyboard_event(ns_event, self);
         }
 
         /// Copies the selected content onto the general pasteboard, in as many formats as the receiver supports.
