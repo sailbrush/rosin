@@ -7,13 +7,15 @@ use crate::{
 };
 
 pub(crate) struct WindowHandle {
-    pub(crate) window_handle: smithay_client_toolkit::shell::xdg::window::Window
+    pub(crate) wayland_handle: Option<smithay_client_toolkit::shell::xdg::window::Window>,
+    pub(crate) x11_handle: Option<x11rb::protocol::xproto::Window>
 }
 
 impl Clone for WindowHandle {
     fn clone(&self) -> Self {
         Self  {
-            window_handle: self.window_handle.clone()
+            wayland_handle: self.wayland_handle.clone(),
+            x11_handle: self.x11_handle.clone()
         }
     }
 }
@@ -71,14 +73,14 @@ impl WindowHandle {
         let size = _size.unwrap().into();
         let w = size.width as u32;
         let h = size.height as u32;
-        self.window_handle.set_max_size(Some((w, h)));
+        self.wayland_handle.as_ref().unwrap().set_max_size(Some((w, h)));
     }
 
     pub fn set_min_size(&self, _size: Option<impl Into<Size>>) {
         let size = _size.unwrap().into();
         let w = size.width as u32;
         let h = size.height as u32;
-        self.window_handle.set_min_size(Some((w, h)));
+        self.wayland_handle.as_ref().unwrap().set_min_size(Some((w, h)));
     }
 
     pub fn set_position(&self, _position: impl Into<Point>) {}
@@ -90,11 +92,11 @@ impl WindowHandle {
     pub fn set_title(&self, _title: impl Into<String>) {}
 
     pub fn minimize(&self) {
-        self.window_handle.set_minimized();
+        self.wayland_handle.as_ref().unwrap().set_minimized();
     }
 
     pub fn maximize(&self) {
-        self.window_handle.set_maximized();
+        self.wayland_handle.as_ref().unwrap().set_maximized();
     }
 
     pub fn restore(&self) {}
