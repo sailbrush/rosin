@@ -11,7 +11,7 @@ pub(crate) fn panic_and_print(msg: String) -> ! {
 }
 
 pub(crate) fn convert_keyboard_event_pressed_x11(kpe: &KeyPressEvent) -> KeyboardEvent {
-    let c = convert_code(kpe.detail as u16);
+    let c = convert_code_x11(kpe.detail as u16);
     let k = convert_key(c);
     KeyboardEvent {
         code: c,
@@ -25,7 +25,7 @@ pub(crate) fn convert_keyboard_event_pressed_x11(kpe: &KeyPressEvent) -> Keyboar
 }
 
 pub(crate) fn convert_keyboard_event_released_x11(kre: &KeyReleaseEvent) -> KeyboardEvent {
-    let c = convert_code(kre.detail as u16);
+    let c = convert_code_x11(kre.detail as u16);
     let k = convert_key(c);
     KeyboardEvent {
         code: c,
@@ -187,7 +187,7 @@ fn convert_location(code: Code) -> Location {
     }
 }
 
-fn convert_code(key_code: u16) -> Code {
+fn convert_code_x11(key_code: u16) -> Code {
     match key_code {
         38 => Code::KeyA,
         39 => Code::KeyS,
@@ -199,6 +199,7 @@ fn convert_code(key_code: u16) -> Code {
         53 => Code::KeyX,
         54 => Code::KeyC,
         55 => Code::KeyV,
+        51 => Code::Backslash,
         51 => Code::IntlBackslash,
         56 => Code::KeyB,
         24 => Code::KeyQ,
@@ -230,7 +231,6 @@ fn convert_code(key_code: u16) -> Code {
         44 => Code::KeyJ,
         45 => Code::KeyK,
         47 => Code::Semicolon,
-        51 => Code::Backslash,
         59 => Code::Comma,
         61 => Code::Slash,
         57 => Code::KeyN,

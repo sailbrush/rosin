@@ -22,6 +22,8 @@ use x11rb::{
         xproto::Visualid,
     },
 };
+
+// referenced winit for atoms
 macro_rules! atom_manager {
     ($($name:ident $(:$lit:literal)?),*) => {
         x11rb::atom_manager! {
@@ -78,27 +80,6 @@ atom_manager! {
     _NET_WM_STATE_MAXIMIZED_VERT,
     _NET_WM_WINDOW_TYPE,
 
-    // Activation atoms.
-    _NET_STARTUP_INFO_BEGIN,
-    _NET_STARTUP_INFO,
-    _NET_STARTUP_ID,
-
-    // WM window types.
-    _NET_WM_WINDOW_TYPE_DESKTOP,
-    _NET_WM_WINDOW_TYPE_DOCK,
-    _NET_WM_WINDOW_TYPE_TOOLBAR,
-    _NET_WM_WINDOW_TYPE_MENU,
-    _NET_WM_WINDOW_TYPE_UTILITY,
-    _NET_WM_WINDOW_TYPE_SPLASH,
-    _NET_WM_WINDOW_TYPE_DIALOG,
-    _NET_WM_WINDOW_TYPE_DROPDOWN_MENU,
-    _NET_WM_WINDOW_TYPE_POPUP_MENU,
-    _NET_WM_WINDOW_TYPE_TOOLTIP,
-    _NET_WM_WINDOW_TYPE_NOTIFICATION,
-    _NET_WM_WINDOW_TYPE_COMBO,
-    _NET_WM_WINDOW_TYPE_DND,
-    _NET_WM_WINDOW_TYPE_NORMAL,
-
     // Drag-N-Drop Atoms
     XdndAware,
     XdndEnter,
@@ -112,17 +93,6 @@ atom_manager! {
     XdndTypeList,
     TextUriList: b"text/uri-list",
     None: b"None",
-
-    // Miscellaneous Atoms
-    _GTK_THEME_VARIANT,
-    _MOTIF_WM_HINTS,
-    _NET_ACTIVE_WINDOW,
-    _NET_CLIENT_LIST,
-    _NET_FRAME_EXTENTS,
-    _NET_SUPPORTED,
-    _NET_SUPPORTING_WM_CHECK,
-    _XEMBED,
-    _XSETTINGS_SETTINGS,
 
     // Stylus Atoms
     ABS_X: b"Abs X",
