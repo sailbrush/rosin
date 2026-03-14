@@ -3,15 +3,20 @@ use std::{any::Any, time::Duration};
 use raw_window_handle::{DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle as RWHWindowHandle};
 
 use crate::{
-    kurbo::{Point, Size},
-    prelude::*,
+    kurbo::{Point, Size}, prelude::*
 };
 
-pub(crate) struct WindowHandle {}
+pub(crate) struct WindowHandle {
+    pub(crate) wayland_handle: Option<smithay_client_toolkit::shell::xdg::window::Window>,
+    pub(crate) x11_handle: Option<x11rb::protocol::xproto::Window>
+}
 
 impl Clone for WindowHandle {
     fn clone(&self) -> Self {
-        Self {}
+        Self  {
+            wayland_handle: self.wayland_handle.clone(),
+            x11_handle: self.x11_handle.clone()
+        }
     }
 }
 
@@ -64,9 +69,23 @@ impl WindowHandle {
 
     pub fn request_exit(&self) {}
 
-    pub fn set_max_size(&self, _size: Option<impl Into<Size>>) {}
+    pub fn set_max_size(&self, _size: Option<impl Into<Size>>) {
+        if self.wayland_handle.is_some() {
+        let size = _size.unwrap().into();
+        let w = size.width as u32;
+        let h = size.height as u32;
+        self.wayland_handle.as_ref().unwrap().set_max_size(Some((w, h)));
+        }
+    }
 
-    pub fn set_min_size(&self, _size: Option<impl Into<Size>>) {}
+    pub fn set_min_size(&self, _size: Option<impl Into<Size>>) {
+        if self.wayland_handle.is_some() {
+        let size = _size.unwrap().into();
+        let w = size.width as u32;
+        let h = size.height as u32;
+        self.wayland_handle.as_ref().unwrap().set_min_size(Some((w, h)));
+        }
+    }
 
     pub fn set_position(&self, _position: impl Into<Point>) {}
 
@@ -76,9 +95,17 @@ impl WindowHandle {
 
     pub fn set_title(&self, _title: impl Into<String>) {}
 
-    pub fn minimize(&self) {}
+    pub fn minimize(&self) {
+        if self.wayland_handle.is_some() {
+        self.wayland_handle.as_ref().unwrap().set_minimized();
+        }
+    }
 
-    pub fn maximize(&self) {}
+    pub fn maximize(&self) {
+        if self.wayland_handle.is_some() {
+        self.wayland_handle.as_ref().unwrap().set_maximized();
+        }
+    }
 
     pub fn restore(&self) {}
 
