@@ -70,17 +70,21 @@ impl WindowHandle {
     pub fn request_exit(&self) {}
 
     pub fn set_max_size(&self, _size: Option<impl Into<Size>>) {
+        if self.wayland_handle.is_some() {
         let size = _size.unwrap().into();
         let w = size.width as u32;
         let h = size.height as u32;
         self.wayland_handle.as_ref().unwrap().set_max_size(Some((w, h)));
+        }
     }
 
     pub fn set_min_size(&self, _size: Option<impl Into<Size>>) {
+        if self.wayland_handle.is_some() {
         let size = _size.unwrap().into();
         let w = size.width as u32;
         let h = size.height as u32;
         self.wayland_handle.as_ref().unwrap().set_min_size(Some((w, h)));
+        }
     }
 
     pub fn set_position(&self, _position: impl Into<Point>) {}
@@ -92,11 +96,15 @@ impl WindowHandle {
     pub fn set_title(&self, _title: impl Into<String>) {}
 
     pub fn minimize(&self) {
+        if self.wayland_handle.is_some() {
         self.wayland_handle.as_ref().unwrap().set_minimized();
+        }
     }
 
     pub fn maximize(&self) {
+        if self.wayland_handle.is_some() {
         self.wayland_handle.as_ref().unwrap().set_maximized();
+        }
     }
 
     pub fn restore(&self) {}

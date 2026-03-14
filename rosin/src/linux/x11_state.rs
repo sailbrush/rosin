@@ -1,31 +1,144 @@
-use crate::gpu::GpuCtx;
+use crate::{
+    gpu::GpuCtx,
+    linux::util::{
+        convert_keyboard_event_pressed_x11, convert_keyboard_event_released_x11, convert_mouse_button_pressed_x11, convert_mouse_button_released_x11, convert_mouse_motion_x11,
+    },
+};
 use rosin_core::{
     peniko,
     prelude::Viewport,
     vello,
     wgpu::{self, TextureViewDescriptor, util::TextureBlitter},
 };
+use std::ops::Index;
 use smithay_client_toolkit::reexports::calloop::Result;
 use std::cell::RefCell;
 use std::rc::Rc;
 use x11rb::{
-    atom_manager,
     connection::Connection,
     errors::ReplyError,
     protocol::{
         render::{self, ConnectionExt, PictType},
-        xproto::{Visualid, Visualtype},
+        xproto::Visualid,
     },
 };
+macro_rules! atom_manager {
+    ($($name:ident $(:$lit:literal)?),*) => {
+        x11rb::atom_manager! {
+            /// The atoms used by `winit`
+            pub AtomCollection: AtomsCookie {
+                $($name $(:$lit)?,)*
+            }
+        }
+
+        /// Indices into the `Atoms` struct.
+        #[derive(Copy, Clone, Debug)]
+        #[allow(non_camel_case_types)]
+        pub enum AtomName {
+            $($name,)*
+        }
+
+        impl AtomName {
+            pub(crate) fn atom_from(
+                self,
+                atoms: &AtomCollection
+            ) -> &x11rb::protocol::xproto::Atom {
+                match self {
+                    $(AtomName::$name => &atoms.$name,)*
+                }
+            }
+        }
+    };
+}
 atom_manager! {
-    pub AtomCollection: AtomCollectionCookie {
-        WM_PROTOCOLS,
-        WM_DELETE_WINDOW,
-        _NET_WM_NAME,
-        UTF8_STRING,
+    // General Use Atoms
+    CARD32,
+    UTF8_STRING,
+    WM_CHANGE_STATE,
+    WM_CLIENT_MACHINE,
+    WM_DELETE_WINDOW,
+    WM_PROTOCOLS,
+    WM_STATE,
+    XIM_SERVERS,
+
+    // Assorted ICCCM Atoms
+    _NET_WM_ICON,
+    _NET_WM_MOVERESIZE,
+    _NET_WM_NAME,
+    _NET_WM_PID,
+    _NET_WM_PING,
+    _NET_WM_SYNC_REQUEST,
+    _NET_WM_SYNC_REQUEST_COUNTER,
+    _NET_WM_STATE,
+    _NET_WM_STATE_ABOVE,
+    _NET_WM_STATE_BELOW,
+    _NET_WM_STATE_FULLSCREEN,
+    _NET_WM_STATE_HIDDEN,
+    _NET_WM_STATE_MAXIMIZED_HORZ,
+    _NET_WM_STATE_MAXIMIZED_VERT,
+    _NET_WM_WINDOW_TYPE,
+
+    // Activation atoms.
+    _NET_STARTUP_INFO_BEGIN,
+    _NET_STARTUP_INFO,
+    _NET_STARTUP_ID,
+
+    // WM window types.
+    _NET_WM_WINDOW_TYPE_DESKTOP,
+    _NET_WM_WINDOW_TYPE_DOCK,
+    _NET_WM_WINDOW_TYPE_TOOLBAR,
+    _NET_WM_WINDOW_TYPE_MENU,
+    _NET_WM_WINDOW_TYPE_UTILITY,
+    _NET_WM_WINDOW_TYPE_SPLASH,
+    _NET_WM_WINDOW_TYPE_DIALOG,
+    _NET_WM_WINDOW_TYPE_DROPDOWN_MENU,
+    _NET_WM_WINDOW_TYPE_POPUP_MENU,
+    _NET_WM_WINDOW_TYPE_TOOLTIP,
+    _NET_WM_WINDOW_TYPE_NOTIFICATION,
+    _NET_WM_WINDOW_TYPE_COMBO,
+    _NET_WM_WINDOW_TYPE_DND,
+    _NET_WM_WINDOW_TYPE_NORMAL,
+
+    // Drag-N-Drop Atoms
+    XdndAware,
+    XdndEnter,
+    XdndLeave,
+    XdndDrop,
+    XdndPosition,
+    XdndStatus,
+    XdndActionPrivate,
+    XdndSelection,
+    XdndFinished,
+    XdndTypeList,
+    TextUriList: b"text/uri-list",
+    None: b"None",
+
+    // Miscellaneous Atoms
+    _GTK_THEME_VARIANT,
+    _MOTIF_WM_HINTS,
+    _NET_ACTIVE_WINDOW,
+    _NET_CLIENT_LIST,
+    _NET_FRAME_EXTENTS,
+    _NET_SUPPORTED,
+    _NET_SUPPORTING_WM_CHECK,
+    _XEMBED,
+    _XSETTINGS_SETTINGS,
+
+    // Stylus Atoms
+    ABS_X: b"Abs X",
+    ABS_Y: b"Abs Y",
+    ABS_PRESSURE: b"Abs Pressure",
+    ABS_TILT_X: b"Abs Tilt X",
+    ABS_TILT_Y: b"Abs Tilt Y"
+
+}
+impl Index<AtomName> for AtomCollection {
+    type Output = x11rb::protocol::xproto::Atom;
+
+    fn index(&self, index: AtomName) -> &Self::Output {
+        index.atom_from(self)
     }
 }
-
 pub(crate) fn choose_visual(conn: &impl Connection, screen_num: usize) -> core::result::Result<(u8, Visualid), ReplyError> {
     let depth = 32;
     let screen = &conn.setup().roots[screen_num];
@@ -111,6 +224,7 @@ impl<S: Sync + 'static> RosinX11Window<S> {
             });
         }
         let mut state = self.app_state.borrow_mut();
+        self.viewport.dispatch_event_queue(&mut state, &self.window_handle);
 
         let params = vello::RenderParams {
             base_color: peniko::Color::BLACK,
@@ -119,7 +233,6 @@ impl<S: Sync + 'static> RosinX11Window<S> {
             antialiasing_method: vello::AaConfig::Msaa16,
         };
 
-        self.viewport.dispatch_event_queue(&mut state, &self.window_handle);
 
         let scene = self.viewport.frame(&state);
         self.vello_renderer
@@ -161,23 +274,43 @@ impl<S: Sync + 'static> RosinX11Window<S> {
                 match event {
                     Event::Expose(_) => {}
                     Event::ConfigureNotify(event) => {
-                        println!("{event:?})");
                         self.configure(event.width as u32, event.height as u32);
                         redraw = true;
                     }
                     Event::ClientMessage(event) => {
-                        println!("{event:?})");
                         let data = event.data.as_data32();
                         if event.format == 32 && event.window == self.window_handle.0.x11_handle.unwrap() && data[0] == self.atoms.WM_DELETE_WINDOW {
                             println!("Window was asked to close");
                             return Ok(());
                         }
                     }
-                    Event::MapNotify(event) => {}
+                    Event::KeyPress(event) => {
+                        let e = convert_keyboard_event_pressed_x11(event);
+                        self.viewport.queue_keyboard_event(&e);
+                        redraw = true;
+                    }
+                    Event::KeyRelease(event) => {
+                        let e = convert_keyboard_event_released_x11(event);
+                        self.viewport.queue_keyboard_event(&e);
+                        redraw = true;
+                    }
+                    Event::ButtonPress(event) => {
+                        let e = convert_mouse_button_pressed_x11(event);
+                        self.viewport.queue_pointer_down_event(&e);
+                        redraw = true;
+                    }
+                    Event::ButtonRelease(event) => {
+                        let e = convert_mouse_button_released_x11(event);
+                        self.viewport.queue_pointer_up_event(&e);
+                        redraw = true;
+                    }
+                    Event::MotionNotify(event) => {
+                        self.viewport.queue_pointer_move_event(&convert_mouse_motion_x11(event));
+                    }
                     Event::Error(_) => println!("Got an unexpected error"),
-                    _ => println!("Got an unknown event"),
+                    _ => println!("{event:?})"),
                 }
-            event_option = conn.poll_for_event().unwrap();
+                event_option = conn.poll_for_event().unwrap();
             }
             if redraw {
                 self.draw();

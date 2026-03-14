@@ -1,26 +1,15 @@
-use crate::{desc::WindowDesc, gpu::GpuCtx, linux::wayland_state::RosinWaylandWindow};
-use raw_window_handle::{RawDisplayHandle, RawWindowHandle, WaylandDisplayHandle, WaylandWindowHandle};
-use rosin_core::{
-    prelude::{TranslationMap, Viewport},
-    vello::{self},
-    wgpu::{self},
-};
+use crate::{desc::WindowDesc, linux::wayland_state::RosinWaylandWindow};
+use smithay_client_toolkit::reexports::protocols_experimental::input_method::v1::client::xx_input_method_manager_v2::Event;
 use smithay_client_toolkit::shell::{WaylandSurface, xdg::window::Window};
 use smithay_client_toolkit::{
     compositor::CompositorState,
-    output::OutputState,
-    registry::RegistryState,
-    seat::SeatState,
     shell::xdg::{XdgShell, window::WindowDecorations},
 };
 use x11rb::{errors::ReplyOrIdError, protocol::xproto::{AtomEnum, ColormapAlloc, CreateWindowAux, EventMask, PropMode, Visualid, WindowClass}, wrapper::ConnectionExt};
 use std::any::Any;
-use std::cell::RefCell;
 use std::ops::Deref;
-use std::ptr::NonNull;
-use std::rc::Rc;
-use wayland_client::{EventQueue, Proxy, globals::GlobalList};
-use wayland_client::{Connection, QueueHandle, globals::registry_queue_init};
+use wayland_client::globals::GlobalList;
+use wayland_client::QueueHandle;
 
 pub(crate) fn create_window_x11<S: Any + Sync + 'static, T: x11rb::connection::Connection>(
     desc: &WindowDesc<S>,
@@ -34,7 +23,13 @@ pub(crate) fn create_window_x11<S: Any + Sync + 'static, T: x11rb::connection::C
     let colormap = conn.generate_id()?;
     x11rb::protocol::xproto::ConnectionExt::create_colormap(&conn, ColormapAlloc::NONE, colormap, screen.root, visual_id)?;
     let win_aux = CreateWindowAux::new()
-        .event_mask(EventMask::EXPOSURE | EventMask::STRUCTURE_NOTIFY)
+        .event_mask(EventMask::EXPOSURE 
+            | EventMask::STRUCTURE_NOTIFY 
+            | EventMask::BUTTON_PRESS
+            | EventMask::BUTTON_RELEASE
+            | EventMask::KEY_PRESS
+            | EventMask::KEY_RELEASE
+            | EventMask::POINTER_MOTION)
         .background_pixel(x11rb::NONE)
         .border_pixel(screen.black_pixel)
         .colormap(colormap);
@@ -67,7 +62,7 @@ pub(crate) fn create_window_x11<S: Any + Sync + 'static, T: x11rb::connection::C
         window,
         AtomEnum::WM_CLASS,
         AtomEnum::STRING,
-        b"simple_window\0simple_window\0".as_slice(),
+        title.as_bytes(),
     )?;
 
     x11rb::protocol::xproto::ConnectionExt::map_window(&conn, window)?;

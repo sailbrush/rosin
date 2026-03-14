@@ -61,16 +61,15 @@ impl<S: Sync + 'static> AppLauncher<S> {
     #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
     pub fn run(mut self, _state: S, _translation_map: TranslationMap) -> Result<(), LaunchError> {
         self.state = Some(Rc::new(RefCell::new(_state)));
-        //implement multi-window later?
-        //for desc in self.windows
-
+        let way_conn = wayland_client::Connection::connect_to_env();
+        if way_conn.is_ok() && false
         {
             use smithay_client_toolkit::{output::OutputState, registry::RegistryState, seat::SeatState, shell::WaylandSurface};
             use wayland_client::Proxy;
 
             use crate::linux::{create_window::create_window_wayland, wayland_state::RosinWaylandWindow};
 
-            let conn = wayland_client::Connection::connect_to_env().unwrap();
+            let conn = way_conn.unwrap();
             let (globals, mut event_queue) = wayland_client::globals::registry_queue_init(&conn).unwrap();
             let qh = event_queue.handle();
             let desc = self.windows[0].clone();
@@ -190,10 +189,9 @@ impl<S: Sync + 'static> AppLauncher<S> {
             };
             let _ = window.run_loop(event_queue);
         }
-        /* 
+        else
         {
             let desc = self.windows[0].clone();
-            //let way_conn = Connection::connect_to_env().unwrap();
             let (conn, screen_num) = XCBConnection::connect(None).unwrap();
             let screen = &conn.setup().roots[screen_num];
             let atoms = AtomCollection::new(&conn).unwrap().reply().unwrap();
@@ -314,7 +312,7 @@ impl<S: Sync + 'static> AppLauncher<S> {
             x11Window.configure(desc.size.width as u32, desc.size.height as u32);
             x11Window.draw();
             let _ = x11Window.run_loop(&conn);
-        }*/
+        }
 
         Ok(())
     }

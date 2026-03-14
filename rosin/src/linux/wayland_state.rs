@@ -6,18 +6,15 @@ use wayland_client::{
 };
 
 use crate::gpu::GpuCtx;
-use crate::linux::handle::WindowHandle;
 use crate::peniko;
-use crate::prelude::ViewFn;
 use crate::wgpu::util::TextureBlitter;
-use crate::wgpu::{TextureFormat, TextureViewDescriptor};
+use crate::wgpu::TextureViewDescriptor;
 use rosin_core::viewport::Viewport;
 use rosin_core::{
     vello::{self},
     wgpu,
 };
 use std::cell::RefCell;
-use std::mem::swap;
 use std::rc::Rc;
 
 // based on https://github.com/Smithay/client-toolkit/blob/master/examples/wgpu.rs
@@ -46,7 +43,9 @@ impl<S: Sync + 'static> CompositorHandler for RosinWaylandWindow<S> {
         // Not needed for this example.
     }
 
-    fn frame(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _surface: &wl_surface::WlSurface, _time: u32) {}
+    fn frame(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _surface: &wl_surface::WlSurface, _time: u32) {
+        self.draw();
+    }
 
     fn surface_enter(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _surface: &wl_surface::WlSurface, _output: &wl_output::WlOutput) {
         // Not needed for this example.
@@ -189,7 +188,6 @@ impl<S: Sync + 'static> RosinWaylandWindow<S> {
             width: self.width,
             height: self.height,
             desired_maximum_frame_latency: 2,
-            // Wayland is inherently a mailbox system.
             present_mode: wgpu::PresentMode::Mailbox,
         };
         surface.configure(&self.gpu_ctx.device, &surface_config);
