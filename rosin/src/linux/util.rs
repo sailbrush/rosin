@@ -189,6 +189,9 @@ fn convert_location(code: Code) -> Location {
 
 fn convert_code_x11(key_code: u16) -> Code {
     match key_code {
+        77 => Code::NumLock,
+        106 => Code::NumpadDivide,
+        104 => Code::NumpadEnter,
         38 => Code::KeyA,
         39 => Code::KeyS,
         40 => Code::KeyD,
