@@ -1,7 +1,10 @@
+use crate::prelude::OverlayPipeline;
 use crate::{
+    desc::WindowDesc,
     gpu::GpuCtx,
     linux::util::{
-        convert_keyboard_event_pressed_x11, convert_keyboard_event_released_x11, convert_mouse_button_pressed_x11, convert_mouse_button_released_x11, convert_mouse_motion_x11,
+        convert_keyboard_event_pressed_x11, convert_keyboard_event_released_x11, convert_mouse_button_pressed_x11, convert_mouse_button_released_x11,
+        convert_mouse_motion_x11,
     },
 };
 use rosin_core::{
@@ -10,9 +13,10 @@ use rosin_core::{
     vello,
     wgpu::{self, TextureViewDescriptor, util::TextureBlitter},
 };
-use std::ops::Index;
 use smithay_client_toolkit::reexports::calloop::Result;
+use std::borrow::Cow;
 use std::cell::RefCell;
+use std::ops::Index;
 use std::rc::Rc;
 use x11rb::{
     connection::Connection,
@@ -154,6 +158,7 @@ pub(crate) struct RosinX11Window<S: Sync + 'static> {
     pub(crate) viewport: Viewport<S, crate::handle::WindowHandle>,
     pub(crate) app_state: Rc<RefCell<S>>,
     pub(crate) window_handle: crate::handle::WindowHandle,
+    pub(crate) desc: WindowDesc<S>,
 }
 
 impl<S: Sync + 'static> RosinX11Window<S> {
@@ -174,6 +179,7 @@ impl<S: Sync + 'static> RosinX11Window<S> {
         let swapchain_view = surface_texture.texture.create_view(&swap_tex_desc);
 
         let mut encoder = device.create_command_encoder(&Default::default());
+
         {
             let color_attachment = wgpu::RenderPassColorAttachment {
                 view: &swapchain_view,
@@ -203,21 +209,130 @@ impl<S: Sync + 'static> RosinX11Window<S> {
             antialiasing_method: vello::AaConfig::Msaa16,
         };
 
-
         let scene = self.viewport.frame(&state);
         self.vello_renderer
             .borrow_mut()
             .render_to_texture(device, queue, scene, &texture_view, &params)
             .expect("TODO: panic message");
 
-        let blitter = TextureBlitter::new(&self.gpu_ctx.device, cap.formats[0]);
+        if self.desc.wgpufn.is_some() {
+            let mut compositor = self.gpu_ctx.compositor.custom.borrow_mut();
+            let compositor = compositor.get_or_insert_with(|| {
+                let shader = self.gpu_ctx.device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                    label: Some("Rosin Compositor Shader"),
+                    source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(crate::gpu::COMPOSITE_SHADER)),
+                });
 
-        blitter.copy(&self.gpu_ctx.device, &mut encoder, &texture_view, &swapchain_view);
+                let layout = self.gpu_ctx.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("Rosin Compositor Layout"),
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Texture {
+                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                                view_dimension: wgpu::TextureViewDimension::D2,
+                                multisampled: false,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                            count: None,
+                        },
+                    ],
+                });
+
+                let pipeline_layout = self.gpu_ctx.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: Some("Rosin Compositor Pipeline Layout"),
+                    bind_group_layouts: &[&layout],
+                    push_constant_ranges: &[],
+                });
+
+                let pipeline = self.gpu_ctx.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some("Rosin Compositor Pipeline"),
+                    layout: Some(&pipeline_layout),
+                    vertex: wgpu::VertexState {
+                        module: &shader,
+                        entry_point: Some("vs_main"),
+                        compilation_options: Default::default(),
+                        buffers: &[],
+                    },
+                    fragment: Some(wgpu::FragmentState {
+                        module: &shader,
+                        entry_point: Some("fs_main"),
+                        compilation_options: Default::default(),
+                        targets: &[Some(wgpu::ColorTargetState {
+                            format: cap.formats[0],
+                            blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                            write_mask: wgpu::ColorWrites::ALL,
+                        })],
+                    }),
+                    primitive: wgpu::PrimitiveState::default(),
+                    depth_stencil: None,
+                    multisample: wgpu::MultisampleState::default(),
+                    multiview: None,
+                    cache: None,
+                });
+
+                let sampler = self.gpu_ctx.device.create_sampler(&wgpu::SamplerDescriptor {
+                    label: Some("Rosin Compositor Sampler"),
+                    address_mode_u: wgpu::AddressMode::ClampToEdge,
+                    address_mode_v: wgpu::AddressMode::ClampToEdge,
+                    mag_filter: wgpu::FilterMode::Linear,
+                    min_filter: wgpu::FilterMode::Linear,
+                    ..Default::default()
+                });
+
+                OverlayPipeline { pipeline, layout, sampler }
+            });
+
+            // Queue gpu commands
+            let bind_group = self.gpu_ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("Compositor Bind Group"),
+                layout: &compositor.layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&texture_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&compositor.sampler),
+                    },
+                ],
+            });
+
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Rosin UI Composite Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &swapchain_view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                    depth_slice: None,
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+            pass.set_pipeline(&compositor.pipeline);
+            pass.set_bind_group(0, &bind_group, &[]);
+            pass.draw(0..3, 0..1);
+        } else {
+            let blitter = TextureBlitter::new(&self.gpu_ctx.device, cap.formats[0]);
+
+            blitter.copy(&self.gpu_ctx.device, &mut encoder, &texture_view, &swapchain_view);
+        }
 
         queue.submit(Some(encoder.finish()));
         surface_texture.present();
     }
-    pub fn configure(&mut self, width: u32, height: u32) {
+    pub fn configure(&mut self) {
         let adapter = &self.gpu_ctx.adapter;
         let surface = &self.surface;
         let cap = surface.get_capabilities(&adapter);
@@ -226,8 +341,8 @@ impl<S: Sync + 'static> RosinX11Window<S> {
             format: cap.formats[0],
             view_formats: vec![cap.formats[0]],
             alpha_mode: wgpu::CompositeAlphaMode::Auto,
-            width,
-            height,
+            width: self.desc.size.width as u32,
+            height: self.desc.size.height as u32,
             desired_maximum_frame_latency: 2,
             present_mode: wgpu::PresentMode::Mailbox,
         };
@@ -244,7 +359,7 @@ impl<S: Sync + 'static> RosinX11Window<S> {
                 match event {
                     Event::Expose(_) => {}
                     Event::ConfigureNotify(event) => {
-                        self.configure(event.width as u32, event.height as u32);
+                        self.configure();
                         redraw = true;
                     }
                     Event::ClientMessage(event) => {

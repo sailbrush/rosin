@@ -307,9 +307,10 @@ impl<S: Sync + 'static> AppLauncher<S> {
                 viewport,
                 window_handle: wh,
                 atoms,
+                desc
             };
 
-            x11Window.configure(desc.size.width as u32, desc.size.height as u32);
+            x11Window.configure();
             x11Window.draw();
             let _ = x11Window.run_loop(&conn);
         }
