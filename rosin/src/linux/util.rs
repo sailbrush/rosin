@@ -29,7 +29,7 @@ pub(crate) fn convert_keyboard_event_released_x11(kre: &KeyReleaseEvent) -> Keyb
     let k = convert_key(c);
     KeyboardEvent {
         code: c,
-        state: KeyState::Down,
+        state: KeyState::Up,
         key: if k.is_some() { k.unwrap() } else { Key::Character(c.to_string()) },
         location: convert_location(c),
         modifiers: convert_modifiers(kre.state),
@@ -94,6 +94,15 @@ fn convert_modifiers(modifiers: KeyButMask) -> Modifiers {
     }
     if modifiers.contains(KeyButMask::CONTROL) {
         retval = retval | Modifiers::CONTROL;
+    }
+    if modifiers.contains(KeyButMask::MOD1) {
+        retval = retval | Modifiers::ALT;
+    }
+    if modifiers.contains(KeyButMask::MOD2) {
+        retval = retval | Modifiers::NUM_LOCK;
+    }
+    if modifiers.contains(KeyButMask::LOCK) {
+        retval = retval | Modifiers::CAPS_LOCK;
     }
     println!("{:?}", modifiers);
     return retval;

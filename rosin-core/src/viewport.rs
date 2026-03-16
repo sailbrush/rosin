@@ -717,7 +717,6 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
 
     fn queue_pointer_event(&mut self, event: &PointerEvent, event_type: On) {
         self.temp.reset();
-        println!("{:?}", event);
         let last_event_pos = event.viewport_pos;
         if let Some(prev_event) = &self.last_pointer_event {
             self.pointer_delta = Some(event.viewport_pos - prev_event.viewport_pos);
@@ -852,7 +851,6 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
                 error!("Event callback recursion depth exceeded MAX_EVENT_DEPTH ({MAX_EVENT_DEPTH})");
                 continue;
             }
-            println!("{:?}", qe);
             // If disabled, don't dispatch any events to node, except for lifecycle events.
             if !matches!(qe.event_type, On::Create | On::Destroy) {
                 // Note: only On::Destroy events use indices from prev_tree, so we're ok in this branch.
