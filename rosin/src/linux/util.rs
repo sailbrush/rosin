@@ -1,3 +1,4 @@
+use crate::linux::x11;
 use rosin_core::{
     keyboard_types::{Code, KeyboardEvent, Location, Modifiers},
     kurbo::{Point, Vec2},
@@ -5,7 +6,6 @@ use rosin_core::{
 };
 use x11rb::protocol::xproto::{ButtonPressEvent, ButtonReleaseEvent, KeyButMask, KeyPressEvent, KeyReleaseEvent, MotionNotifyEvent};
 use xkbcommon::xkb;
-use crate::linux::x11;
 
 pub(crate) fn panic_and_print(msg: String) -> ! {
     println!("{}", msg);
@@ -15,7 +15,6 @@ pub(crate) fn panic_and_print(msg: String) -> ! {
 pub(crate) fn convert_keyboard_event_pressed_x11(kpe: &KeyPressEvent) -> KeyboardEvent {
     let c = convert_code_x11(kpe.detail as u16);
     let k = convert_key(c);
-    println!("{:?}", c);
     KeyboardEvent {
         code: c,
         state: KeyState::Down,
@@ -107,8 +106,7 @@ fn convert_modifiers(modifiers: KeyButMask) -> Modifiers {
     if modifiers.contains(KeyButMask::LOCK) {
         retval = retval | Modifiers::CAPS_LOCK;
     }
-    println!("{:?}", modifiers);
-    return retval;
+    retval
 }
 fn convert_mouse_button(btn: u8) -> PointerButton {
     PointerButton::from(btn as isize)
@@ -200,15 +198,15 @@ fn convert_location(code: Code) -> Location {
 }
 // https://github.com/xkbcommon/libxkbcommon/blob/6e4f0fb9e7ee876f14aad07dda4d69a622c58a3b/include/xkbcommon/xkbcommon-keysyms.h
 fn convert_code_x11(key_code: u16) -> Code {
-    
     let context = xkb::Context::new(xkb::CONTEXT_NO_FLAGS);
 
+    //empty strings indicates system default
     let keymap = xkb::Keymap::new_from_names(
         &context,
         "",                                          // rules
-        "pc105",                                     // model
-        "",                                        // layout
-        "",                                    // variant
+        "",                                          // model
+        "",                                          // layout
+        "",                                          // variant
         Some("terminate:ctrl_alt_bksp".to_string()), // options
         xkb::COMPILE_NO_FLAGS,
     )
@@ -217,6 +215,29 @@ fn convert_code_x11(key_code: u16) -> Code {
     let mut state = xkb::State::new(&keymap);
     let keysym = state.key_get_one_sym(key_code.into());
     match u32::from(keysym) {
+        // function keys
+        0x8f6 => Code::Fn,
+        0xffbe => Code::F1,
+        0xffbf => Code::F2,
+        0xffc0 => Code::F3,
+        0xffc1 => Code::F4,
+        0xffc2 => Code::F5,
+        0xffc3 => Code::F6,
+        0xffc4 => Code::F7,
+        0xffc5 => Code::F8,
+        0xffc6 => Code::F9,
+        0xffc7 => Code::F10,
+        0xffc8 => Code::F11,
+        0xffc9 => Code::F12,
+        0xffca => Code::F13,
+        0xffcb => Code::F14,
+        0xffcc => Code::F15,
+        0xffcd => Code::F16,
+        0xffce => Code::F17,
+        0xffcf => Code::F18,
+        0xffd0 => Code::F19,
+        0xffd1 => Code::F20,
+        // digits
         0x30 => Code::Digit0,
         0x31 => Code::Digit1,
         0x32 => Code::Digit2,
@@ -230,6 +251,7 @@ fn convert_code_x11(key_code: u16) -> Code {
         0x5b => Code::BracketLeft,
         0x5c => Code::Backslash,
         0x5d => Code::BracketRight,
+        // alphabet
         0x61 => Code::KeyA,
         0x62 => Code::KeyB,
         0x63 => Code::KeyC,
@@ -256,15 +278,15 @@ fn convert_code_x11(key_code: u16) -> Code {
         0x78 => Code::KeyY,
         0x79 => Code::KeyX,
         0x7a => Code::KeyZ,
-        0x3d => Code::Equal,
-        0x2d => Code::Minus,
-        0xff8d => Code::Enter,
+        // punctuation
         0x22 => Code::Quote,
         0x3b => Code::Semicolon,
         0x2c => Code::Comma,
-        0x2f => Code::Slash,
+        0x2d => Code::Minus,
         0x2e => Code::Period,
-        0xff09 => Code::Tab,
+        0x2f => Code::Slash,
+        0x3d => Code::Equal,
+        // Numpad
         0xffbd => Code::NumpadEqual,
         0xffb0 => Code::Numpad0,
         0xffb1 => Code::Numpad1,
@@ -279,63 +301,47 @@ fn convert_code_x11(key_code: u16) -> Code {
         0xffae => Code::NumpadDecimal,
         0xffaa => Code::NumpadMultiply,
         0xffab => Code::NumpadAdd,
-        0x31 => Code::Space,
-        0x32 => Code::Backquote,
         0xff08 => Code::Backspace,
         0xff8d => Code::NumpadEnter,
-        0x35 => Code::Escape,
-        0x36 => Code::MetaRight,
-        0x37 => Code::MetaLeft,
-        0x38 => Code::ShiftLeft,
-        0x39 => Code::CapsLock,
-        0x3a => Code::AltLeft,
-        0x3b => Code::ControlLeft,
-        0x3c => Code::ShiftRight,
-        0x3d => Code::AltRight,
-        0x3e => Code::ControlRight,
-        0x3f => Code::Fn,
-        0x40 => Code::F17,
-        0x47 => Code::NumLock,
-        0x48 => Code::AudioVolumeUp,
-        0x49 => Code::AudioVolumeDown,
-        0x4a => Code::AudioVolumeMute,
         0xffaf => Code::NumpadDivide,
         0xffad => Code::NumpadSubtract,
-        0x4f => Code::F18,
-        0x50 => Code::F19,
-        0x5a => Code::F20,
-        0x5d => Code::IntlYen,
-        0x5e => Code::IntlRo,
         0x5f => Code::NumpadComma,
-        0x60 => Code::F5,
-        0x61 => Code::F6,
-        0x62 => Code::F7,
-        0x63 => Code::F3,
-        0x64 => Code::F8,
-        0x65 => Code::F9,
-        0x66 => Code::Lang2,
-        0x67 => Code::F11,
-        0x68 => Code::Lang1,
-        0x69 => Code::F13,
-        0x6a => Code::F16,
-        0x6b => Code::F14,
-        0x6d => Code::F10,
-        0x6e => Code::ContextMenu,
-        0x6f => Code::F12,
-        0x71 => Code::F15,
-        0x72 => Code::Insert,
-        0x73 => Code::Home,
-        0x74 => Code::PageUp,
-        0x75 => Code::Delete,
-        0x76 => Code::F4,
-        0x77 => Code::End,
-        0x78 => Code::F2,
-        0x79 => Code::PageDown,
-        0x7a => Code::F1,
-        0x7b => Code::ArrowLeft,
-        0x7c => Code::ArrowRight,
-        0x7d => Code::ArrowDown,
-        0x7e => Code::ArrowUp,
+        //control characters
+        0x20 => Code::Space,
+        0xff09 => Code::Tab,
+        0x60 => Code::Backquote,
+        0xff1b => Code::Escape,
+        0xff0d => Code::Enter,
+        // modifiers
+        0xffe1 => Code::ShiftLeft,
+        0xffe2 => Code::ShiftRight,
+        0xffe3 => Code::ControlLeft,
+        0xffe4 => Code::ControlRight,
+        0xffe5 => Code::CapsLock,
+        0xffe7 => Code::MetaLeft,
+        0xffe8 => Code::MetaRight,
+        0xffe9 => Code::AltLeft,
+        0xffea => Code::AltRight,
+        0xff7f => Code::NumLock,
+        0x1008ff13 => Code::AudioVolumeUp,
+        0x1008ff11 => Code::AudioVolumeDown,
+        0x1008ff12 => Code::AudioVolumeMute,
+        0x00a5 => Code::IntlYen,
+        //0x5e => Code::IntlRo,
+        //0x66 => Code::Lang2,
+        //0x68 => Code::Lang1,
+        0xff67 => Code::ContextMenu,
+        0xff9e => Code::Insert,
+        0xff95 => Code::Home,
+        0xff9a => Code::PageUp,
+        0xffff => Code::Delete,
+        0xff9c => Code::End,
+        // arrows
+        0xff9b => Code::PageDown,
+        0xff51 => Code::ArrowLeft,
+        0xff53 => Code::ArrowRight,
+        0xff54 => Code::ArrowDown,
+        0xff52 => Code::ArrowUp,
         _ => Code::Unidentified,
     }
 }

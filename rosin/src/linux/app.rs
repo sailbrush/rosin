@@ -62,7 +62,7 @@ impl<S: Sync + 'static> AppLauncher<S> {
     pub fn run(mut self, _state: S, _translation_map: TranslationMap) -> Result<(), LaunchError> {
         self.state = Some(Rc::new(RefCell::new(_state)));
         let way_conn = wayland_client::Connection::connect_to_env();
-        if way_conn.is_ok() && false {
+        if false { // disable wayland for now
             use smithay_client_toolkit::{output::OutputState, registry::RegistryState, seat::SeatState, shell::WaylandSurface};
             use wayland_client::Proxy;
 
