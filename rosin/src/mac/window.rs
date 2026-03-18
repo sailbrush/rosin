@@ -9,7 +9,7 @@ use std::{
 
 use accesskit_macos::SubclassingAdapter;
 use objc2::{
-    AnyThread, ClassType, DeclaredClass, MainThreadOnly, define_class, msg_send,
+    AnyThread, ClassType, MainThreadOnly, define_class, msg_send,
     rc::{Allocated, Retained},
     runtime::{AnyObject, Bool, ProtocolObject, Sel},
     sel,
@@ -53,6 +53,7 @@ pub(crate) fn ivars_accessor_ptr() -> *mut () {
 #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
 #[inline(always)]
 pub(crate) fn view_ivars(view: &RosinView) -> &ViewIvars {
+    use objc2::DeclaredClass;
     view.ivars()
 }
 
@@ -973,6 +974,7 @@ impl<'a, S: Sync + 'static> ViewportTrait for ViewportContainer<'a, S> {
 }
 
 impl RosinView {
+    #[allow(unused)]
     #[cfg(all(feature = "hot-reload", debug_assertions))]
     #[deprecated = "Use view_ivars() instead of .ivars(), direct calls can crash under hot-reload"]
     pub(crate) fn ivars(&self) -> &ViewIvars {
