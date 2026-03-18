@@ -1,7 +1,7 @@
 use crate::linux::util;
 use crate::linux::{
     create_window::create_window_x11,
-    x11_state::{AtomCollection, choose_visual},
+    x11::{AtomCollection, choose_visual},
 };
 use crate::prelude::*;
 use pollster::FutureExt;
@@ -21,7 +21,7 @@ use x11rb::xcb_ffi::XCBConnection;
 use raw_window_handle::{XcbDisplayHandle, XcbWindowHandle};
 use rosin_core::prelude::Viewport;
 
-use crate::linux::x11_state::RosinX11Window;
+use crate::linux::x11::RosinX11Window;
 static _APP_STARTED: OnceLock<()> = OnceLock::new();
 
 pub(crate) struct AppLauncher<S: Sync + 'static> {
@@ -62,12 +62,11 @@ impl<S: Sync + 'static> AppLauncher<S> {
     pub fn run(mut self, _state: S, _translation_map: TranslationMap) -> Result<(), LaunchError> {
         self.state = Some(Rc::new(RefCell::new(_state)));
         let way_conn = wayland_client::Connection::connect_to_env();
-        if way_conn.is_ok() && false
-        {
+        if way_conn.is_ok() && false {
             use smithay_client_toolkit::{output::OutputState, registry::RegistryState, seat::SeatState, shell::WaylandSurface};
             use wayland_client::Proxy;
 
-            use crate::linux::{create_window::create_window_wayland, wayland_state::RosinWaylandWindow};
+            use crate::linux::{create_window::create_window_wayland, wayland::RosinWaylandWindow};
 
             let conn = way_conn.unwrap();
             let (globals, mut event_queue) = wayland_client::globals::registry_queue_init(&conn).unwrap();
@@ -147,7 +146,6 @@ impl<S: Sync + 'static> AppLauncher<S> {
             };
             let viewport: Viewport<S, crate::prelude::WindowHandle> =
                 Viewport::new(desc.viewfn.func, desc.size, rosin_core::kurbo::Vec2 { x: 1.0f64, y: 1.0f64 }, _translation_map);
-            
 
             let wh = crate::prelude::WindowHandle {
                 0: crate::linux::handle::WindowHandle {
@@ -188,9 +186,7 @@ impl<S: Sync + 'static> AppLauncher<S> {
                 window_handle: wh,
             };
             let _ = window.run_loop(event_queue);
-        }
-        else
-        {
+        } else {
             let desc = self.windows[0].clone();
             let (conn, screen_num) = XCBConnection::connect(None).unwrap();
             let screen = &conn.setup().roots[screen_num];
@@ -307,7 +303,7 @@ impl<S: Sync + 'static> AppLauncher<S> {
                 viewport,
                 window_handle: wh,
                 atoms,
-                desc
+                desc,
             };
 
             x11Window.configure();

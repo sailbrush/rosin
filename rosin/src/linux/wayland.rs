@@ -1,14 +1,21 @@
 use smithay_client_toolkit::{
-    compositor::*, output::*, reexports::calloop::Result, registry::*, seat::*, shell::xdg::window::{Window, WindowConfigure, WindowHandler}, *
+    compositor::*,
+    output::*,
+    reexports::calloop::Result,
+    registry::*,
+    seat::*,
+    shell::xdg::window::{Window, WindowConfigure, WindowHandler},
+    *,
 };
 use wayland_client::{
-    Connection, EventQueue, QueueHandle, protocol::{wl_output, wl_seat, wl_surface}
+    Connection, EventQueue, QueueHandle,
+    protocol::{wl_output, wl_seat, wl_surface},
 };
 
 use crate::gpu::GpuCtx;
 use crate::peniko;
-use crate::wgpu::util::TextureBlitter;
 use crate::wgpu::TextureViewDescriptor;
+use crate::wgpu::util::TextureBlitter;
 use rosin_core::viewport::Viewport;
 use rosin_core::{
     vello::{self},
@@ -74,7 +81,6 @@ impl<S: Sync + 'static> WindowHandler for RosinWaylandWindow<S> {
     }
     // this gets called whenever something with the window changes, ex resize, minimize, maximize, etc.
     fn configure(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _window: &Window, configure: WindowConfigure, _serial: u32) {
-
         let (new_width, new_height) = configure.new_size;
         self.width = new_width.map_or(self.width, |v| v.get());
         self.height = new_height.map_or(self.height, |v| v.get());
@@ -174,8 +180,7 @@ impl<S: Sync + 'static> RosinWaylandWindow<S> {
         queue.submit(Some(encoder.finish()));
         surface_texture.present();
     }
-    pub fn configure(&mut self){
-
+    pub fn configure(&mut self) {
         let adapter = &self.gpu_ctx.adapter;
         let surface = &self.surface;
 
@@ -192,7 +197,7 @@ impl<S: Sync + 'static> RosinWaylandWindow<S> {
         };
         surface.configure(&self.gpu_ctx.device, &surface_config);
     }
-    pub fn run_loop(&mut self, mut event_queue: EventQueue<RosinWaylandWindow<S>>) -> Result<()>{
+    pub fn run_loop(&mut self, mut event_queue: EventQueue<RosinWaylandWindow<S>>) -> Result<()> {
         loop {
             event_queue.blocking_dispatch(self).unwrap();
             if self.exit {

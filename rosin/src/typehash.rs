@@ -575,9 +575,7 @@ impl<A: TypeHash> TypeHash for (A,) {
         if depth == 0 {
             return 1;
         }
-        A::get_typehash(depth - 1)
-            .wrapping_add(82183243201)
-            ^ 6769770974631404992
+        A::get_typehash(depth - 1).wrapping_add(82183243201) ^ 6769770974631404992
     }
 }
 
