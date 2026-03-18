@@ -8,7 +8,7 @@ pub fn dragvalue<S>(ui: &mut Ui<S, WindowHandle>, id: NodeId, value: WeakVar<f64
         .id(id)
         .classes("drag-value")
         .style_sheet(widget_styles())
-        .text(ui_format!(value, "{:.2}"))
+        .text(ui_format!("{:.2}", value))
         .event(On::PointerDown, |_, ctx| {
             let Some(ev) = ctx.pointer() else { return };
             if ev.button.is_primary() && !ev.did_focus_window {
