@@ -168,7 +168,7 @@ impl<S: Sync + 'static> RosinX11Window<S> {
         let device = &self.gpu_ctx.device;
         let queue = &self.gpu_ctx.queue;
 
-        let cap = surface.get_capabilities(&adapter);
+        let cap = surface.get_capabilities(adapter);
 
         let surface_texture = surface.get_current_texture().expect("failed to acquire next swapchain texture");
 
@@ -193,7 +193,7 @@ impl<S: Sync + 'static> RosinX11Window<S> {
 
             let _renderpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
-                color_attachments: &[Some(color_attachment)].as_slice(),
+                color_attachments: [Some(color_attachment)].as_slice(),
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
@@ -335,7 +335,7 @@ impl<S: Sync + 'static> RosinX11Window<S> {
     pub fn configure(&mut self) {
         let adapter = &self.gpu_ctx.adapter;
         let surface = &self.surface;
-        let cap = surface.get_capabilities(&adapter);
+        let cap = surface.get_capabilities(adapter);
         let surface_config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: cap.formats[0],
@@ -358,7 +358,7 @@ impl<S: Sync + 'static> RosinX11Window<S> {
             while let Some(ref event) = event_option {
                 match event {
                     Event::Expose(_) => {}
-                    Event::ConfigureNotify(event) => {
+                    Event::ConfigureNotify(_event) => {
                         self.configure();
                         redraw = true;
                     }

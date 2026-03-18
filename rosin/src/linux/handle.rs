@@ -16,7 +16,7 @@ impl Clone for WindowHandle {
     fn clone(&self) -> Self {
         Self {
             wayland_handle: self.wayland_handle.clone(),
-            x11_handle: self.x11_handle.clone(),
+            x11_handle: self.x11_handle,
         }
     }
 }

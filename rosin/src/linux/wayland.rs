@@ -129,7 +129,7 @@ impl<S: Sync + 'static> RosinWaylandWindow<S> {
         let queue = &self.gpu_ctx.queue;
         let surface_texture = surface.get_current_texture().expect("failed to acquire next swapchain texture");
 
-        let cap = surface.get_capabilities(&adapter);
+        let cap = surface.get_capabilities(adapter);
         let texture_view = self.tex_to_render.create_view(&TextureViewDescriptor::default());
 
         let mut swap_tex_desc = TextureViewDescriptor::default();
@@ -150,7 +150,7 @@ impl<S: Sync + 'static> RosinWaylandWindow<S> {
 
             let _renderpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
-                color_attachments: &[Some(color_attachment)].as_slice(),
+                color_attachments: [Some(color_attachment)].as_slice(),
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
@@ -160,8 +160,8 @@ impl<S: Sync + 'static> RosinWaylandWindow<S> {
 
         let params = vello::RenderParams {
             base_color: peniko::Color::BLACK,
-            width: self.width as u32,
-            height: self.height as u32,
+            width: self.width,
+            height: self.height,
             antialiasing_method: vello::AaConfig::Msaa16,
         };
 
@@ -184,7 +184,7 @@ impl<S: Sync + 'static> RosinWaylandWindow<S> {
         let adapter = &self.gpu_ctx.adapter;
         let surface = &self.surface;
 
-        let cap = surface.get_capabilities(&adapter);
+        let cap = surface.get_capabilities(adapter);
         let surface_config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: cap.formats[0],

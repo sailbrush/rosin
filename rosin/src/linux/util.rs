@@ -1,4 +1,3 @@
-use crate::linux::x11;
 use rosin_core::{
     keyboard_types::{Code, KeyboardEvent, Location, Modifiers},
     kurbo::{Point, Vec2},
@@ -48,7 +47,7 @@ pub(crate) fn convert_mouse_button_pressed_x11(bpe: &ButtonPressEvent) -> Pointe
         mods: convert_modifiers(bpe.state),
         count: 1,
         did_focus_window: true,
-        pressure: 1 as f32,
+        pressure: 1_f32,
         tangential_pressure: 0 as f32,
         tilt: Vec2::default(),
         twist: 0 as f32,
@@ -64,7 +63,7 @@ pub(crate) fn convert_mouse_button_released_x11(bre: &ButtonReleaseEvent) -> Poi
         mods: convert_modifiers(bre.state),
         count: 0,
         did_focus_window: true,
-        pressure: 1 as f32,
+        pressure: 1_f32,
         tangential_pressure: 0 as f32,
         tilt: Vec2::default(),
         twist: 0 as f32,
@@ -92,19 +91,19 @@ pub(crate) fn convert_mouse_motion_x11(mm: &MotionNotifyEvent) -> PointerEvent {
 fn convert_modifiers(modifiers: KeyButMask) -> Modifiers {
     let mut retval = Modifiers::default();
     if modifiers.contains(KeyButMask::SHIFT) {
-        retval = retval | Modifiers::SHIFT;
+        retval |= Modifiers::SHIFT;
     }
     if modifiers.contains(KeyButMask::CONTROL) {
-        retval = retval | Modifiers::CONTROL;
+        retval |= Modifiers::CONTROL;
     }
     if modifiers.contains(KeyButMask::MOD1) {
-        retval = retval | Modifiers::ALT;
+        retval |= Modifiers::ALT;
     }
     if modifiers.contains(KeyButMask::MOD2) {
-        retval = retval | Modifiers::NUM_LOCK;
+        retval |= Modifiers::NUM_LOCK;
     }
     if modifiers.contains(KeyButMask::LOCK) {
-        retval = retval | Modifiers::CAPS_LOCK;
+        retval |= Modifiers::CAPS_LOCK;
     }
     retval
 }
@@ -212,7 +211,7 @@ fn convert_code_x11(key_code: u16) -> Code {
     )
     .unwrap();
 
-    let mut state = xkb::State::new(&keymap);
+    let state = xkb::State::new(&keymap);
     let keysym = state.key_get_one_sym(key_code.into());
     match u32::from(keysym) {
         // function keys

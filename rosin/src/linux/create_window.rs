@@ -1,5 +1,4 @@
 use crate::{desc::WindowDesc, linux::wayland::RosinWaylandWindow};
-use smithay_client_toolkit::reexports::protocols_experimental::input_method::v1::client::xx_input_method_manager_v2::Event;
 use smithay_client_toolkit::shell::{WaylandSurface, xdg::window::Window};
 use smithay_client_toolkit::{
     compositor::CompositorState,
@@ -58,7 +57,7 @@ pub(crate) fn create_window_x11<S: Any + Sync + 'static, T: x11rb::connection::C
     let title = desc.title.clone().unwrap();
     conn.change_property8(PropMode::REPLACE, window, AtomEnum::WM_NAME, AtomEnum::STRING, title.as_bytes())?;
     conn.change_property8(PropMode::REPLACE, window, atoms._NET_WM_NAME, atoms.UTF8_STRING, title.as_bytes())?;
-    conn.change_property32(PropMode::REPLACE, window, atoms.WM_PROTOCOLS, AtomEnum::ATOM, &[atoms.WM_DELETE_WINDOW].as_slice())?;
+    conn.change_property32(PropMode::REPLACE, window, atoms.WM_PROTOCOLS, AtomEnum::ATOM, [atoms.WM_DELETE_WINDOW].as_slice())?;
     conn.change_property8(PropMode::REPLACE, window, AtomEnum::WM_CLASS, AtomEnum::STRING, title.as_bytes())?;
 
     x11rb::protocol::xproto::ConnectionExt::map_window(&conn, window)?;
@@ -66,15 +65,15 @@ pub(crate) fn create_window_x11<S: Any + Sync + 'static, T: x11rb::connection::C
 }
 
 pub(crate) fn create_window_wayland<S: Any + Sync + 'static>(desc: &WindowDesc<S>, globals: &GlobalList, qh: &QueueHandle<RosinWaylandWindow<S>>) -> Window {
-    let compositor_state = CompositorState::bind(&globals, &qh).expect("wl_compositor not available");
-    let surface = compositor_state.create_surface(&qh);
-    let xdg_shell_state = XdgShell::bind(&globals, &qh).expect("xdg shell not available");
-    let window = xdg_shell_state.create_window(surface, WindowDecorations::RequestServer, &qh);
+    let compositor_state = CompositorState::bind(globals, qh).expect("wl_compositor not available");
+    let surface = compositor_state.create_surface(qh);
+    let xdg_shell_state = XdgShell::bind(globals, qh).expect("xdg shell not available");
+    let window = xdg_shell_state.create_window(surface, WindowDecorations::RequestServer, qh);
     window.set_title(desc.title.clone().unwrap().deref());
     window.set_app_id("rosin.default.id");
     window.set_min_size(Some((desc.min_size.unwrap_or(desc.size).width as u32, desc.min_size.unwrap_or(desc.size).height as u32)));
     window.set_max_size(Some((desc.max_size.unwrap_or(desc.size).width as u32, desc.max_size.unwrap_or(desc.size).height as u32)));
 
     window.commit();
-    return window;
+    window
 }
