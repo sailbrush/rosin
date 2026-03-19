@@ -1,17 +1,30 @@
 use std::{any::Any, time::Duration};
-
-use raw_window_handle::{DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle as RWHWindowHandle};
-
+use std::sync::Arc;
+use std::sync::RwLock;
+use std::borrow::Borrow;
 use crate::{
     kurbo::{Point, Size},
     prelude::*,
 };
+use raw_window_handle::{DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle as RWHWindowHandle};
+pub(crate) struct InputHandlerVars {
+    pub(crate) id: Option<NodeId>,
+    pub(crate) handler: Option<Box<dyn InputHandler + Send + Sync>>,
+}
 
-pub(crate) struct WindowHandle {}
+pub(crate) struct WindowHandle {
+    pub(crate) wayland_handle: Option<smithay_client_toolkit::shell::xdg::window::Window>,
+    pub(crate) x11_handle: Option<x11rb::protocol::xproto::Window>,
+    pub(crate) input_handler: Arc<RwLock<InputHandlerVars>>,
+}
 
 impl Clone for WindowHandle {
     fn clone(&self) -> Self {
-        Self {}
+        Self {
+            wayland_handle: self.wayland_handle.clone(),
+            x11_handle: self.x11_handle,
+            input_handler: self.input_handler.clone(),
+        }
     }
 }
 
@@ -28,7 +41,12 @@ impl HasDisplayHandle for WindowHandle {
 }
 
 impl WindowHandle {
-    pub fn set_input_handler(&self, _id: Option<NodeId>, _handler: Option<Box<dyn InputHandler + Send + Sync>>) {}
+    pub fn set_input_handler(&self, _id: Option<NodeId>, _handler: Option<Box<dyn InputHandler + Send + Sync>>) {
+        let clone: &RwLock<InputHandlerVars> = self.input_handler.borrow();
+        let mut input_handle = clone.write().unwrap();
+        input_handle.handler = _handler;
+        input_handle.id = _id;
+    }
 
     pub fn get_logical_size(&self) -> Size {
         Size::ZERO
@@ -64,9 +82,23 @@ impl WindowHandle {
 
     pub fn request_exit(&self) {}
 
-    pub fn set_max_size(&self, _size: Option<impl Into<Size>>) {}
+    pub fn set_max_size(&self, _size: Option<impl Into<Size>>) {
+        if self.wayland_handle.is_some() {
+            let size = _size.unwrap().into();
+            let w = size.width as u32;
+            let h = size.height as u32;
+            self.wayland_handle.as_ref().unwrap().set_max_size(Some((w, h)));
+        }
+    }
 
-    pub fn set_min_size(&self, _size: Option<impl Into<Size>>) {}
+    pub fn set_min_size(&self, _size: Option<impl Into<Size>>) {
+        if self.wayland_handle.is_some() {
+            let size = _size.unwrap().into();
+            let w = size.width as u32;
+            let h = size.height as u32;
+            self.wayland_handle.as_ref().unwrap().set_min_size(Some((w, h)));
+        }
+    }
 
     pub fn set_position(&self, _position: impl Into<Point>) {}
 
@@ -76,9 +108,17 @@ impl WindowHandle {
 
     pub fn set_title(&self, _title: impl Into<String>) {}
 
-    pub fn minimize(&self) {}
+    pub fn minimize(&self) {
+        if self.wayland_handle.is_some() {
+            self.wayland_handle.as_ref().unwrap().set_minimized();
+        }
+    }
 
-    pub fn maximize(&self) {}
+    pub fn maximize(&self) {
+        if self.wayland_handle.is_some() {
+            self.wayland_handle.as_ref().unwrap().set_maximized();
+        }
+    }
 
     pub fn restore(&self) {}
 
