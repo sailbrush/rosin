@@ -232,6 +232,18 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
     fn update_hot_indexes_at(&mut self, point: Point) {
         self.curr_hot_indexes.clear();
         layout::hit_test(&self.temp, &self.curr_tree, point, &mut self.curr_hot_indexes);
+
+        if let Some(captured_nid) = self.capture
+            && let Some(&cap_idx) = self.curr_tree.nid_map.get(&captured_nid)
+        {
+            self.curr_hot_indexes.clear();
+            let mut idx = cap_idx;
+            while idx != usize::MAX {
+                self.curr_hot_indexes.push(idx);
+                idx = self.curr_tree.nodes[idx].parent;
+            }
+            self.curr_hot_indexes.sort_unstable();
+        }
     }
 
     // Returns true if any nodes were marked dirty
@@ -725,23 +737,7 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
         std::mem::swap(&mut self.curr_hot_indexes, &mut self.prev_hot_indexes);
         self.update_hot_indexes_at(last_event_pos);
 
-        let mut capture_idx: Option<usize> = None;
-
-        // If captured, clamp hover to the captured node if the pointer is actually over it.
-        if let Some(captured_nid) = self.capture {
-            if let Some(&cap_idx) = self.curr_tree.nid_map.get(&captured_nid) {
-                capture_idx = Some(cap_idx);
-
-                let over = self.curr_hot_indexes.contains(&cap_idx);
-                self.curr_hot_indexes.clear();
-                if over {
-                    self.curr_hot_indexes.push(cap_idx);
-                }
-            } else {
-                // Captured node doesn't exist anymore
-                self.capture = None;
-            }
-        }
+        let capture_idx = self.capture.and_then(|nid| self.curr_tree.nid_map.get(&nid).copied());
 
         self.queue_pointer_leave_enter_events(EventInfo::Pointer(*event));
 
