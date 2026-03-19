@@ -110,6 +110,61 @@ fn convert_modifiers(modifiers: KeyButMask) -> Modifiers {
 fn convert_mouse_button(btn: u8) -> PointerButton {
     PointerButton::from(btn as isize)
 }
+fn last_char(s: &str) -> char {
+    s.chars().last().expect("empty string")
+}
+pub fn kb_event_to_str(kbe: &KeyboardEvent) -> String {
+    let mut retval = String::new();
+    let mut c = char::from_u32(match kbe.key {
+            // See: https://w3c.github.io/uievents/#fixed-virtual-key-codes
+            Key::Named(NamedKey::Backspace) => 8,
+            Key::Named(NamedKey::Tab) => 9,
+            Key::Named(NamedKey::Enter) => 13,
+            Key::Named(NamedKey::Shift) => 16,
+            Key::Named(NamedKey::Control) => 17,
+            Key::Named(NamedKey::Alt) => 18,
+            Key::Named(NamedKey::CapsLock) => 20,
+            Key::Named(NamedKey::Escape) => 27,
+            Key::Named(NamedKey::PageUp) => 33,
+            Key::Named(NamedKey::PageDown) => 34,
+            Key::Named(NamedKey::End) => 35,
+            Key::Named(NamedKey::Home) => 36,
+            Key::Named(NamedKey::ArrowLeft) => 37,
+            Key::Named(NamedKey::ArrowUp) => 38,
+            Key::Named(NamedKey::ArrowRight) => 39,
+            Key::Named(NamedKey::ArrowDown) => 40,
+            Key::Named(NamedKey::Delete) => 46,
+            Key::Character(ref c) => match last_char(c) {
+                ' ' => 32,
+                x @ '0'..='9' => x as u32,
+                x @ 'a'..='z' => x.to_ascii_uppercase() as u32,
+                x @ 'A'..='Z' => x as u32,
+                // See: https://w3c.github.io/uievents/#optionally-fixed-virtual-key-codes
+                ';' | ':' => 186,
+                '=' | '+' => 187,
+                ',' | '<' => 188,
+                '-' | '_' => 189,
+                '.' | '>' => 190,
+                '/' | '?' => 191,
+                '`' | '~' => 192,
+                '[' | '{' => 219,
+                '\\' | '|' => 220,
+                ']' | '}' => 221,
+                '\'' | '\"' => 222,
+                _ => 0,
+            },
+            _ => 0,
+        }).unwrap();
+        if kbe.modifiers.shift() {
+            c.make_ascii_uppercase();
+        } else {
+            c.make_ascii_lowercase();
+        }
+        retval.push(c);
+        println!("{:?}", c);
+    retval
+}
+
 
 fn convert_key(code: Code) -> Option<Key> {
     Some(match code {
@@ -344,3 +399,5 @@ fn convert_code_x11(key_code: u16) -> Code {
         _ => Code::Unidentified,
     }
 }
+
+

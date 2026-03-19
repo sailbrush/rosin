@@ -1,3 +1,6 @@
+use crate::ime::InputHandler;
+use crate::linux::handle::InputHandlerVars;
+use crate::linux::util::kb_event_to_str;
 use crate::prelude::OverlayPipeline;
 use crate::{
     desc::WindowDesc,
@@ -18,6 +21,8 @@ use std::borrow::Cow;
 use std::cell::RefCell;
 use std::ops::Index;
 use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::RwLock;
 use x11rb::{
     connection::Connection,
     errors::ReplyError,
@@ -159,6 +164,8 @@ pub(crate) struct RosinX11Window<S: Sync + 'static> {
     pub(crate) app_state: Rc<RefCell<S>>,
     pub(crate) window_handle: crate::handle::WindowHandle,
     pub(crate) desc: WindowDesc<S>,
+    pub(crate) input_handler: Arc<RwLock<InputHandlerVars>>,
+    pub(crate) new_size: Option<(u32, u32)>,
 }
 
 impl<S: Sync + 'static> RosinX11Window<S> {
@@ -341,8 +348,16 @@ impl<S: Sync + 'static> RosinX11Window<S> {
             format: cap.formats[0],
             view_formats: vec![cap.formats[0]],
             alpha_mode: wgpu::CompositeAlphaMode::Auto,
-            width: self.desc.size.width as u32,
-            height: self.desc.size.height as u32,
+            width: if self.new_size.is_some() || self.new_size.unwrap_or((0, 0)) != (0, 0) {
+                self.new_size.unwrap().0
+            } else {
+                self.desc.size.width as u32
+            },
+            height: if self.new_size.is_some() || self.new_size.unwrap_or((0, 0)) != (0, 0) {
+                self.new_size.unwrap().1
+            } else {
+                self.desc.size.height as u32
+            },
             desired_maximum_frame_latency: 2,
             present_mode: wgpu::PresentMode::Mailbox,
         };
@@ -359,6 +374,7 @@ impl<S: Sync + 'static> RosinX11Window<S> {
                 match event {
                     Event::Expose(_) => {}
                     Event::ConfigureNotify(_event) => {
+                        self.new_size = Some((_event.width as u32, _event.height as u32));
                         self.configure();
                         redraw = true;
                     }
@@ -371,6 +387,47 @@ impl<S: Sync + 'static> RosinX11Window<S> {
                     }
                     Event::KeyPress(event) => {
                         let e = convert_keyboard_event_pressed_x11(event);
+                        let mut input_handle = self.input_handler.write().unwrap();
+                        if let Some(handler) = input_handle.handler.as_mut() {
+                            let text = kb_event_to_str(&e);
+                            if text.chars().last().unwrap().is_alphabetic() {
+                                let text_len = text.len();
+
+                                // Determine the range in the document to overwrite.
+                                let range = handler.composition_range().unwrap_or_else(|| handler.selection());
+
+                                let start = range.start;
+                                handler.replace_range(range, &text);
+
+                                // Update selection to end of inserted text to prevent backward typing
+                                let new_cursor_pos = start + text_len;
+                                handler.set_selection(new_cursor_pos..new_cursor_pos);
+
+                                // Text is committed, so there is no longer "marked" text.
+                                handler.set_composition_range(None);
+                                self.viewport.queue_change_event(input_handle.id.expect("panic"));
+                            } else {
+                                if text.chars().last().unwrap() == '\u{8}' {
+
+                                    // Determine the range in the document to overwrite.
+                                    let range = handler.composition_range().unwrap_or_else(|| handler.selection());
+                                    if range.start != 0 {
+                                        let start = range.start - 1;
+                                        handler
+                                            .handle_action(crate::ime::Action::Delete(crate::ime::Movement::Grapheme(crate::ime::HorizontalDirection::Left)));
+
+                                        // Update selection to end of inserted text to prevent backward typing
+                                        let new_cursor_pos = start;
+                                        handler.set_selection(new_cursor_pos..new_cursor_pos);
+
+                                        // Text is committed, so there is no longer "marked" text.
+                                        handler.set_composition_range(None);
+                                        self.viewport.queue_change_event(input_handle.id.expect("panic"));
+                                    }
+                                }
+                            }
+                        }
+
                         self.viewport.queue_keyboard_event(&e);
                         redraw = true;
                     }

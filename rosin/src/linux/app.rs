@@ -1,3 +1,4 @@
+use crate::linux::handle::InputHandlerVars;
 use crate::linux::util;
 use crate::linux::{
     create_window::create_window_x11,
@@ -6,6 +7,8 @@ use crate::linux::{
 use crate::prelude::*;
 use pollster::FutureExt;
 use raw_window_handle::{RawDisplayHandle, RawWindowHandle, WaylandDisplayHandle, WaylandWindowHandle};
+use raw_window_handle::{XcbDisplayHandle, XcbWindowHandle};
+use rosin_core::prelude::Viewport;
 use rosin_core::vello::{self, AaSupport};
 use rosin_core::wgpu;
 use rosin_core::wgpu::ExperimentalFeatures;
@@ -16,9 +19,6 @@ use std::rc::Rc;
 use std::sync::OnceLock;
 use x11rb::connection::Connection as X11Conn;
 use x11rb::xcb_ffi::XCBConnection;
-
-use raw_window_handle::{XcbDisplayHandle, XcbWindowHandle};
-use rosin_core::prelude::Viewport;
 
 use crate::linux::x11::RosinX11Window;
 static _APP_STARTED: OnceLock<()> = OnceLock::new();
@@ -61,11 +61,12 @@ impl<S: Sync + 'static> AppLauncher<S> {
     pub fn run(mut self, _state: S, _translation_map: TranslationMap) -> Result<(), LaunchError> {
         self.state = Some(Rc::new(RefCell::new(_state)));
         let way_conn = wayland_client::Connection::connect_to_env();
-        if false { // disable wayland for now, test should be way_conn.is_some() I think
+        if false {
+            // disable wayland for now, test should be way_conn.is_some() I think
             use smithay_client_toolkit::{output::OutputState, registry::RegistryState, seat::SeatState, shell::WaylandSurface};
             use wayland_client::Proxy;
 
-            use crate::linux::{create_window::create_window_wayland, wayland::RosinWaylandWindow};
+            use crate::linux::{create_window::create_window_wayland, handle::InputHandlerVars, wayland::RosinWaylandWindow};
 
             let conn = way_conn.unwrap();
             let (globals, event_queue) = wayland_client::globals::registry_queue_init(&conn).unwrap();
@@ -147,9 +148,10 @@ impl<S: Sync + 'static> AppLauncher<S> {
                 Viewport::new(desc.viewfn.func, desc.size, rosin_core::kurbo::Vec2 { x: 1.0f64, y: 1.0f64 }, _translation_map);
 
             let wh = crate::prelude::WindowHandle(crate::linux::handle::WindowHandle {
-                    wayland_handle: Some(window),
-                    x11_handle: None,
-                });
+                wayland_handle: Some(window),
+                x11_handle: None,
+                input_handler: std::sync::Arc::new(std::sync::RwLock::new(InputHandlerVars { id: None, handler: None })),
+            });
             let vello_renderer = {
                 let renderer = match vello::Renderer::new(
                     &gpu_ctx.device,
@@ -189,7 +191,6 @@ impl<S: Sync + 'static> AppLauncher<S> {
             let screen = &conn.setup().roots[screen_num];
             let atoms = AtomCollection::new(&conn).unwrap().reply().unwrap();
             let (depth, visualid) = choose_visual(&conn, screen_num).unwrap();
-
             let window = create_window_x11(&desc, &conn, screen, &atoms, depth, visualid).unwrap();
 
             let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
@@ -286,9 +287,10 @@ impl<S: Sync + 'static> AppLauncher<S> {
                 })
             };
             let wh = crate::prelude::WindowHandle(crate::linux::handle::WindowHandle {
-                    wayland_handle: None,
-                    x11_handle: Some(window),
-                });
+                wayland_handle: None,
+                x11_handle: Some(window),
+                input_handler: std::sync::Arc::new(std::sync::RwLock::new(InputHandlerVars { id: None, handler: None })),
+            });
             let mut x11_window = RosinX11Window {
                 app_state: self.state.unwrap(),
                 gpu_ctx,
@@ -296,9 +298,11 @@ impl<S: Sync + 'static> AppLauncher<S> {
                 surface: wgpu_surface,
                 tex_to_render: vello_texture,
                 viewport,
+                input_handler: wh.0.input_handler.clone(),
                 window_handle: wh,
                 atoms,
                 desc,
+                new_size: None,
             };
 
             x11_window.configure();
