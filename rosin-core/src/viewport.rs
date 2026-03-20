@@ -1182,6 +1182,7 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
                     self.prev_hot_indexes.push(new_idx);
                 }
             }
+            self.curr_hot_indexes.clear();
         }
         let build_complete = Instant::now();
         perf_info.build_time = build_complete.duration_since(start_time);
