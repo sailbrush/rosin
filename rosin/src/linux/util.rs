@@ -1,114 +1,12 @@
 use rosin_core::{
-    keyboard_types::{Code, KeyboardEvent, Location, Modifiers},
-    kurbo::{Point, Vec2},
-    prelude::{Key, KeyState, NamedKey, PointerButton, PointerButtons, PointerEvent, PointerType},
+    keyboard_types::{Code, KeyboardEvent, Location},
+    prelude::{Key, NamedKey},
 };
-use x11rb::protocol::xproto::{ButtonPressEvent, ButtonReleaseEvent, KeyButMask, KeyPressEvent, KeyReleaseEvent, MotionNotifyEvent};
 use xkbcommon::xkb;
 
 pub(crate) fn panic_and_print(msg: String) -> ! {
     println!("{}", msg);
     std::process::abort()
-}
-
-pub(crate) fn convert_keyboard_event_pressed_x11(kpe: &KeyPressEvent) -> KeyboardEvent {
-    let c = convert_code_x11(kpe.detail as u16);
-    let k = convert_key(c);
-    KeyboardEvent {
-        code: c,
-        state: KeyState::Down,
-        key: if k.is_some() { k.unwrap() } else { Key::Character(c.to_string()) },
-        location: convert_location(c),
-        modifiers: convert_modifiers(kpe.state),
-        repeat: false,
-        is_composing: false,
-    }
-}
-
-pub(crate) fn convert_keyboard_event_released_x11(kre: &KeyReleaseEvent) -> KeyboardEvent {
-    let c = convert_code_x11(kre.detail as u16);
-    let k = convert_key(c);
-    KeyboardEvent {
-        code: c,
-        state: KeyState::Up,
-        key: if k.is_some() { k.unwrap() } else { Key::Character(c.to_string()) },
-        location: convert_location(c),
-        modifiers: convert_modifiers(kre.state),
-        repeat: false,
-        is_composing: false,
-    }
-}
-pub(crate) fn convert_mouse_button_pressed_x11(bpe: &ButtonPressEvent) -> PointerEvent {
-    PointerEvent {
-        viewport_pos: Point::new(bpe.event_x as f64, bpe.event_y as f64),
-        wheel_delta: Vec2::default(),
-        button: convert_mouse_button(bpe.detail),
-        buttons: PointerButtons::empty().with(convert_mouse_button(bpe.detail)),
-        mods: convert_modifiers(bpe.state),
-        count: 1,
-        did_focus_window: true,
-        pressure: 1_f32,
-        tangential_pressure: 0 as f32,
-        tilt: Vec2::default(),
-        twist: 0 as f32,
-        pointer_type: PointerType::Mouse,
-    }
-}
-pub(crate) fn convert_mouse_button_released_x11(bre: &ButtonReleaseEvent) -> PointerEvent {
-    PointerEvent {
-        viewport_pos: Point::new(bre.event_x as f64, bre.event_y as f64),
-        wheel_delta: Vec2::default(),
-        button: convert_mouse_button(bre.detail),
-        buttons: PointerButtons::empty(),
-        mods: convert_modifiers(bre.state),
-        count: 0,
-        did_focus_window: true,
-        pressure: 1_f32,
-        tangential_pressure: 0 as f32,
-        tilt: Vec2::default(),
-        twist: 0 as f32,
-        pointer_type: PointerType::Mouse,
-    }
-}
-
-pub(crate) fn convert_mouse_motion_x11(mm: &MotionNotifyEvent) -> PointerEvent {
-    PointerEvent {
-        viewport_pos: Point::new(mm.event_x as f64, mm.event_y as f64),
-        wheel_delta: Vec2::default(),
-        button: convert_mouse_button(mm.detail.into()),
-        buttons: PointerButtons::empty(),
-        mods: Modifiers::empty(),
-        count: 0,
-        did_focus_window: false,
-        pressure: 0 as f32,
-        tangential_pressure: 0 as f32,
-        tilt: Vec2::default(),
-        twist: 0 as f32,
-        pointer_type: PointerType::Mouse,
-    }
-}
-
-fn convert_modifiers(modifiers: KeyButMask) -> Modifiers {
-    let mut retval = Modifiers::default();
-    if modifiers.contains(KeyButMask::SHIFT) {
-        retval |= Modifiers::SHIFT;
-    }
-    if modifiers.contains(KeyButMask::CONTROL) {
-        retval |= Modifiers::CONTROL;
-    }
-    if modifiers.contains(KeyButMask::MOD1) {
-        retval |= Modifiers::ALT;
-    }
-    if modifiers.contains(KeyButMask::MOD2) {
-        retval |= Modifiers::NUM_LOCK;
-    }
-    if modifiers.contains(KeyButMask::LOCK) {
-        retval |= Modifiers::CAPS_LOCK;
-    }
-    retval
-}
-fn convert_mouse_button(btn: u8) -> PointerButton {
-    PointerButton::from(btn as isize)
 }
 fn last_char(s: &str) -> char {
     s.chars().last().expect("empty string")
@@ -116,55 +14,55 @@ fn last_char(s: &str) -> char {
 pub fn kb_event_to_str(kbe: &KeyboardEvent) -> String {
     let mut retval = String::new();
     let mut c = char::from_u32(match kbe.key {
-            // See: https://w3c.github.io/uievents/#fixed-virtual-key-codes
-            Key::Named(NamedKey::Backspace) => 8,
-            Key::Named(NamedKey::Tab) => 9,
-            Key::Named(NamedKey::Enter) => 13,
-            Key::Named(NamedKey::Shift) => 16,
-            Key::Named(NamedKey::Control) => 17,
-            Key::Named(NamedKey::Alt) => 18,
-            Key::Named(NamedKey::CapsLock) => 20,
-            Key::Named(NamedKey::Escape) => 27,
-            Key::Named(NamedKey::PageUp) => 33,
-            Key::Named(NamedKey::PageDown) => 34,
-            Key::Named(NamedKey::End) => 35,
-            Key::Named(NamedKey::Home) => 36,
-            Key::Named(NamedKey::ArrowLeft) => 37,
-            Key::Named(NamedKey::ArrowUp) => 38,
-            Key::Named(NamedKey::ArrowRight) => 39,
-            Key::Named(NamedKey::ArrowDown) => 40,
-            Key::Named(NamedKey::Delete) => 46,
-            Key::Character(ref c) => match last_char(c) {
-                ' ' => 32,
-                x @ '0'..='9' => x as u32,
-                x @ 'a'..='z' => x.to_ascii_uppercase() as u32,
-                x @ 'A'..='Z' => x as u32,
-                // See: https://w3c.github.io/uievents/#optionally-fixed-virtual-key-codes
-                ';' | ':' => 186,
-                '=' | '+' => 187,
-                ',' | '<' => 188,
-                '-' | '_' => 189,
-                '.' | '>' => 190,
-                '/' | '?' => 191,
-                '`' | '~' => 192,
-                '[' | '{' => 219,
-                '\\' | '|' => 220,
-                ']' | '}' => 221,
-                '\'' | '\"' => 222,
-                _ => 0,
-            },
+        // See: https://w3c.github.io/uievents/#fixed-virtual-key-codes
+        Key::Named(NamedKey::Backspace) => 8,
+        Key::Named(NamedKey::Tab) => 9,
+        Key::Named(NamedKey::Enter) => 13,
+        Key::Named(NamedKey::Shift) => 16,
+        Key::Named(NamedKey::Control) => 17,
+        Key::Named(NamedKey::Alt) => 18,
+        Key::Named(NamedKey::CapsLock) => 20,
+        Key::Named(NamedKey::Escape) => 27,
+        Key::Named(NamedKey::PageUp) => 33,
+        Key::Named(NamedKey::PageDown) => 34,
+        Key::Named(NamedKey::End) => 35,
+        Key::Named(NamedKey::Home) => 36,
+        Key::Named(NamedKey::ArrowLeft) => 37,
+        Key::Named(NamedKey::ArrowUp) => 38,
+        Key::Named(NamedKey::ArrowRight) => 39,
+        Key::Named(NamedKey::ArrowDown) => 40,
+        Key::Named(NamedKey::Delete) => 46,
+        Key::Character(ref c) => match last_char(c) {
+            ' ' => 32,
+            x @ '0'..='9' => x as u32,
+            x @ 'a'..='z' => x.to_ascii_uppercase() as u32,
+            x @ 'A'..='Z' => x as u32,
+            // See: https://w3c.github.io/uievents/#optionally-fixed-virtual-key-codes
+            ';' | ':' => 186,
+            '=' | '+' => 187,
+            ',' | '<' => 188,
+            '-' | '_' => 189,
+            '.' | '>' => 190,
+            '/' | '?' => 191,
+            '`' | '~' => 192,
+            '[' | '{' => 219,
+            '\\' | '|' => 220,
+            ']' | '}' => 221,
+            '\'' | '\"' => 222,
             _ => 0,
-        }).unwrap();
-        if kbe.modifiers.shift() {
-            c.make_ascii_uppercase();
-        } else {
-            c.make_ascii_lowercase();
-        }
-        retval.push(c);
-        println!("{:?}", c);
+        },
+        _ => 0,
+    })
+    .unwrap();
+    if kbe.modifiers.shift() {
+        c.make_ascii_uppercase();
+    } else {
+        c.make_ascii_lowercase();
+    }
+    retval.push(c);
+    println!("{:?}", c);
     retval
 }
-
 
 fn convert_key(code: Code) -> Option<Key> {
     Some(match code {
@@ -251,7 +149,7 @@ fn convert_location(code: Code) -> Location {
     }
 }
 // https://github.com/xkbcommon/libxkbcommon/blob/6e4f0fb9e7ee876f14aad07dda4d69a622c58a3b/include/xkbcommon/xkbcommon-keysyms.h
-fn convert_code_x11(key_code: u16) -> Code {
+fn convert_code(key_code: u16) -> Code {
     let context = xkb::Context::new(xkb::CONTEXT_NO_FLAGS);
 
     //empty strings indicates system default
@@ -399,5 +297,3 @@ fn convert_code_x11(key_code: u16) -> Code {
         _ => Code::Unidentified,
     }
 }
-
-

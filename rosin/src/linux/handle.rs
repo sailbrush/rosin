@@ -1,13 +1,13 @@
-use std::{any::Any, time::Duration};
-use std::sync::Arc;
-use std::sync::RwLock;
-use std::borrow::Borrow;
 use crate::linux::create_window::WaylandWindow;
 use crate::{
     kurbo::{Point, Size},
     prelude::*,
 };
 use raw_window_handle::{DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle as RWHWindowHandle};
+use std::borrow::Borrow;
+use std::sync::Arc;
+use std::sync::RwLock;
+use std::{any::Any, time::Duration};
 pub(crate) struct InputHandlerVars {
     pub(crate) id: Option<NodeId>,
     pub(crate) handler: Option<Box<dyn InputHandler + Send + Sync>>,
@@ -15,7 +15,6 @@ pub(crate) struct InputHandlerVars {
 
 pub(crate) struct WindowHandle {
     pub(crate) wayland_handle: Option<Arc<WaylandWindow>>,
-    pub(crate) x11_handle: Option<x11rb::protocol::xproto::Window>,
     pub(crate) input_handler: Arc<RwLock<InputHandlerVars>>,
 }
 
@@ -23,7 +22,6 @@ impl Clone for WindowHandle {
     fn clone(&self) -> Self {
         Self {
             wayland_handle: self.wayland_handle.clone(),
-            x11_handle: self.x11_handle,
             input_handler: self.input_handler.clone(),
         }
     }
@@ -83,11 +81,9 @@ impl WindowHandle {
 
     pub fn request_exit(&self) {}
 
-    pub fn set_max_size(&self, _size: Option<impl Into<Size>>) {
-    }
+    pub fn set_max_size(&self, _size: Option<impl Into<Size>>) {}
 
-    pub fn set_min_size(&self, _size: Option<impl Into<Size>>) {
-    }
+    pub fn set_min_size(&self, _size: Option<impl Into<Size>>) {}
 
     pub fn set_position(&self, _position: impl Into<Point>) {}
 
@@ -97,11 +93,9 @@ impl WindowHandle {
 
     pub fn set_title(&self, _title: impl Into<String>) {}
 
-    pub fn minimize(&self) {
-    }
+    pub fn minimize(&self) {}
 
-    pub fn maximize(&self) {
-    }
+    pub fn maximize(&self) {}
 
     pub fn restore(&self) {}
 

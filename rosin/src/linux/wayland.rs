@@ -1,9 +1,3 @@
-
-use wayland_client::{
-    Connection, EventQueue, QueueHandle,
-    protocol::{wl_output, wl_seat, wl_surface},
-};
-use wayland_client::Dispatch;
 use crate::gpu::GpuCtx;
 use crate::peniko;
 use crate::wgpu::TextureViewDescriptor;
@@ -15,8 +9,8 @@ use rosin_core::{
 };
 use std::cell::RefCell;
 use std::rc::Rc;
-
-// based on https://github.com/Smithay/client-toolkit/blob/master/examples/wgpu.rs
+use wayland_client::Dispatch;
+use wayland_client::{Connection, EventQueue, QueueHandle, protocol::wl_surface};
 
 pub(crate) struct RosinWaylandState<S: Sync + 'static> {
     pub(crate) exit: bool,
@@ -117,44 +111,95 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
     }
 }
 
-use wayland_client::protocol::wl_registry;
-use wayland_client::protocol::wl_compositor;
-use wayland_protocols::xdg::shell::client::xdg_surface;
+use wayland_client::Proxy;
 use wayland_client::globals::GlobalListContents;
+use wayland_client::protocol::wl_compositor;
+use wayland_client::protocol::wl_compositor::WlCompositor;
+use wayland_client::protocol::wl_registry;
+use wayland_client::protocol::wl_registry::WlRegistry;
+use wayland_client::protocol::wl_surface::WlSurface;
+use wayland_protocols::xdg::shell::client::xdg_surface;
+use wayland_protocols::xdg::shell::client::xdg_toplevel::XdgToplevel;
 use wayland_protocols::xdg::shell::client::xdg_wm_base;
-impl<S: Sync + 'static> Dispatch<wl_registry::WlRegistry, GlobalListContents, ()> for RosinWaylandState<S> {
-    
+use wayland_protocols::xdg::shell::client::xdg_wm_base::XdgWmBase;
+impl<S: Sync + 'static> Dispatch<wl_registry::WlRegistry, GlobalListContents> for RosinWaylandState<S> {
+    fn event(
+        _: &mut RosinWaylandState<S>,
+        _: &WlRegistry,
+        _: <WlRegistry as Proxy>::Event,
+        _: &GlobalListContents,
+        _: &wayland_client::Connection,
+        _: &QueueHandle<RosinWaylandState<S>>,
+    ) {
+        todo!()
+    }
 }
 
 impl<S: Sync + 'static> Dispatch<wl_compositor::WlCompositor, ()> for RosinWaylandState<S> {
-
+    fn event(
+        _: &mut RosinWaylandState<S>,
+        _: &WlCompositor,
+        _: <WlCompositor as Proxy>::Event,
+        _: &(),
+        _: &wayland_client::Connection,
+        _: &QueueHandle<RosinWaylandState<S>>,
+    ) {
+        todo!()
+    }
 }
 
 impl<S: Sync + 'static> Dispatch<wl_surface::WlSurface, ()> for RosinWaylandState<S> {
-
+    fn event(
+        _: &mut RosinWaylandState<S>,
+        _: &WlSurface,
+        _: <WlSurface as Proxy>::Event,
+        _: &(),
+        _: &wayland_client::Connection,
+        _: &QueueHandle<RosinWaylandState<S>>,
+    ) {
+        todo!()
+    }
 }
 use wayland_protocols::xdg::shell::client::xdg_toplevel;
 
 impl<S: Sync + 'static> Dispatch<xdg_toplevel::XdgToplevel, ()> for RosinWaylandState<S> {
-
+    fn event(
+        _: &mut RosinWaylandState<S>,
+        _: &XdgToplevel,
+        _: <XdgToplevel as Proxy>::Event,
+        _: &(),
+        _: &wayland_client::Connection,
+        _: &QueueHandle<RosinWaylandState<S>>,
+    ) {
+        todo!()
+    }
 }
 
 impl<S: Sync + 'static> Dispatch<xdg_wm_base::XdgWmBase, ()> for RosinWaylandState<S> {
-
-}
-
-
-use crate::linux::create_window::WindowData;
-impl<S: Sync + 'static> Dispatch<xdg_surface::XdgSurface, ()> for RosinWaylandState<S> {
-fn event(
-        data: &mut RosinWaylandState<S>,
-        xdg_surface: &xdg_surface::XdgSurface,
-        event: xdg_surface::Event,
+    fn event(
+        _: &mut RosinWaylandState<S>,
+        wm_base: &XdgWmBase,
+        event: <XdgWmBase as Proxy>::Event,
         _: &(),
-        conn: &Connection,
-        qh: &QueueHandle<RosinWaylandState<S>>,
+        _: &wayland_client::Connection,
+        _: &QueueHandle<RosinWaylandState<S>>,
     ) {
-        todo!()
+        if let xdg_wm_base::Event::Ping { serial } = event {
+            wm_base.pong(serial);
         }
+    }
 }
 
+impl<S: Sync + 'static> Dispatch<xdg_surface::XdgSurface, ()> for RosinWaylandState<S> {
+    fn event(
+        _data: &mut RosinWaylandState<S>,
+        _xdg_surface: &xdg_surface::XdgSurface,
+        _event: xdg_surface::Event,
+        _: &(),
+        _conn: &Connection,
+        _qh: &QueueHandle<RosinWaylandState<S>>,
+    ) {
+        if let xdg_surface::Event::Configure { serial, .. } = event {
+        }
+    }
+}
