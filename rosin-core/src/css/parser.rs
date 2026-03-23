@@ -529,6 +529,7 @@ fn next_color<'i>(parser: &mut Parser<'i, '_>) -> Result<ColorProperty, cssparse
             PredefinedColorSpace::Rec2020 => convert::<Rec2020>(func.c1, func.c2, func.c3, func.alpha),
             PredefinedColorSpace::XyzD50 => convert::<XyzD50>(func.c1, func.c2, func.c3, func.alpha),
             PredefinedColorSpace::XyzD65 => convert::<XyzD65>(func.c1, func.c2, func.c3, func.alpha),
+            PredefinedColorSpace::DisplayP3Linear => return Err(parser.new_custom_error(CustomParseError::UnsupportedValue)), // TODO - waiting on color crate to support LinearDisplayP3
         },
     })
 }

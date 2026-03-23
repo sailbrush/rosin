@@ -9,7 +9,7 @@ use std::{
 
 use block2::RcBlock;
 use dispatch2::{DispatchQueue, DispatchTime, MainThreadBound};
-use objc2::{AnyThread, DefinedClass, rc::Retained, sel};
+use objc2::{AnyThread, rc::Retained, sel};
 use objc2_app_kit::{
     NSAlert, NSApp, NSCursor, NSHorizontalDirections, NSImage, NSModalResponseOK, NSOpenPanel, NSPasteboard, NSPasteboardTypeString, NSSavePanel, NSScreen,
     NSVerticalDirections, NSWindowStyleMask, NSWorkspace,
@@ -21,7 +21,10 @@ use raw_window_handle::{AppKitWindowHandle, DisplayHandle, HandleError, HasDispl
 use crate::{
     kurbo::{Point, Size},
     log::warn,
-    mac::{util, window::RosinView},
+    mac::{
+        util,
+        window::{RosinView, view_ivars},
+    },
     prelude::*,
 };
 
@@ -200,7 +203,7 @@ impl WindowHandle {
     pub fn create_window<S: Any + Sync + 'static>(&self, desc: &WindowDesc<S>) {
         let desc_boxed = Box::new(desc.clone());
         self.queue_on_main(move |view, mtm| {
-            view.ivars().viewport.borrow_mut().create_window(mtm, view, desc_boxed);
+            view_ivars(view).viewport.borrow_mut().create_window(mtm, view, desc_boxed);
         });
     }
 
@@ -518,7 +521,7 @@ impl WindowHandle {
                     FileDialogResponse::Cancelled
                 };
 
-                view.ivars().viewport.borrow_mut().file_dialog_event(view, node, response);
+                view_ivars(view).viewport.borrow_mut().file_dialog_event(view, node, response);
             });
 
             if let Some(window) = view.window() {
@@ -565,7 +568,7 @@ impl WindowHandle {
                     FileDialogResponse::Cancelled
                 };
 
-                view.ivars().viewport.borrow_mut().file_dialog_event(view, node, response);
+                view_ivars(view).viewport.borrow_mut().file_dialog_event(view, node, response);
             });
 
             if let Some(window) = view.window() {
@@ -591,7 +594,8 @@ impl WindowHandle {
             // SAFETY: We are on the main queue here.
             let mtm = unsafe { MainThreadMarker::new_unchecked() };
             let view = ns_view.get(mtm);
-            view.ivars().viewport.borrow_mut().timer_event(node, view);
+
+            view_ivars(view).viewport.borrow_mut().timer_event(node, view);
         });
     }
 
@@ -642,7 +646,8 @@ impl WindowHandle {
                 let Some((_, cmd)) = custom_options.get(idx) else {
                     return;
                 };
-                view.ivars().viewport.borrow_mut().command_event(view, Some(node), *cmd);
+
+                view_ivars(view).viewport.borrow_mut().command_event(view, Some(node), *cmd);
             };
 
             if let Some(window) = view.window() {

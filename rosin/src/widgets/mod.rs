@@ -55,6 +55,7 @@ mod perfdisplay;
 mod progressbar;
 mod scrollarea;
 mod slider;
+mod tabs;
 mod textbox;
 
 pub use button::*;
@@ -66,4 +67,5 @@ pub use perfdisplay::*;
 pub use progressbar::*;
 pub use scrollarea::*;
 pub use slider::*;
+pub use tabs::*;
 pub use textbox::*;

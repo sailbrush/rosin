@@ -93,7 +93,7 @@ pub struct Viewport<S: Sync + 'static, H: Clone + 'static> {
     phase: Phase,
 
     /// The currently active node
-    active_node: Option<NodeId>,
+    active_nodes: Vec<NodeId>,
 
     /// The currently focused node
     focused_node: Option<NodeId>,
@@ -199,7 +199,7 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
             size,
             scale,
             phase: Phase::Build,
-            active_node: None,
+            active_nodes: Vec::new(),
             focused_node: None,
             capture: None,
             last_pointer_event: None,
@@ -232,6 +232,18 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
     fn update_hot_indexes_at(&mut self, point: Point) {
         self.curr_hot_indexes.clear();
         layout::hit_test(&self.temp, &self.curr_tree, point, &mut self.curr_hot_indexes);
+
+        if let Some(captured_nid) = self.capture
+            && let Some(&cap_idx) = self.curr_tree.nid_map.get(&captured_nid)
+        {
+            self.curr_hot_indexes.clear();
+            let mut idx = cap_idx;
+            while idx != usize::MAX {
+                self.curr_hot_indexes.push(idx);
+                idx = self.curr_tree.nodes[idx].parent;
+            }
+            self.curr_hot_indexes.sort_unstable();
+        }
     }
 
     // Returns true if any nodes were marked dirty
@@ -260,8 +272,8 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
         self.focused_node
     }
 
-    pub fn get_active_node(&self) -> Option<NodeId> {
-        self.active_node
+    pub fn get_active_nodes(&self) -> &[NodeId] {
+        &self.active_nodes
     }
 
     pub fn get_size(&self) -> Size {
@@ -694,9 +706,6 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
         self.curr_hot_indexes.clear(); // nothing is hot because we're leaving the window
 
         self.queue_pointer_leave_enter_events(EventInfo::None);
-
-        // Clear last pointer event because it's used for delta calculations
-        self.last_pointer_event = None;
     }
 
     pub fn queue_pointer_wheel_event(&mut self, event: &PointerEvent) {
@@ -728,23 +737,7 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
         std::mem::swap(&mut self.curr_hot_indexes, &mut self.prev_hot_indexes);
         self.update_hot_indexes_at(last_event_pos);
 
-        let mut capture_idx: Option<usize> = None;
-
-        // If captured, clamp hover to the captured node if the pointer is actually over it.
-        if let Some(captured_nid) = self.capture {
-            if let Some(&cap_idx) = self.curr_tree.nid_map.get(&captured_nid) {
-                capture_idx = Some(cap_idx);
-
-                let over = self.curr_hot_indexes.contains(&cap_idx);
-                self.curr_hot_indexes.clear();
-                if over {
-                    self.curr_hot_indexes.push(cap_idx);
-                }
-            } else {
-                // Captured node doesn't exist anymore
-                self.capture = None;
-            }
-        }
+        let capture_idx = self.capture.and_then(|nid| self.curr_tree.nid_map.get(&nid).copied());
 
         self.queue_pointer_leave_enter_events(EventInfo::Pointer(*event));
 
@@ -841,7 +834,9 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
             return None;
         }
 
-        let start_active_node = self.active_node;
+        self.temp.reset();
+
+        let start_active_nodes: BumpVec<NodeId> = BumpVec::from_iter_in(self.active_nodes.iter().copied(), &self.temp);
         let start_focused_node = self.focused_node;
 
         let mut dispatch_info = DispatchInfo::default();
@@ -869,7 +864,7 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
 
             let (has_callback, mut ctx) = if qe.event_type == On::Destroy {
                 let mut ctx = EventCtx {
-                    active_node: self.active_node,
+                    active_nodes: &mut self.active_nodes,
                     captured_node: self.capture,
                     emit_change: false,
                     event_type: qe.event_type,
@@ -893,7 +888,7 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
                 (self.prev_tree.nodes[qe.idx].run_callbacks(qe.event_type, state, &mut ctx), ctx)
             } else {
                 let mut ctx = EventCtx {
-                    active_node: self.active_node,
+                    active_nodes: &mut self.active_nodes,
                     captured_node: self.capture,
                     emit_change: false,
                     event_type: qe.event_type,
@@ -929,8 +924,6 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
             if !intercept_ax_focus {
                 dispatch_info.callback_count += 1;
             }
-
-            self.active_node = ctx.active_node;
 
             // We cannot blindly set self.capture = ctx.captured_node, because a node (like a TextBox losing focus)
             // might try to release the capture (ctx.captured_node = None) even if it doesn't currently own it.
@@ -1089,10 +1082,16 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
 
         let mut dirtied = false;
 
-        if self.active_node != start_active_node {
-            // Previously active loses :active, new active gains :active
-            dirtied |= self.curr_tree.add_dirty_root_by_nid(start_active_node, css::ACTIVE_DIRTY);
-            dirtied |= self.curr_tree.add_dirty_root_by_nid(self.active_node, css::ACTIVE_DIRTY);
+        self.active_nodes.sort();
+        self.active_nodes.dedup();
+
+        let mut gained_active: BumpVec<NodeId> = BumpVec::with_capacity_in(self.active_nodes.len(), &self.temp);
+        let mut lost_active: BumpVec<NodeId> = BumpVec::with_capacity_in(start_active_nodes.len(), &self.temp);
+
+        sorted_iter_diff(self.active_nodes.iter(), start_active_nodes.iter(), &mut gained_active, &mut lost_active);
+
+        for &nid in gained_active.iter().chain(lost_active.iter()) {
+            dirtied |= self.curr_tree.add_dirty_root_by_nid(Some(nid), css::ACTIVE_DIRTY);
         }
 
         if self.focused_node != start_focused_node {
@@ -1159,16 +1158,12 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
             self.curr_tree.finish();
             perf_info.node_count = self.curr_tree.nodes.len();
 
+            self.active_nodes.retain(|nid| self.curr_tree.nid_map.contains_key(nid));
+
             if let Some(nid) = self.focused_node
                 && !self.curr_tree.nid_map.contains_key(&nid)
             {
                 self.focused_node = None;
-            }
-
-            if let Some(nid) = self.active_node
-                && !self.curr_tree.nid_map.contains_key(&nid)
-            {
-                self.active_node = None;
             }
 
             if let Some(nid) = self.capture
@@ -1186,6 +1181,7 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
                     self.prev_hot_indexes.push(new_idx);
                 }
             }
+            self.curr_hot_indexes.clear();
         }
         let build_complete = Instant::now();
         perf_info.build_time = build_complete.duration_since(start_time);
@@ -1234,7 +1230,7 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
                 &mut self.curr_tree,
                 state,
                 self.focused_node,
-                self.active_node,
+                &self.active_nodes,
                 &self.curr_hot_indexes,
                 &mut self.ancestor_classes,
             );
@@ -1276,7 +1272,7 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
                             &mut self.curr_tree,
                             state,
                             self.focused_node,
-                            self.active_node,
+                            &self.active_nodes,
                             &self.curr_hot_indexes,
                             &mut self.ancestor_classes,
                         );
@@ -1313,7 +1309,7 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
                 did_layout,
                 &self.perf_info,
                 self.scale,
-                self.active_node,
+                &self.active_nodes,
                 self.focused_node,
                 self.translation_map.clone(),
                 &mut self.scene_cache,

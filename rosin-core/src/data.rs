@@ -20,11 +20,11 @@ pub type StackString = SmallString<[u8; 64]>;
 /// Example:
 /// ```rust,ignore
 /// let value: WeakVar<f32> = ...;
-/// let example: UIString = ui_format!(value, "{:.2}");
+/// let example: UIString = ui_format!("{:.2}", value);
 /// ```
 #[macro_export]
 macro_rules! ui_format {
-    ($val:expr, $fmt:literal) => {{
+    ($fmt:literal, $val:expr) => {{
         let var = ($val).clone();
         UIString::__deferred_stack(move || {
             use std::fmt::Write;

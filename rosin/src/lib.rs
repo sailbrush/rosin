@@ -80,6 +80,8 @@
 //! }
 //! ```
 
+#![deny(deprecated)]
+
 #[doc(inline)]
 pub use rosin_core::{css, data, events, layout, localization, nodeid, pointer, reactive, text, tree};
 

@@ -617,3 +617,9 @@ impl<A: TypeHash, B: TypeHash, C: TypeHash, D: TypeHash> TypeHash for (A, B, C, 
             ^ 13214396272658929112
     }
 }
+
+impl TypeHash for rosin_core::kurbo::Vec2 {
+    fn get_typehash(_: u64) -> u64 {
+        12530978722039632348
+    }
+}

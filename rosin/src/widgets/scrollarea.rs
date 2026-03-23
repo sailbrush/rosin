@@ -1,12 +1,17 @@
 use crate::{kurbo::Vec2, prelude::*, widgets::widget_styles};
 
 // TODO - scroll bars and stuff
-#[derive(Default)]
+#[cfg_attr(feature = "hot-reload", derive(serde::Deserialize, serde::Serialize, TypeHash), serde(default))]
+#[derive(Default, Debug)]
 pub struct ScrollArea {
     offset: Var<Vec2>,
 }
 
 impl ScrollArea {
+    pub fn reset(&self) {
+        self.offset.set(Vec2::ZERO);
+    }
+
     pub fn view<'a, S, H>(&self, ui: &'a mut Ui<S, H>, id: NodeId, func: impl FnOnce(&mut Ui<S, H>)) -> &'a mut Ui<S, H> {
         let offset = self.offset.downgrade();
         ui.node()

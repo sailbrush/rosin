@@ -61,7 +61,13 @@ impl<S: Sync + 'static> AppLauncher<S> {
     where
         S: serde::Serialize + serde::de::DeserializeOwned + crate::typehash::TypeHash + 'static,
     {
+        use crate::mac::window::*;
         use std::{env, fs};
+
+        fn resolve(view: &RosinView) -> &ViewIvars {
+            DeclaredClass::ivars(view)
+        }
+        set_ivars_accessor(resolve as *mut ());
 
         if let Some(loader) = crate::mac::hot::HotReloader::new() {
             'hot_reload: {
@@ -200,7 +206,7 @@ impl<S: Sync + 'static> AppLauncher<S> {
             compositor,
         });
 
-        let state = self.state.clone().unwrap(); // Unwrap ok: state be Some() to launch the app.
+        let state = self.state.clone().unwrap(); // Unwrap ok: state must be Some() to launch the app.
         let translation_map = self.translation_map.clone().unwrap_or_default();
 
         for desc in &self.windows {

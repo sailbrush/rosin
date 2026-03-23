@@ -28,7 +28,13 @@ use crate::{
 };
 
 #[unsafe(no_mangle)]
-pub extern "Rust" fn rosin_init_registry(registry: &'static Registry, scopes: Rc<RefCell<Vec<DependencyMap>>>, interner: Arc<RwLock<StringInterner>>) -> bool {
+pub extern "Rust" fn rosin_init_registry(
+    registry: &'static Registry,
+    scopes: Rc<RefCell<Vec<DependencyMap>>>,
+    interner: Arc<RwLock<StringInterner>>,
+    ivars_fn: *mut (),
+) -> bool {
+    crate::mac::window::set_ivars_accessor(ivars_fn);
     Registry::set_global(registry) && reactive::try_init_read_scopes(scopes) && StringInterner::set_global(interner)
 }
 
@@ -140,11 +146,12 @@ impl HotReloader {
     #[allow(clippy::type_complexity)]
     pub fn init_registry(lib: &Library) {
         let symbol = unsafe { lib.get(b"rosin_init_registry") };
-        let registry_func: libloading::Symbol<fn(&'static Registry, Rc<RefCell<Vec<DependencyMap>>>, Arc<RwLock<StringInterner>>) -> bool> = match symbol {
-            Ok(s) => s,
-            Err(_) => return,
-        };
-        if !registry_func(Registry::global(), reactive::read_scopes_rc(), StringInterner::global().clone()) {
+        let registry_func: libloading::Symbol<fn(&'static Registry, Rc<RefCell<Vec<DependencyMap>>>, Arc<RwLock<StringInterner>>, *mut ()) -> bool> =
+            match symbol {
+                Ok(s) => s,
+                Err(_) => return,
+            };
+        if !registry_func(Registry::global(), reactive::read_scopes_rc(), StringInterner::global().clone(), crate::mac::window::ivars_accessor_ptr()) {
             log::error!("Hot-reload failed to init loaded image.");
         }
     }
@@ -226,6 +233,16 @@ impl HotReloader {
         let app = NSApp(mtm);
 
         if foreign_typehash != local_typehash {
+            // Wait until the binary on disk is newer than the current one before spawning
+            let binary_modified = env::current_exe().ok().and_then(|p| fs::metadata(p).ok()).and_then(|m| m.modified().ok());
+
+            if binary_modified < Some(last_modified) {
+                // Drop the new dylib since we can't use it yet
+                drop(new_lib);
+                let _ = fs::remove_file(&new_path);
+                return;
+            }
+
             // Serialize app and window states to disk, then start a new process to load it.
             let mut windows = Vec::new();
             for window in app.windows().iter() {
