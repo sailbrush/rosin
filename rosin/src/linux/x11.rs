@@ -16,7 +16,6 @@ use rosin_core::{
     vello,
     wgpu::{self, TextureViewDescriptor, util::TextureBlitter},
 };
-use smithay_client_toolkit::reexports::calloop::Result;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::ops::Index;
@@ -363,7 +362,7 @@ impl<S: Sync + 'static> RosinX11Window<S> {
         };
         surface.configure(&self.gpu_ctx.device, &surface_config);
     }
-    pub fn run_loop(&mut self, conn: &impl Connection) -> Result<()> {
+    pub fn run_loop(&mut self, conn: &impl Connection) -> Result<(), ()> {
         loop {
             use x11rb::protocol::Event;
             let _ = conn.flush();

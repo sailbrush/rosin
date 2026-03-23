@@ -1,9 +1,5 @@
-use crate::{desc::WindowDesc, linux::wayland::RosinWaylandWindow};
-use smithay_client_toolkit::shell::{WaylandSurface, xdg::window::Window};
-use smithay_client_toolkit::{
-    compositor::CompositorState,
-    shell::xdg::{XdgShell, window::WindowDecorations},
-};
+use crate::{desc::WindowDesc, linux::wayland::RosinWaylandState};
+
 use std::any::Any;
 use std::ops::Deref;
 use wayland_client::QueueHandle;
@@ -13,6 +9,24 @@ use x11rb::{
     protocol::xproto::{AtomEnum, ColormapAlloc, CreateWindowAux, EventMask, PropMode, Visualid, WindowClass},
     wrapper::ConnectionExt,
 };
+use wayland_protocols::xdg::shell::client::{
+    xdg_positioner, xdg_surface, xdg_toplevel, xdg_wm_base,
+};
+use wayland_client::protocol::wl_surface;
+use wayland_protocols::xdg::decoration::zv1::client::zxdg_toplevel_decoration_v1::Mode;
+use wayland_protocols::xdg::decoration::zv1::client::{
+    zxdg_decoration_manager_v1, zxdg_toplevel_decoration_v1,
+};
+use std::sync::Arc;
+pub struct GlobalData;
+use std::sync::Weak;
+#[derive(Debug, Clone)]
+pub struct WindowData(pub(crate) Weak<WaylandWindow>);
+pub struct WaylandWindow {
+    pub(crate) xdg_surface: xdg_surface::XdgSurface,
+    pub(crate) xdg_toplevel: xdg_toplevel::XdgToplevel,
+    pub(crate) surface: wl_surface::WlSurface
+}
 
 pub(crate) fn create_window_x11<S: Any + Sync + 'static, T: x11rb::connection::Connection>(
     desc: &WindowDesc<S>,
@@ -64,16 +78,36 @@ pub(crate) fn create_window_x11<S: Any + Sync + 'static, T: x11rb::connection::C
     Ok(window)
 }
 
-pub(crate) fn create_window_wayland<S: Any + Sync + 'static>(desc: &WindowDesc<S>, globals: &GlobalList, qh: &QueueHandle<RosinWaylandWindow<S>>) -> Window {
-    let compositor_state = CompositorState::bind(globals, qh).expect("wl_compositor not available");
-    let surface = compositor_state.create_surface(qh);
-    let xdg_shell_state = XdgShell::bind(globals, qh).expect("xdg shell not available");
-    let window = xdg_shell_state.create_window(surface, WindowDecorations::RequestServer, qh);
-    window.set_title(desc.title.clone().unwrap().deref());
-    window.set_app_id("rosin.default.id");
-    window.set_min_size(Some((desc.min_size.unwrap_or(desc.size).width as u32, desc.min_size.unwrap_or(desc.size).height as u32)));
-    window.set_max_size(Some((desc.max_size.unwrap_or(desc.size).width as u32, desc.max_size.unwrap_or(desc.size).height as u32)));
 
-    window.commit();
+
+
+use wayland_client::protocol::wl_compositor;
+
+pub(crate) fn create_window_wayland<S: Any + Sync + 'static>(desc: &WindowDesc<S>, globals: &GlobalList, qh: &QueueHandle<RosinWaylandState<S>>) ->Arc<WaylandWindow> {
+    
+    let wl_compositor: wl_compositor::WlCompositor = globals.bind(qh, 1..=6, ()).unwrap();
+    let surface = wl_compositor.create_surface(qh, ());
+
+    let xdg_wm_base: xdg_wm_base::XdgWmBase = globals.bind(qh, 1..=6, ()).unwrap();
+    
+    let freeze = qh.freeze();
+
+        let window = Arc::new_cyclic(|weak| {
+            let xdg_surface = xdg_wm_base.get_xdg_surface(
+                &surface,
+                qh,
+                (),
+            );
+            let xdg_toplevel = xdg_surface.get_toplevel(qh, ());
+
+            WaylandWindow {
+                xdg_surface,
+                xdg_toplevel,
+                surface,
+            }
+        });
+
+        // Explicitly drop the queue freeze to allow the queue to resume work.
+        drop(freeze);
     window
 }

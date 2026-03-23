@@ -61,12 +61,11 @@ impl<S: Sync + 'static> AppLauncher<S> {
     pub fn run(mut self, _state: S, _translation_map: TranslationMap) -> Result<(), LaunchError> {
         self.state = Some(Rc::new(RefCell::new(_state)));
         let way_conn = wayland_client::Connection::connect_to_env();
-        if false {
-            // disable wayland for now, test should be way_conn.is_some() I think
-            use smithay_client_toolkit::{output::OutputState, registry::RegistryState, seat::SeatState, shell::WaylandSurface};
+        if true {
+            // enable wayland only for now, test should be way_conn.is_some() I think
             use wayland_client::Proxy;
 
-            use crate::linux::{create_window::create_window_wayland, handle::InputHandlerVars, wayland::RosinWaylandWindow};
+            use crate::linux::{create_window::create_window_wayland, handle::InputHandlerVars, wayland::RosinWaylandState};
 
             let conn = way_conn.unwrap();
             let (globals, event_queue) = wayland_client::globals::registry_queue_init(&conn).unwrap();
@@ -74,7 +73,7 @@ impl<S: Sync + 'static> AppLauncher<S> {
             let desc = self.windows[0].clone();
             let window = create_window_wayland(&desc, &globals, &qh);
             let raw_display_handle = RawDisplayHandle::Wayland(WaylandDisplayHandle::new(NonNull::new(conn.backend().display_ptr() as *mut _).unwrap()));
-            let raw_window_handle = RawWindowHandle::Wayland(WaylandWindowHandle::new(NonNull::new(window.wl_surface().id().as_ptr() as *mut _).unwrap()));
+            let raw_window_handle = RawWindowHandle::Wayland(WaylandWindowHandle::new(NonNull::new(window.surface.id().as_ptr() as *mut _).unwrap()));
             let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
                 backends: self.wgpu_config.backends,
                 ..Default::default()
@@ -168,11 +167,7 @@ impl<S: Sync + 'static> AppLauncher<S> {
 
                 Rc::new(RefCell::new(renderer))
             };
-            let mut window: RosinWaylandWindow<S> = RosinWaylandWindow {
-                registry_state: RegistryState::new(&globals),
-                seat_state: SeatState::new(&globals, &qh),
-                output_state: OutputState::new(&globals, &qh),
-
+            let mut window: RosinWaylandState<S> = RosinWaylandState {
                 exit: false,
                 width: desc.size.width as u32,
                 height: desc.size.height as u32,

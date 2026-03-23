@@ -1,17 +1,9 @@
-use smithay_client_toolkit::{
-    compositor::*,
-    output::*,
-    reexports::calloop::Result,
-    registry::*,
-    seat::*,
-    shell::xdg::window::{Window, WindowConfigure, WindowHandler},
-    *,
-};
+
 use wayland_client::{
     Connection, EventQueue, QueueHandle,
     protocol::{wl_output, wl_seat, wl_surface},
 };
-
+use wayland_client::Dispatch;
 use crate::gpu::GpuCtx;
 use crate::peniko;
 use crate::wgpu::TextureViewDescriptor;
@@ -25,11 +17,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 // based on https://github.com/Smithay/client-toolkit/blob/master/examples/wgpu.rs
-pub(crate) struct RosinWaylandWindow<S: Sync + 'static> {
-    pub(crate) registry_state: RegistryState,
-    pub(crate) seat_state: SeatState,
-    pub(crate) output_state: OutputState,
 
+pub(crate) struct RosinWaylandState<S: Sync + 'static> {
     pub(crate) exit: bool,
     pub(crate) width: u32,
     pub(crate) height: u32,
@@ -41,87 +30,8 @@ pub(crate) struct RosinWaylandWindow<S: Sync + 'static> {
     pub(crate) app_state: Rc<RefCell<S>>,
     pub(crate) window_handle: crate::handle::WindowHandle,
 }
-impl<S: Sync + 'static> CompositorHandler for RosinWaylandWindow<S> {
-    fn scale_factor_changed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _surface: &wl_surface::WlSurface, _new_factor: i32) {
-        // Not needed for this example.
-    }
 
-    fn transform_changed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _surface: &wl_surface::WlSurface, _new_transform: wl_output::Transform) {
-        // Not needed for this example.
-    }
-
-    fn frame(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _surface: &wl_surface::WlSurface, _time: u32) {
-        self.draw();
-    }
-
-    fn surface_enter(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _surface: &wl_surface::WlSurface, _output: &wl_output::WlOutput) {
-        // Not needed for this example.
-    }
-
-    fn surface_leave(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _surface: &wl_surface::WlSurface, _output: &wl_output::WlOutput) {
-        // Not needed for this example.
-    }
-}
-
-impl<S: Sync + 'static> OutputHandler for RosinWaylandWindow<S> {
-    fn output_state(&mut self) -> &mut OutputState {
-        &mut self.output_state
-    }
-
-    fn new_output(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: wl_output::WlOutput) {}
-
-    fn update_output(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: wl_output::WlOutput) {}
-
-    fn output_destroyed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: wl_output::WlOutput) {}
-}
-
-impl<S: Sync + 'static> WindowHandler for RosinWaylandWindow<S> {
-    fn request_close(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &Window) {
-        self.exit = true;
-    }
-    // this gets called whenever something with the window changes, ex resize, minimize, maximize, etc.
-    fn configure(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _window: &Window, configure: WindowConfigure, _serial: u32) {
-        let (new_width, new_height) = configure.new_size;
-        self.width = new_width.map_or(self.width, |v| v.get());
-        self.height = new_height.map_or(self.height, |v| v.get());
-
-        self.configure();
-        self.draw();
-    }
-}
-
-impl<S: Sync + 'static> SeatHandler for RosinWaylandWindow<S> {
-    fn seat_state(&mut self) -> &mut SeatState {
-        &mut self.seat_state
-    }
-
-    fn new_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat) {}
-
-    fn new_capability(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _seat: wl_seat::WlSeat, _capability: Capability) {}
-
-    fn remove_capability(&mut self, _conn: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat, _capability: Capability) {}
-
-    fn remove_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat) {}
-}
-
-delegate_compositor!(@<S: Sync + 'static> RosinWaylandWindow<S>);
-delegate_output!(@<S: Sync + 'static> RosinWaylandWindow<S>);
-
-delegate_seat!(@<S: Sync + 'static> RosinWaylandWindow<S>);
-
-delegate_xdg_shell!(@<S: Sync + 'static> RosinWaylandWindow<S>);
-delegate_xdg_window!(@<S: Sync + 'static> RosinWaylandWindow<S>);
-
-delegate_registry!(@<S: Sync + 'static> RosinWaylandWindow<S>);
-
-impl<S: Sync + 'static> ProvidesRegistryState for RosinWaylandWindow<S> {
-    fn registry(&mut self) -> &mut RegistryState {
-        &mut self.registry_state
-    }
-    registry_handlers![OutputState];
-}
-
-impl<S: Sync + 'static> RosinWaylandWindow<S> {
+impl<S: Sync + 'static> RosinWaylandState<S> {
     pub fn draw(&mut self) {
         let adapter = &self.gpu_ctx.adapter;
         let surface = &self.surface;
@@ -197,7 +107,7 @@ impl<S: Sync + 'static> RosinWaylandWindow<S> {
         };
         surface.configure(&self.gpu_ctx.device, &surface_config);
     }
-    pub fn run_loop(&mut self, mut event_queue: EventQueue<RosinWaylandWindow<S>>) -> Result<()> {
+    pub fn run_loop(&mut self, mut event_queue: EventQueue<RosinWaylandState<S>>) -> Result<(), ()> {
         loop {
             event_queue.blocking_dispatch(self).unwrap();
             if self.exit {
@@ -206,3 +116,45 @@ impl<S: Sync + 'static> RosinWaylandWindow<S> {
         }
     }
 }
+
+use wayland_client::protocol::wl_registry;
+use wayland_client::protocol::wl_compositor;
+use wayland_protocols::xdg::shell::client::xdg_surface;
+use wayland_client::globals::GlobalListContents;
+use wayland_protocols::xdg::shell::client::xdg_wm_base;
+impl<S: Sync + 'static> Dispatch<wl_registry::WlRegistry, GlobalListContents, ()> for RosinWaylandState<S> {
+    
+}
+
+impl<S: Sync + 'static> Dispatch<wl_compositor::WlCompositor, ()> for RosinWaylandState<S> {
+
+}
+
+impl<S: Sync + 'static> Dispatch<wl_surface::WlSurface, ()> for RosinWaylandState<S> {
+
+}
+use wayland_protocols::xdg::shell::client::xdg_toplevel;
+
+impl<S: Sync + 'static> Dispatch<xdg_toplevel::XdgToplevel, ()> for RosinWaylandState<S> {
+
+}
+
+impl<S: Sync + 'static> Dispatch<xdg_wm_base::XdgWmBase, ()> for RosinWaylandState<S> {
+
+}
+
+
+use crate::linux::create_window::WindowData;
+impl<S: Sync + 'static> Dispatch<xdg_surface::XdgSurface, ()> for RosinWaylandState<S> {
+fn event(
+        data: &mut RosinWaylandState<S>,
+        xdg_surface: &xdg_surface::XdgSurface,
+        event: xdg_surface::Event,
+        _: &(),
+        conn: &Connection,
+        qh: &QueueHandle<RosinWaylandState<S>>,
+    ) {
+        todo!()
+        }
+}
+
