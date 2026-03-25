@@ -11,6 +11,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use wayland_client::Dispatch;
 use wayland_client::{Connection, EventQueue, QueueHandle, protocol::wl_surface};
+use wayland_protocols::xdg::decoration::zv1::client::zxdg_decoration_manager_v1;
 
 pub(crate) struct RosinWaylandState<S: Sync + 'static> {
     pub(crate) exit: bool,
@@ -104,6 +105,7 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
     pub fn run_loop(&mut self, mut event_queue: EventQueue<RosinWaylandState<S>>) -> Result<(), ()> {
         loop {
             event_queue.blocking_dispatch(self).unwrap();
+            self.draw();
             if self.exit {
                 return Ok(());
             }
@@ -118,6 +120,7 @@ use wayland_client::protocol::wl_compositor::WlCompositor;
 use wayland_client::protocol::wl_registry;
 use wayland_client::protocol::wl_registry::WlRegistry;
 use wayland_client::protocol::wl_surface::WlSurface;
+use wayland_protocols::xdg::decoration::zv1::client::zxdg_toplevel_decoration_v1;
 use wayland_protocols::xdg::shell::client::xdg_surface;
 use wayland_protocols::xdg::shell::client::xdg_toplevel::XdgToplevel;
 use wayland_protocols::xdg::shell::client::xdg_wm_base;
@@ -157,7 +160,6 @@ impl<S: Sync + 'static> Dispatch<wl_surface::WlSurface, ()> for RosinWaylandStat
         _: &wayland_client::Connection,
         _: &QueueHandle<RosinWaylandState<S>>,
     ) {
-        todo!()
     }
 }
 use wayland_protocols::xdg::shell::client::xdg_toplevel;
@@ -166,12 +168,12 @@ impl<S: Sync + 'static> Dispatch<xdg_toplevel::XdgToplevel, ()> for RosinWayland
     fn event(
         _: &mut RosinWaylandState<S>,
         _: &XdgToplevel,
-        _: <XdgToplevel as Proxy>::Event,
+        event: <XdgToplevel as Proxy>::Event,
         _: &(),
         _: &wayland_client::Connection,
         _: &QueueHandle<RosinWaylandState<S>>,
     ) {
-        todo!()
+        if let xdg_toplevel::Event::Close = event {}
     }
 }
 
@@ -192,14 +194,40 @@ impl<S: Sync + 'static> Dispatch<xdg_wm_base::XdgWmBase, ()> for RosinWaylandSta
 
 impl<S: Sync + 'static> Dispatch<xdg_surface::XdgSurface, ()> for RosinWaylandState<S> {
     fn event(
-        _data: &mut RosinWaylandState<S>,
-        _xdg_surface: &xdg_surface::XdgSurface,
-        _event: xdg_surface::Event,
+        data: &mut RosinWaylandState<S>,
+        xdg_surface: &xdg_surface::XdgSurface,
+        event: xdg_surface::Event,
         _: &(),
         _conn: &Connection,
         _qh: &QueueHandle<RosinWaylandState<S>>,
     ) {
         if let xdg_surface::Event::Configure { serial, .. } = event {
+            xdg_surface.ack_configure(serial);
+            data.configure();
+            data.window_handle.0.wayland_handle.clone().unwrap().surface.commit();
         }
+    }
+}
+
+impl<S: Sync + 'static> Dispatch<zxdg_decoration_manager_v1::ZxdgDecorationManagerV1, ()> for RosinWaylandState<S> {
+    fn event(
+        _data: &mut RosinWaylandState<S>,
+        _deco_manager: &zxdg_decoration_manager_v1::ZxdgDecorationManagerV1,
+        _event: <zxdg_decoration_manager_v1::ZxdgDecorationManagerV1 as Proxy>::Event,
+        _: &(),
+        _conn: &Connection,
+        _qh: &QueueHandle<RosinWaylandState<S>>,
+    ) {
+    }
+}
+impl<S: Sync + 'static> Dispatch<zxdg_toplevel_decoration_v1::ZxdgToplevelDecorationV1, ()> for RosinWaylandState<S> {
+    fn event(
+        _data: &mut RosinWaylandState<S>,
+        _toplevel_deco: &zxdg_toplevel_decoration_v1::ZxdgToplevelDecorationV1,
+        _event: <zxdg_toplevel_decoration_v1::ZxdgToplevelDecorationV1 as Proxy>::Event,
+        _: &(),
+        _conn: &Connection,
+        _qh: &QueueHandle<RosinWaylandState<S>>,
+    ) {
     }
 }

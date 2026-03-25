@@ -5,6 +5,8 @@ use std::sync::Arc;
 use wayland_client::QueueHandle;
 use wayland_client::globals::GlobalList;
 use wayland_client::protocol::wl_surface;
+use wayland_protocols::xdg::decoration::zv1::client::zxdg_toplevel_decoration_v1::Mode;
+use wayland_protocols::xdg::decoration::zv1::client::{zxdg_decoration_manager_v1, zxdg_toplevel_decoration_v1};
 use wayland_protocols::xdg::shell::client::{xdg_surface, xdg_toplevel, xdg_wm_base};
 pub struct GlobalData;
 #[derive(Debug, Clone)]
@@ -13,8 +15,9 @@ pub struct WaylandWindow {
     pub(crate) xdg_surface: xdg_surface::XdgSurface,
     pub(crate) xdg_toplevel: xdg_toplevel::XdgToplevel,
     pub(crate) surface: wl_surface::WlSurface,
+    pub(crate) xdg_decoration_manager: zxdg_decoration_manager_v1::ZxdgDecorationManagerV1,
+    pub(crate) toplevel_decoration: zxdg_toplevel_decoration_v1::ZxdgToplevelDecorationV1,
 }
-
 
 use wayland_client::protocol::wl_compositor;
 
@@ -33,16 +36,22 @@ pub(crate) fn create_window_wayland<S: Any + Sync + 'static>(
     let window = Arc::new_cyclic(|_weak| {
         let xdg_surface = xdg_wm_base.get_xdg_surface(&surface, qh, ());
         let xdg_toplevel = xdg_surface.get_toplevel(qh, ());
+        let xdg_decoration_manager: zxdg_decoration_manager_v1::ZxdgDecorationManagerV1 = globals.bind(qh, 1..=1, ()).unwrap();
+        surface.commit();
+        // Need to look into options for client side decorations
+        let toplevel_decoration = xdg_decoration_manager.get_toplevel_decoration(&xdg_toplevel, qh, ());
+        toplevel_decoration.set_mode(Mode::ServerSide);
 
         WaylandWindow {
             xdg_surface,
             xdg_toplevel,
             surface,
+            xdg_decoration_manager,
+            toplevel_decoration,
         }
     });
-
     // Explicitly drop the queue freeze to allow the queue to resume work.
     drop(freeze);
-    
+
     window
 }
