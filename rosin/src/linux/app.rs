@@ -169,6 +169,7 @@ impl<S: Sync + 'static> AppLauncher<S> {
             window_handle: wh,
             last_mouse_pos: Vec2::new(0.0, 0.0),
             wgpufn: desc.wgpufn,
+            pressed_modifiers: 0
         };
         let _ = window.run_loop(event_queue);
 

@@ -1,13 +1,65 @@
+
 use rosin_core::{
     keyboard_types::{Code, KeyboardEvent, Location},
     prelude::{Key, NamedKey},
 };
 use xkbcommon::xkb;
-
+use wayland_client::WEnum;
+use crate::prelude::Modifiers;
+use wayland_client::protocol::wl_keyboard::KeyState;
 pub(crate) fn panic_and_print(msg: String) -> ! {
     println!("{}", msg);
     std::process::abort()
 }
+
+pub(crate) fn convert_wayland_key(key: u32, state: WEnum<KeyState>, mods: u32) -> KeyboardEvent {
+    let xkb_key = convert_code(key + 8);
+    let k = convert_key(xkb_key);
+    let mut repeat = false;
+    let s = match state {
+        WEnum::Value(sta) => {
+            match sta {
+                KeyState::Released => {
+                    rosin_core::keyboard_types::KeyState::Up
+                }
+                KeyState::Pressed => {
+                    rosin_core::keyboard_types::KeyState::Down
+                }
+                KeyState::Repeated => {
+                    repeat = true;
+                    rosin_core::keyboard_types::KeyState::Down
+                }
+                _ => {
+                    rosin_core::keyboard_types::KeyState::Up
+                }
+            }
+        }
+        _ => {rosin_core::keyboard_types::KeyState::Up}
+    };
+    KeyboardEvent {
+        code: xkb_key,
+        key: if k.is_some() { k.unwrap() } else { Key::Character(xkb_key.to_string()) },
+        is_composing: false,
+        location: convert_location(xkb_key),
+        modifiers: convert_modifiers(mods),
+        repeat: repeat,
+        state: s,
+
+    }
+}
+fn convert_modifiers(mods: u32) -> Modifiers {
+    let mut retval = Modifiers::default();
+    if mods & 1 == 1 {
+        retval |= Modifiers::SHIFT;
+    }
+    if mods & 8 == 8 {
+        retval |= Modifiers::ALT;
+    }
+    println!("{:?}", mods);
+    retval
+}
+
+
 fn last_char(s: &str) -> char {
     s.chars().last().expect("empty string")
 }
@@ -149,7 +201,7 @@ fn convert_location(code: Code) -> Location {
     }
 }
 // https://github.com/xkbcommon/libxkbcommon/blob/6e4f0fb9e7ee876f14aad07dda4d69a622c58a3b/include/xkbcommon/xkbcommon-keysyms.h
-fn convert_code(key_code: u16) -> Code {
+fn convert_code(key_code: u32) -> Code {
     let context = xkb::Context::new(xkb::CONTEXT_NO_FLAGS);
 
     //empty strings indicates system default

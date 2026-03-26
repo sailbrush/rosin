@@ -32,7 +32,7 @@ pub(crate) fn create_window_wayland<S: Any + Sync + 'static>(
 
     let xdg_wm_base: xdg_wm_base::XdgWmBase = globals.bind(qh, 1..=6, ()).unwrap();
 
-    let seat: wl_seat::WlSeat = globals.bind(qh, 1..=6, ()).unwrap();
+    let _seat: wl_seat::WlSeat = globals.bind(qh, 1..=6, ()).unwrap();
 
     let freeze = qh.freeze();
 

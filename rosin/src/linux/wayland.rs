@@ -1,12 +1,12 @@
 use crate::gpu::GpuCtx;
 use crate::kurbo::Point;
 use crate::kurbo::Vec2;
+use crate::linux::handle::InputHandlerVars;
 use crate::peniko;
 use crate::prelude::OverlayPipeline;
 use crate::prelude::WgpuCtx;
 use crate::prelude::WgpuFn;
 use crate::wgpu::TextureViewDescriptor;
-use crate::wgpu::util::TextureBlitter;
 use rosin_core::prelude::PointerButton;
 use rosin_core::prelude::PointerEvent;
 use rosin_core::viewport::Viewport;
@@ -29,7 +29,6 @@ use wayland_client::protocol::wl_pointer::WlPointer;
 use wayland_client::protocol::wl_registry;
 use wayland_client::protocol::wl_registry::WlRegistry;
 use wayland_client::protocol::wl_seat;
-use wayland_client::protocol::wl_seat::Capability;
 use wayland_client::protocol::wl_surface::WlSurface;
 use wayland_client::{Connection, EventQueue, QueueHandle, protocol::wl_surface};
 use wayland_protocols::xdg::decoration::zv1::client::zxdg_decoration_manager_v1;
@@ -38,6 +37,7 @@ use wayland_protocols::xdg::shell::client::xdg_surface;
 use wayland_protocols::xdg::shell::client::xdg_toplevel::XdgToplevel;
 use wayland_protocols::xdg::shell::client::xdg_wm_base;
 use wayland_protocols::xdg::shell::client::xdg_wm_base::XdgWmBase;
+use crate::linux::util::convert_wayland_key;
 pub(crate) struct RosinWaylandState<S: Sync + 'static> {
     pub(crate) exit: bool,
     pub(crate) width: u32,
@@ -51,6 +51,7 @@ pub(crate) struct RosinWaylandState<S: Sync + 'static> {
     pub(crate) window_handle: crate::handle::WindowHandle,
     pub(crate) last_mouse_pos: Vec2,
     pub(crate) wgpufn: Option<WgpuFn<S>>,
+    pub(crate) pressed_modifiers: u32
 }
 
 impl<S: Sync + 'static> RosinWaylandState<S> {
@@ -331,17 +332,69 @@ impl<S: Sync + 'static> Dispatch<wl_seat::WlSeat, ()> for RosinWaylandState<S> {
         }
     }
 }
-
+use crate::linux::util::kb_event_to_str;
 impl<S: Sync + 'static> Dispatch<wl_keyboard::WlKeyboard, ()> for RosinWaylandState<S> {
     fn event(
-        state: &mut RosinWaylandState<S>,
+        s: &mut RosinWaylandState<S>,
         _: &wl_keyboard::WlKeyboard,
         event: wl_keyboard::Event,
         _: &(),
         _: &Connection,
         _: &QueueHandle<RosinWaylandState<S>>,
     ) {
-        if let wl_keyboard::Event::Key { key, .. } = event {}
+        match event {
+            wl_keyboard::Event::Keymap { format: _, fd: _, size: _ } => {}
+            wl_keyboard::Event::Key { serial: _, time: _, key, state } => {
+                use std::sync::RwLockWriteGuard;
+                let mut input_handle: RwLockWriteGuard<'_, InputHandlerVars> = s.window_handle.0.input_handler.write().unwrap();
+
+                let e = convert_wayland_key(key, state, s.pressed_modifiers);
+
+                if let Some(handler) = input_handle.handler.as_mut() {
+                    let text = kb_event_to_str(&e);
+                    if text.chars().last().unwrap().is_alphabetic() && e.state == rosin_core::keyboard_types::KeyState::Down {
+                        let text_len = text.len();
+
+                        // Determine the range in the document to overwrite.
+                        let range: std::ops::Range<usize> = handler.composition_range().unwrap_or_else(|| handler.selection());
+
+                        let start = range.start;
+                        handler.replace_range(range, &text);
+
+                        // Update selection to end of inserted text to prevent backward typing
+                        let new_cursor_pos = start + text_len;
+                        handler.set_selection(new_cursor_pos..new_cursor_pos);
+
+                        // Text is committed, so there is no longer "marked" text.
+                        handler.set_composition_range(None);
+                        s.viewport.queue_change_event(input_handle.id.expect("panic"));
+                    } else {
+                        if text.chars().last().unwrap() == '\u{8}' && e.state == rosin_core::keyboard_types::KeyState::Down {
+                            // Determine the range in the document to overwrite.
+                            let range = handler.composition_range().unwrap_or_else(|| handler.selection());
+                            if range.start != 0 {
+                                let start = range.start - 1;
+                                handler.handle_action(crate::ime::Action::Delete(crate::ime::Movement::Grapheme(crate::ime::HorizontalDirection::Left)));
+
+                                // Update selection to end of inserted text to prevent backward typing
+                                let new_cursor_pos = start;
+                                handler.set_selection(new_cursor_pos..new_cursor_pos);
+
+                                // Text is committed, so there is no longer "marked" text.
+                                handler.set_composition_range(None);
+                                s.viewport.queue_change_event(input_handle.id.expect("panic"));
+                            }
+                        }
+                    }
+                }
+            }
+            wl_keyboard::Event::Modifiers { serial: _, mods_depressed, mods_latched, mods_locked, group: _ } => {
+                s.pressed_modifiers = mods_depressed | mods_latched | mods_locked;
+            }
+            _ => {
+                println!("{:?}", event);
+            }
+        };
     }
 }
 
@@ -387,24 +440,24 @@ impl<S: Sync + 'static> Dispatch<zxdg_toplevel_decoration_v1::ZxdgToplevelDecora
 impl<S: Sync + 'static> Dispatch<WlPointer, ()> for RosinWaylandState<S> {
     fn event(
         data: &mut RosinWaylandState<S>,
-        pointer: &WlPointer,
+        _pointer: &WlPointer,
         event: wl_pointer::Event,
-        udata: &(),
-        conn: &Connection,
-        qh: &QueueHandle<RosinWaylandState<S>>,
+        _udata: &(),
+        _conn: &Connection,
+        _qh: &QueueHandle<RosinWaylandState<S>>,
     ) {
         match event {
             wl_pointer::Event::Enter {
-                surface,
-                surface_x,
-                surface_y,
-                serial,
+                surface: _,
+                surface_x: _,
+                surface_y: _,
+                serial: _,
             } => {
                 let pe = PointerEvent { ..Default::default() };
                 data.viewport.queue_pointer_move_event(&pe);
             }
-            wl_pointer::Event::Leave { surface, serial } => {}
-            wl_pointer::Event::Motion { time, surface_x, surface_y } => {
+            wl_pointer::Event::Leave { surface: _, serial: _ } => {}
+            wl_pointer::Event::Motion { time: _, surface_x, surface_y } => {
                 data.last_mouse_pos = Vec2::new(surface_x, surface_y);
                 let pe = PointerEvent {
                     viewport_pos: Point::new(data.last_mouse_pos.x, data.last_mouse_pos.y),
@@ -412,7 +465,7 @@ impl<S: Sync + 'static> Dispatch<WlPointer, ()> for RosinWaylandState<S> {
                 };
                 data.viewport.queue_pointer_move_event(&pe);
             }
-            wl_pointer::Event::Button { time, button, state, serial } => {
+            wl_pointer::Event::Button { time: _, button, state, serial: _ } => {
                 let pe = PointerEvent {
                     viewport_pos: Point::new(data.last_mouse_pos.x, data.last_mouse_pos.y),
                     button: PointerButton::from(button as isize),
@@ -425,11 +478,11 @@ impl<S: Sync + 'static> Dispatch<WlPointer, ()> for RosinWaylandState<S> {
                     WEnum::Value(wl_pointer::ButtonState::Released) => {
                         data.viewport.queue_pointer_up_event(&pe);
                     }
-                    WEnum::Unknown(unknown) => {}
+                    WEnum::Unknown(_unknown) => {}
                     _ => unreachable!(),
                 }
             }
-            wl_pointer::Event::Axis { time, axis, value } => match axis {
+            wl_pointer::Event::Axis { time: _, axis, value } => match axis {
                 WEnum::Value(axis) => {
                     let (mut horizontal, mut vertical) = <(f64, f64)>::default();
                     match axis {
@@ -448,21 +501,19 @@ impl<S: Sync + 'static> Dispatch<WlPointer, ()> for RosinWaylandState<S> {
                     };
                     data.viewport.queue_pointer_wheel_event(&pe);
                 }
-                WEnum::Unknown(unknown) => {}
+                WEnum::Unknown(_unknown) => {}
             },
             wl_pointer::Event::AxisSource { axis_source } => match axis_source {
-                WEnum::Value(source) => {
+                WEnum::Value(_source) => {
                     println!("{:?}", event);
-                    let pe = PointerEvent {
+                    let _pe = PointerEvent {
                         wheel_delta: Vec2::new(0.0, 0.0),
                         ..Default::default()
                     };
                 }
-                WEnum::Unknown(unknown) => {
-                }
+                WEnum::Unknown(_unknown) => {}
             },
-            wl_pointer::Event::Frame => {
-            }
+            wl_pointer::Event::Frame => {}
             _ => println!("{:?}", event),
         };
     }
