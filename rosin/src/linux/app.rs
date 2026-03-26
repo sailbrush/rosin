@@ -58,6 +58,7 @@ impl<S: Sync + 'static> AppLauncher<S> {
         let conn = way_conn.unwrap();
         let (globals, event_queue) = wayland_client::globals::registry_queue_init(&conn).unwrap();
         let qh = event_queue.handle();
+
         let desc = self.windows[0].clone();
         let window = create_window_wayland(&desc, &globals, &qh);
         let raw_display_handle = RawDisplayHandle::Wayland(WaylandDisplayHandle::new(NonNull::new(conn.backend().display_ptr() as *mut _).unwrap()));
@@ -154,6 +155,7 @@ impl<S: Sync + 'static> AppLauncher<S> {
 
             Rc::new(RefCell::new(renderer))
         };
+        use crate::kurbo::Vec2;
         let mut window: RosinWaylandState<S> = RosinWaylandState {
             exit: false,
             width: desc.size.width as u32,
@@ -165,6 +167,8 @@ impl<S: Sync + 'static> AppLauncher<S> {
             viewport,
             app_state: self.state.unwrap(),
             window_handle: wh,
+            last_mouse_pos: Vec2::new(0.0, 0.0),
+            wgpufn: desc.wgpufn,
         };
         let _ = window.run_loop(event_queue);
 
