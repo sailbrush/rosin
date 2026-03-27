@@ -8,7 +8,7 @@
 [![Docs](https://docs.rs/rosin/badge.svg)](https://docs.rs/rosin)
 
 [![Dependencies](https://deps.rs/repo/github/sailbrush/rosin/status.svg)](https://deps.rs/repo/github/sailbrush/rosin)
-[![Vello version](https://img.shields.io/badge/Vello-v0.7.0-orange.svg)](https://crates.io/crates/vello)
+[![Vello version](https://img.shields.io/badge/Vello-v0.8.0-orange.svg)](https://crates.io/crates/vello)
 [![Apache 2.0 or MIT license](https://img.shields.io/badge/license-Apache--2.0_OR_MIT-blue.svg)](#license)
 
 </div>
