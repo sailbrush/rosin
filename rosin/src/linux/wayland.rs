@@ -2,6 +2,7 @@ use crate::gpu::GpuCtx;
 use crate::kurbo::Point;
 use crate::kurbo::Vec2;
 use crate::linux::handle::InputHandlerVars;
+use crate::linux::util::convert_wayland_key;
 use crate::peniko;
 use crate::prelude::OverlayPipeline;
 use crate::prelude::WgpuCtx;
@@ -14,6 +15,7 @@ use rosin_core::{
     vello::{self},
     wgpu,
 };
+use wayland_client::protocol::wl_subsurface::WlSubsurface;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -37,7 +39,6 @@ use wayland_protocols::xdg::shell::client::xdg_surface;
 use wayland_protocols::xdg::shell::client::xdg_toplevel::XdgToplevel;
 use wayland_protocols::xdg::shell::client::xdg_wm_base;
 use wayland_protocols::xdg::shell::client::xdg_wm_base::XdgWmBase;
-use crate::linux::util::convert_wayland_key;
 pub(crate) struct RosinWaylandState<S: Sync + 'static> {
     pub(crate) exit: bool,
     pub(crate) width: u32,
@@ -51,10 +52,16 @@ pub(crate) struct RosinWaylandState<S: Sync + 'static> {
     pub(crate) window_handle: crate::handle::WindowHandle,
     pub(crate) last_mouse_pos: Vec2,
     pub(crate) wgpufn: Option<WgpuFn<S>>,
-    pub(crate) pressed_modifiers: u32
+    pub(crate) pressed_modifiers: u32,
+    pub(crate) has_csd_frame: bool
 }
 
 impl<S: Sync + 'static> RosinWaylandState<S> {
+    pub fn draw_csd_frame(&self) {
+        if self.has_csd_frame {
+            
+        }
+    }
     pub fn draw(&mut self) {
         let adapter = &self.gpu_ctx.adapter;
         let surface = &self.surface;
@@ -221,6 +228,7 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
             compositor.copy(&self.gpu_ctx.device, &mut encoder, &texture_view, &swapchain_view);
         }
         queue.submit(Some(encoder.finish()));
+        self.draw_csd_frame();
         surface_texture.present();
     }
     pub fn configure(&mut self) {
@@ -343,7 +351,12 @@ impl<S: Sync + 'static> Dispatch<wl_keyboard::WlKeyboard, ()> for RosinWaylandSt
     ) {
         match event {
             wl_keyboard::Event::Keymap { format: _, fd: _, size: _ } => {}
-            wl_keyboard::Event::Key { serial: _, time: _, key, state } => {
+            wl_keyboard::Event::Key {
+                serial: _,
+                time: _,
+                key,
+                state,
+            } => {
                 use std::sync::RwLockWriteGuard;
                 let mut input_handle: RwLockWriteGuard<'_, InputHandlerVars> = s.window_handle.0.input_handler.write().unwrap();
 
@@ -387,7 +400,13 @@ impl<S: Sync + 'static> Dispatch<wl_keyboard::WlKeyboard, ()> for RosinWaylandSt
                     }
                 }
             }
-            wl_keyboard::Event::Modifiers { serial: _, mods_depressed, mods_latched, mods_locked, group: _ } => {
+            wl_keyboard::Event::Modifiers {
+                serial: _,
+                mods_depressed,
+                mods_latched,
+                mods_locked,
+                group: _,
+            } => {
                 s.pressed_modifiers = mods_depressed | mods_latched | mods_locked;
             }
             _ => {
@@ -464,7 +483,12 @@ impl<S: Sync + 'static> Dispatch<WlPointer, ()> for RosinWaylandState<S> {
                 };
                 data.viewport.queue_pointer_move_event(&pe);
             }
-            wl_pointer::Event::Button { time: _, button, state, serial: _ } => {
+            wl_pointer::Event::Button {
+                time: _,
+                button,
+                state,
+                serial: _,
+            } => {
                 let pe = PointerEvent {
                     viewport_pos: Point::new(data.last_mouse_pos.x, data.last_mouse_pos.y),
                     button: PointerButton::from(button as isize),

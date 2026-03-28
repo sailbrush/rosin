@@ -155,6 +155,7 @@ impl<S: Sync + 'static> AppLauncher<S> {
 
             Rc::new(RefCell::new(renderer))
         };
+        let has_csd = wh.0.wayland_handle.as_ref().unwrap().toplevel_decoration.is_none();
         use crate::kurbo::Vec2;
         let mut window: RosinWaylandState<S> = RosinWaylandState {
             exit: false,
@@ -169,7 +170,8 @@ impl<S: Sync + 'static> AppLauncher<S> {
             window_handle: wh,
             last_mouse_pos: Vec2::new(0.0, 0.0),
             wgpufn: desc.wgpufn,
-            pressed_modifiers: 0
+            pressed_modifiers: 0,
+            has_csd_frame: has_csd,
         };
         let _ = window.run_loop(event_queue);
 
