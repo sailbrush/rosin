@@ -322,7 +322,6 @@ impl<S: Sync + 'static> Dispatch<wl_seat::WlSeat, ()> for RosinWaylandState<S> {
             capabilities: WEnum::Value(capabilities),
         } = event
         {
-            println!("A");
             if capabilities.contains(wl_seat::Capability::Keyboard) {
                 seat.get_keyboard(qh, ());
             }
