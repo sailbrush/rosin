@@ -6,7 +6,7 @@ use crate::{
 use raw_window_handle::{DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle as RWHWindowHandle};
 use std::borrow::Borrow;
 use std::sync::Arc;
-use std::sync::RwLock;
+use rosin_core::parking_lot::RwLock;
 use std::{any::Any, time::Duration};
 pub(crate) struct InputHandlerVars {
     pub(crate) id: Option<NodeId>,
@@ -42,7 +42,7 @@ impl HasDisplayHandle for WindowHandle {
 impl WindowHandle {
     pub fn set_input_handler(&self, _id: Option<NodeId>, _handler: Option<Box<dyn InputHandler + Send + Sync>>) {
         let clone: &RwLock<InputHandlerVars> = self.input_handler.borrow();
-        let mut input_handle = clone.write().unwrap();
+        let mut input_handle = clone.write();
         input_handle.handler = _handler;
         input_handle.id = _id;
     }

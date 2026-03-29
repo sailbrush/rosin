@@ -137,7 +137,7 @@ impl<S: Sync + 'static> AppLauncher<S> {
 
         let wh = crate::prelude::WindowHandle(crate::linux::handle::WindowHandle {
             wayland_handle: Some(window),
-            input_handler: std::sync::Arc::new(std::sync::RwLock::new(InputHandlerVars { id: None, handler: None })),
+            input_handler: std::sync::Arc::new(rosin_core::parking_lot::RwLock::new(InputHandlerVars { id: None, handler: None })),
         });
         let vello_renderer = {
             let renderer = match vello::Renderer::new(
@@ -155,7 +155,6 @@ impl<S: Sync + 'static> AppLauncher<S> {
 
             Rc::new(RefCell::new(renderer))
         };
-        let has_csd = wh.0.wayland_handle.as_ref().unwrap().toplevel_decoration.is_none();
         use crate::kurbo::Vec2;
         let mut window: RosinWaylandState<S> = RosinWaylandState {
             exit: false,
@@ -171,7 +170,6 @@ impl<S: Sync + 'static> AppLauncher<S> {
             last_mouse_pos: Vec2::new(0.0, 0.0),
             wgpufn: desc.wgpufn,
             pressed_modifiers: 0,
-            has_csd_frame: has_csd,
         };
         let _ = window.run_loop(event_queue);
 

@@ -15,7 +15,6 @@ use rosin_core::{
     vello::{self},
     wgpu,
 };
-use wayland_client::protocol::wl_subsurface::WlSubsurface;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -31,6 +30,9 @@ use wayland_client::protocol::wl_pointer::WlPointer;
 use wayland_client::protocol::wl_registry;
 use wayland_client::protocol::wl_registry::WlRegistry;
 use wayland_client::protocol::wl_seat;
+use wayland_client::protocol::wl_shm;
+use wayland_client::protocol::wl_subcompositor;
+use wayland_client::protocol::wl_subsurface;
 use wayland_client::protocol::wl_surface::WlSurface;
 use wayland_client::{Connection, EventQueue, QueueHandle, protocol::wl_surface};
 use wayland_protocols::xdg::decoration::zv1::client::zxdg_decoration_manager_v1;
@@ -53,15 +55,9 @@ pub(crate) struct RosinWaylandState<S: Sync + 'static> {
     pub(crate) last_mouse_pos: Vec2,
     pub(crate) wgpufn: Option<WgpuFn<S>>,
     pub(crate) pressed_modifiers: u32,
-    pub(crate) has_csd_frame: bool
 }
 
 impl<S: Sync + 'static> RosinWaylandState<S> {
-    pub fn draw_csd_frame(&self) {
-        if self.has_csd_frame {
-            
-        }
-    }
     pub fn draw(&mut self) {
         let adapter = &self.gpu_ctx.adapter;
         let surface = &self.surface;
@@ -77,7 +73,6 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
         let swapchain_view = surface_texture.texture.create_view(&swap_tex_desc);
 
         let mut encoder = device.create_command_encoder(&Default::default());
-        let mut state = self.app_state.borrow_mut();
 
         let params = vello::RenderParams {
             base_color: peniko::Color::TRANSPARENT,
@@ -86,7 +81,7 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
             antialiasing_method: vello::AaConfig::Msaa16,
         };
 
-        self.viewport.dispatch_event_queue(&mut state, &self.window_handle);
+        self.viewport.dispatch_event_queue(&mut self.app_state.borrow_mut(), &self.window_handle);
 
         if let Some(wgpufn) = self.wgpufn {
             let mut encoder = self.gpu_ctx.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -101,12 +96,12 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
                 encoder: &mut encoder,
             };
 
-            (wgpufn.func)(&mut state, &mut render_ctx);
+            (wgpufn.func)(&mut self.app_state.borrow_mut(), &mut render_ctx);
 
             self.gpu_ctx.queue.submit(Some(encoder.finish()));
         }
 
-        let scene = self.viewport.frame(&state);
+        let scene = self.viewport.frame(&self.app_state.borrow_mut());
         self.vello_renderer
             .borrow_mut()
             .render_to_texture(device, queue, scene, &texture_view, &params)
@@ -139,13 +134,14 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
                             ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                             count: None,
                         },
-                    ],
+                    ]
+                    .as_slice(),
                 });
 
                 let pipeline_layout = self.gpu_ctx.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("Rosin Compositor Pipeline Layout"),
-                    bind_group_layouts: &[&layout],
-                    push_constant_ranges: &[],
+                    bind_group_layouts: &[&layout].as_slice(),
+                    push_constant_ranges: &[].as_slice(),
                 });
 
                 let pipeline = self.gpu_ctx.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -155,7 +151,7 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
                         module: &shader,
                         entry_point: Some("vs_main"),
                         compilation_options: Default::default(),
-                        buffers: &[],
+                        buffers: &[].as_slice(),
                     },
                     fragment: Some(wgpu::FragmentState {
                         module: &shader,
@@ -165,7 +161,8 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
                             format: cap.formats[0],
                             blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                             write_mask: wgpu::ColorWrites::ALL,
-                        })],
+                        })]
+                        .as_slice(),
                     }),
                     primitive: wgpu::PrimitiveState::default(),
                     depth_stencil: None,
@@ -199,7 +196,8 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
                         binding: 1,
                         resource: wgpu::BindingResource::Sampler(&compositor.sampler),
                     },
-                ],
+                ]
+                .as_slice(),
             });
 
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -212,7 +210,8 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
                         store: wgpu::StoreOp::Store,
                     },
                     depth_slice: None,
-                })],
+                })]
+                .as_slice(),
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
@@ -228,7 +227,6 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
             compositor.copy(&self.gpu_ctx.device, &mut encoder, &texture_view, &swapchain_view);
         }
         queue.submit(Some(encoder.finish()));
-        self.draw_csd_frame();
         surface_texture.present();
     }
     pub fn configure(&mut self) {
@@ -299,14 +297,22 @@ use wayland_protocols::xdg::shell::client::xdg_toplevel;
 
 impl<S: Sync + 'static> Dispatch<xdg_toplevel::XdgToplevel, ()> for RosinWaylandState<S> {
     fn event(
-        _: &mut RosinWaylandState<S>,
+        data: &mut RosinWaylandState<S>,
         _: &XdgToplevel,
         event: <XdgToplevel as Proxy>::Event,
         _: &(),
         _: &wayland_client::Connection,
         _: &QueueHandle<RosinWaylandState<S>>,
     ) {
-        if let xdg_toplevel::Event::Close = event {}
+        if let xdg_toplevel::Event::Close = event {
+            data.exit = true;
+        }
+        if let xdg_toplevel::Event::Configure { width, height, states } = event {
+            if width != 0 && height != 0 {
+                data.width = width as u32;
+                data.height = height as u32;
+            }
+        }
     }
 }
 
@@ -357,14 +363,13 @@ impl<S: Sync + 'static> Dispatch<wl_keyboard::WlKeyboard, ()> for RosinWaylandSt
                 key,
                 state,
             } => {
-                use std::sync::RwLockWriteGuard;
-                let mut input_handle: RwLockWriteGuard<'_, InputHandlerVars> = s.window_handle.0.input_handler.write().unwrap();
+                let mut input_handle = s.window_handle.0.input_handler.write();
 
                 let e = convert_wayland_key(key, state, s.pressed_modifiers);
 
                 if let Some(handler) = input_handle.handler.as_mut() {
                     let text = kb_event_to_str(&e);
-                    if text.chars().last().unwrap().is_alphabetic() && e.state == rosin_core::keyboard_types::KeyState::Down {
+                    if text.chars().last().is_some() && text.chars().last().unwrap().is_alphabetic() && e.state == rosin_core::keyboard_types::KeyState::Down {
                         let text_len = text.len();
 
                         // Determine the range in the document to overwrite.
@@ -381,7 +386,7 @@ impl<S: Sync + 'static> Dispatch<wl_keyboard::WlKeyboard, ()> for RosinWaylandSt
                         handler.set_composition_range(None);
                         s.viewport.queue_change_event(input_handle.id.expect("panic"));
                     } else {
-                        if text.chars().last().unwrap() == '\u{8}' && e.state == rosin_core::keyboard_types::KeyState::Down {
+                        if text.chars().last().is_some() && text.chars().last().unwrap() == '\u{8}' && e.state == rosin_core::keyboard_types::KeyState::Down {
                             // Determine the range in the document to overwrite.
                             let range = handler.composition_range().unwrap_or_else(|| handler.selection());
                             if range.start != 0 {
@@ -539,5 +544,41 @@ impl<S: Sync + 'static> Dispatch<WlPointer, ()> for RosinWaylandState<S> {
             wl_pointer::Event::Frame => {}
             _ => println!("{:?}", event),
         };
+    }
+}
+
+impl<S: Sync + 'static> Dispatch<wl_subcompositor::WlSubcompositor, ()> for RosinWaylandState<S> {
+    fn event(
+        _: &mut RosinWaylandState<S>,
+        _: &wl_subcompositor::WlSubcompositor,
+        _: <wl_subcompositor::WlSubcompositor as Proxy>::Event,
+        _: &(),
+        _: &wayland_client::Connection,
+        _: &QueueHandle<RosinWaylandState<S>>,
+    ) {
+    }
+}
+
+impl<S: Sync + 'static> Dispatch<wl_subsurface::WlSubsurface, ()> for RosinWaylandState<S> {
+    fn event(
+        _: &mut RosinWaylandState<S>,
+        _: &wl_subsurface::WlSubsurface,
+        _: <wl_subsurface::WlSubsurface as Proxy>::Event,
+        _: &(),
+        _: &wayland_client::Connection,
+        _: &QueueHandle<RosinWaylandState<S>>,
+    ) {
+    }
+}
+
+impl<S: Sync + 'static> Dispatch<wl_shm::WlShm, ()> for RosinWaylandState<S> {
+    fn event(
+        _: &mut RosinWaylandState<S>,
+        _: &wl_shm::WlShm,
+        _: <wl_shm::WlShm as Proxy>::Event,
+        _: &(),
+        _: &wayland_client::Connection,
+        _: &QueueHandle<RosinWaylandState<S>>,
+    ) {
     }
 }
