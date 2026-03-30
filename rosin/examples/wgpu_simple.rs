@@ -51,7 +51,7 @@ fn wgpu_callback(state: &State, ctx: &mut WgpuCtx<'_>) {
         let pipeline_layout = ctx.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[],
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
 
         ctx.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -72,7 +72,7 @@ fn wgpu_callback(state: &State, ctx: &mut WgpuCtx<'_>) {
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         })
     });
@@ -91,6 +91,7 @@ fn wgpu_callback(state: &State, ctx: &mut WgpuCtx<'_>) {
         depth_stencil_attachment: None,
         timestamp_writes: None,
         occlusion_query_set: None,
+        multiview_mask: None,
     });
 
     render_pass.set_pipeline(pipeline);

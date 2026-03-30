@@ -464,14 +464,10 @@ impl<'a, S: Sync + 'static> ViewportTrait for ViewportContainer<'a, S> {
                 }
             };
 
-            // TODO - Wgpu v28 fixes this:
-            // https://github.com/gfx-rs/wgpu/pull/8716
-            // So can be fixed as soon as Vello updates
-            #[allow(invalid_reference_casting)]
             unsafe {
                 if let Some(hal_surface) = surface.as_hal::<wgpu::hal::api::Metal>() {
-                    let raw = (&*hal_surface) as *const wgpu::hal::metal::Surface as *mut wgpu::hal::metal::Surface;
-                    (*raw).present_with_transaction = true;
+                    let guard = hal_surface.render_layer().lock();
+                    guard.set_presents_with_transaction(true);
                 }
             }
 
@@ -650,7 +646,7 @@ impl<'a, S: Sync + 'static> ViewportTrait for ViewportContainer<'a, S> {
                 let pipeline_layout = gpu_ctx.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("Rosin Compositor Pipeline Layout"),
                     bind_group_layouts: &[&layout],
-                    push_constant_ranges: &[],
+                    immediate_size: 0,
                 });
 
                 let pipeline = gpu_ctx.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -675,7 +671,7 @@ impl<'a, S: Sync + 'static> ViewportTrait for ViewportContainer<'a, S> {
                     primitive: wgpu::PrimitiveState::default(),
                     depth_stencil: None,
                     multisample: wgpu::MultisampleState::default(),
-                    multiview: None,
+                    multiview_mask: None,
                     cache: None,
                 });
 
@@ -721,6 +717,7 @@ impl<'a, S: Sync + 'static> ViewportTrait for ViewportContainer<'a, S> {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
             pass.set_pipeline(&compositor.pipeline);
             pass.set_bind_group(0, &bind_group, &[]);

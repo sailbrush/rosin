@@ -39,8 +39,8 @@ smallvec = "1.15.1"
 sys-locale = "0.3.1"
 time = { version = "0.3.47", features = ["serde"], optional = true }
 unic-langid = { version = "0.9.5", features = ["macros"] }
-vello = "0.7.0" # also bump the version in the readme badge
-vello_encoding = "0.7.0"
+vello = "0.8.0" # also bump the version in the readme badge
+vello_encoding = "0.8.0"
 
 [dev-dependencies]
 env_logger = "0.11.9"
