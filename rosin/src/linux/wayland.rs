@@ -41,6 +41,33 @@ use wayland_protocols::xdg::shell::client::xdg_surface;
 use wayland_protocols::xdg::shell::client::xdg_toplevel::XdgToplevel;
 use wayland_protocols::xdg::shell::client::xdg_wm_base;
 use wayland_protocols::xdg::shell::client::xdg_wm_base::XdgWmBase;
+
+pub(crate) const SRGB_SHADER: &str = r#"
+@vertex
+fn vs_main(@builtin(vertex_index) vertex_index: u32) -> @builtin(position) vec4<f32> {
+    var positions = array<vec2<f32>, 3>(
+        vec2<f32>(-1.0, -1.0),
+        vec2<f32>( 3.0, -1.0),
+        vec2<f32>(-1.0,  3.0)
+    );
+    return vec4<f32>(positions[vertex_index], 0.0, 1.0);
+}
+
+@group(0) @binding(0) var t_diffuse: texture_2d<f32>;
+@group(0) @binding(1) var s_diffuse: sampler;
+
+fn gamma(color: vec4<f32>) -> vec4<f32> {
+    return color;
+}
+
+@fragment
+fn fs_main(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
+    let dim = textureDimensions(t_diffuse);
+    let uv = pos.xy / vec2<f32>(f32(dim.x), f32(dim.y));
+    return gamma(textureSample(t_diffuse, s_diffuse, uv));
+}
+"#;
+
 pub(crate) struct RosinWaylandState<S: Sync + 'static> {
     pub(crate) exit: bool,
     pub(crate) width: u32,
@@ -224,8 +251,112 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
             let compositor = compositor.get_or_insert_with(|| wgpu::util::TextureBlitter::new(&self.gpu_ctx.device, cap.formats[0]));
 
             // Queue gpu commands
-            compositor.copy(&self.gpu_ctx.device, &mut encoder, &texture_view, &swapchain_view);
+            let shader = self.gpu_ctx.device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("gamma"),
+                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(SRGB_SHADER)),
+            });
+
+            let layout = self.gpu_ctx.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Rosin Compositor Layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ]
+                .as_slice(),
+            });
+
+            let pipeline_layout = self.gpu_ctx.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Rosin Compositor Pipeline Layout"),
+                bind_group_layouts: &[&layout].as_slice(),
+                push_constant_ranges: &[].as_slice(),
+            });
+            let pipeline = self.gpu_ctx.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("gamma pipeline"),
+                layout: Some(&pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: Some("vs_main"),
+                    compilation_options: Default::default(),
+                    buffers: &[].as_slice(),
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: Some("fs_main"),
+                    compilation_options: Default::default(),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: cap.formats[0],
+                        blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })]
+                    .as_slice(),
+                }),
+                primitive: wgpu::PrimitiveState::default(),
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState::default(),
+                multiview: None,
+                cache: None,
+            });
+
+            let sampler = self.gpu_ctx.device.create_sampler(&wgpu::SamplerDescriptor {
+                label: Some("gamma Sampler"),
+                address_mode_u: wgpu::AddressMode::ClampToEdge,
+                address_mode_v: wgpu::AddressMode::ClampToEdge,
+                mag_filter: wgpu::FilterMode::Linear,
+                min_filter: wgpu::FilterMode::Linear,
+                ..Default::default()
+            });
+
+            let bind_group = self.gpu_ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("gamma Bind Group"),
+                layout: &layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&texture_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&sampler),
+                    },
+                ]
+                .as_slice(),
+            });
+
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Rosin UI gamma Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &swapchain_view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                    depth_slice: None,
+                })]
+                .as_slice(),
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+            pass.set_pipeline(&pipeline);
+            pass.set_bind_group(0, &bind_group, &[]);
+            pass.draw(0..3, 0..1);
         }
+
         queue.submit(Some(encoder.finish()));
         surface_texture.present();
     }
