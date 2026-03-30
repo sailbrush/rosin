@@ -41,8 +41,6 @@ wayland-client = "0.31.13"
 wayland-cursor = "0.31.0"
 wayland-protocols = { version = "0.32.1", features = ["client", "staging", "unstable"] }
 xkbcommon = "0.9.0"
-cursor-icon = "1.2.0"
-wayland-csd-frame = "0.3.0"
 
 
 [features]
