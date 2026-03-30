@@ -60,8 +60,54 @@ fn convert_modifiers(mods: u32) -> Modifiers {
 }
 
 
-fn last_char(s: &str) -> char {
-    s.chars().last().expect("empty string")
+fn to_char(s: &str) -> char {
+    match s {
+        "KeyA" => 'a',
+        "KeyB" => 'b',
+        "KeyC" => 'c',
+        "KeyD" => 'd',
+        "KeyE" => 'e',
+        "KeyF" => 'f',
+        "KeyG" => 'g',
+        "KeyH" => 'h',
+        "KeyI" => 'i',
+        "KeyJ" => 'j',
+        "KeyK" => 'k',
+        "KeyL" => 'l',
+        "KeyM" => 'm',
+        "KeyN" => 'n',
+        "KeyO" => 'o',
+        "KeyP" => 'p',
+        "KeyQ" => 'q',
+        "KeyR" => 'r',
+        "KeyS" => 's',
+        "KeyT" => 't',
+        "KeyU" => 'u',
+        "KeyV" => 'v',
+        "KeyW" => 'w',
+        "KeyX" => 'x',
+        "KeyY" => 'y',
+        "KeyZ" => 'z',
+        "Digit0" => '0',
+        "Digit1" => '1',
+        "Digit2" => '2',
+        "Digit3" => '3',
+        "Digit4" => '4',
+        "Digit5" => '5',
+        "Digit6" => '6',
+        "Digit7" => '7',
+        "Digit8" => '8',
+        "Digit9" => '9',
+        "Comma" => ',',
+        "Semicolon" => ';',
+        "Period" => '.',
+        "Slash" => '/',
+        "Backslash" => '\\',
+        _ => {println!("{:?}", s); ' '},
+    }
+}
+pub fn valid_char(c: char) -> bool {
+    return (c as u32) >= 32 && (c as u32) < 127;
 }
 pub fn kb_event_to_str(kbe: &KeyboardEvent) -> String {
     let mut retval = String::new();
@@ -84,26 +130,9 @@ pub fn kb_event_to_str(kbe: &KeyboardEvent) -> String {
         Key::Named(NamedKey::ArrowRight) => 39,
         Key::Named(NamedKey::ArrowDown) => 40,
         Key::Named(NamedKey::Delete) => 46,
-        Key::Character(ref c) => match last_char(c) {
-            ' ' => 32,
-            x @ '0'..='9' => x as u32,
-            x @ 'a'..='z' => x.to_ascii_uppercase() as u32,
-            x @ 'A'..='Z' => x as u32,
-            // See: https://w3c.github.io/uievents/#optionally-fixed-virtual-key-codes
-            ';' | ':' => 186,
-            '=' | '+' => 187,
-            ',' | '<' => 188,
-            '-' | '_' => 189,
-            '.' | '>' => 190,
-            '/' | '?' => 191,
-            '`' | '~' => 192,
-            '[' | '{' => 219,
-            '\\' | '|' => 220,
-            ']' | '}' => 221,
-            '\'' | '\"' => 222,
-            _ => 0,
-        },
+        Key::Character(ref c) => to_char(c) as u32,
         _ => 0,
+        
     })
     .unwrap();
     if kbe.modifiers.shift() {

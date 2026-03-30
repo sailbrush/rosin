@@ -15,6 +15,7 @@ use rosin_core::{
     vello::{self},
     wgpu,
 };
+use crate::linux::util::valid_char;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -168,7 +169,7 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
                 let pipeline_layout = self.gpu_ctx.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("Rosin Compositor Pipeline Layout"),
                     bind_group_layouts: &[&layout].as_slice(),
-                    push_constant_ranges: &[].as_slice(),
+                    immediate_size: 0
                 });
 
                 let pipeline = self.gpu_ctx.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -194,7 +195,7 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
                     primitive: wgpu::PrimitiveState::default(),
                     depth_stencil: None,
                     multisample: wgpu::MultisampleState::default(),
-                    multiview: None,
+                    multiview_mask: None,
                     cache: None,
                 });
 
@@ -242,6 +243,7 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None
             });
             pass.set_pipeline(&compositor.pipeline);
             pass.set_bind_group(0, &bind_group, &[]);
@@ -257,7 +259,7 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
             });
 
             let layout = self.gpu_ctx.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("Rosin Compositor Layout"),
+                label: Some("Rosin gamma Layout"),
                 entries: &[
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
@@ -280,9 +282,9 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
             });
 
             let pipeline_layout = self.gpu_ctx.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Rosin Compositor Pipeline Layout"),
+                label: Some("Rosin gamma Pipeline Layout"),
                 bind_group_layouts: &[&layout].as_slice(),
-                push_constant_ranges: &[].as_slice(),
+                immediate_size: 0
             });
             let pipeline = self.gpu_ctx.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("gamma pipeline"),
@@ -307,7 +309,7 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
                 primitive: wgpu::PrimitiveState::default(),
                 depth_stencil: None,
                 multisample: wgpu::MultisampleState::default(),
-                multiview: None,
+                multiview_mask: None,
                 cache: None,
             });
 
@@ -351,6 +353,7 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None
             });
             pass.set_pipeline(&pipeline);
             pass.set_bind_group(0, &bind_group, &[]);
@@ -500,7 +503,7 @@ impl<S: Sync + 'static> Dispatch<wl_keyboard::WlKeyboard, ()> for RosinWaylandSt
 
                 if let Some(handler) = input_handle.handler.as_mut() {
                     let text = kb_event_to_str(&e);
-                    if text.chars().last().is_some() && text.chars().last().unwrap().is_alphabetic() && e.state == rosin_core::keyboard_types::KeyState::Down {
+                    if text.chars().last().is_some() && valid_char(text.chars().last().unwrap()) && e.state == rosin_core::keyboard_types::KeyState::Down {
                         let text_len = text.len();
 
                         // Determine the range in the document to overwrite.
@@ -608,7 +611,7 @@ impl<S: Sync + 'static> Dispatch<WlPointer, ()> for RosinWaylandState<S> {
                 serial: _,
             } => {
                 let pe = PointerEvent { ..Default::default() };
-                data.viewport.queue_pointer_move_event(&pe);
+                //data.viewport.queue_pointer_move_event(&pe);
             }
             wl_pointer::Event::Leave { surface: _, serial: _ } => {}
             wl_pointer::Event::Motion { time: _, surface_x, surface_y } => {

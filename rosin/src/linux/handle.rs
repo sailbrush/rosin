@@ -4,9 +4,9 @@ use crate::{
     prelude::*,
 };
 use raw_window_handle::{DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle as RWHWindowHandle};
+use rosin_core::parking_lot::RwLock;
 use std::borrow::Borrow;
 use std::sync::Arc;
-use rosin_core::parking_lot::RwLock;
 use std::{any::Any, time::Duration};
 pub(crate) struct InputHandlerVars {
     pub(crate) id: Option<NodeId>,
@@ -81,9 +81,25 @@ impl WindowHandle {
 
     pub fn request_exit(&self) {}
 
-    pub fn set_max_size(&self, _size: Option<impl Into<Size>>) {}
+    pub fn set_max_size(&self, size: Option<impl Into<Size>>) {
+        if size.is_some() {
+            let s = size.unwrap().into();
+            self.wayland_handle.clone()
+                .unwrap()
+                .xdg_toplevel
+                .set_max_size(s.width as i32, s.height as i32);
+        }
+    }
 
-    pub fn set_min_size(&self, _size: Option<impl Into<Size>>) {}
+    pub fn set_min_size(&self, size: Option<impl Into<Size>>) {
+        if size.is_some() {
+            let s = size.unwrap().into();
+            self.wayland_handle.clone()
+                .unwrap()
+                .xdg_toplevel
+                .set_min_size(s.width as i32, s.height as i32);
+        }
+    }
 
     pub fn set_position(&self, _position: impl Into<Point>) {}
 
@@ -110,8 +126,13 @@ impl WindowHandle {
     pub fn get_clipboard_text(&self) -> Option<String> {
         None
     }
-
-    pub fn open_url(&self, _url: &str) {}
+    // TODO: make safer?
+    pub fn open_url(&self, url: &str) {
+        use std::process::Command;
+        let mut cmd = Command::new("xdg-open");
+        cmd.arg(url);
+        cmd.spawn();
+    }
 
     pub fn open_file_dialog(&self, _node: Option<NodeId>, _options: FileDialogOptions) {}
 
