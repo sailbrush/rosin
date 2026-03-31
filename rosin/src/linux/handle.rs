@@ -84,20 +84,14 @@ impl WindowHandle {
     pub fn set_max_size(&self, size: Option<impl Into<Size>>) {
         if size.is_some() {
             let s = size.unwrap().into();
-            self.wayland_handle.clone()
-                .unwrap()
-                .xdg_toplevel
-                .set_max_size(s.width as i32, s.height as i32);
+            self.wayland_handle.clone().unwrap().xdg_toplevel.set_max_size(s.width as i32, s.height as i32);
         }
     }
 
     pub fn set_min_size(&self, size: Option<impl Into<Size>>) {
         if size.is_some() {
             let s = size.unwrap().into();
-            self.wayland_handle.clone()
-                .unwrap()
-                .xdg_toplevel
-                .set_min_size(s.width as i32, s.height as i32);
+            self.wayland_handle.clone().unwrap().xdg_toplevel.set_min_size(s.width as i32, s.height as i32);
         }
     }
 
@@ -107,11 +101,17 @@ impl WindowHandle {
 
     pub fn set_size(&self, _size: impl Into<Size>) {}
 
-    pub fn set_title(&self, _title: impl Into<String>) {}
+    pub fn set_title(&self, title: impl Into<String>) {
+        self.wayland_handle.clone().unwrap().xdg_toplevel.set_title(title.into());
+    }
 
-    pub fn minimize(&self) {}
+    pub fn minimize(&self) {
+        self.wayland_handle.clone().unwrap().xdg_toplevel.set_minimized();
+    }
 
-    pub fn maximize(&self) {}
+    pub fn maximize(&self) {
+        self.wayland_handle.clone().unwrap().xdg_toplevel.set_maximized();
+    }
 
     pub fn restore(&self) {}
 
@@ -131,7 +131,7 @@ impl WindowHandle {
         use std::process::Command;
         let mut cmd = Command::new("xdg-open");
         cmd.arg(url);
-        cmd.spawn();
+        let _ = cmd.spawn();
     }
 
     pub fn open_file_dialog(&self, _node: Option<NodeId>, _options: FileDialogOptions) {}
