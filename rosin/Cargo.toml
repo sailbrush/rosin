@@ -34,6 +34,15 @@ objc2-foundation = { version = "0.3.2", features = ["NSArray", "NSEnumerator", "
 objc2-quartz-core = { version = "0.3.2", features = ["CALayer", "CAMetalLayer"] }
 objc2-uniform-type-identifiers = { version = "0.3.2" }
 
+
+[target.'cfg(target_os="linux")'.dependencies]
+wayland-backend = {version = "0.3.0", features = ["client_system", "dlopen"]}
+wayland-client = "0.31.13"
+wayland-cursor = "0.31.0"
+wayland-protocols = { version = "0.32.1", features = ["client", "staging", "unstable"] }
+xkbcommon = "0.9.0"
+
+
 [features]
 default = ["system_fonts"]
 icu = ["rosin-core/icu"]

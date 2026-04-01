@@ -1,17 +1,29 @@
-use std::{any::Any, time::Duration};
-
-use raw_window_handle::{DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle as RWHWindowHandle};
-
+use crate::linux::create_window::WaylandWindow;
 use crate::{
     kurbo::{Point, Size},
     prelude::*,
 };
+use raw_window_handle::{DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle as RWHWindowHandle};
+use rosin_core::parking_lot::RwLock;
+use std::borrow::Borrow;
+use std::sync::Arc;
+use std::{any::Any, time::Duration};
+pub(crate) struct InputHandlerVars {
+    pub(crate) id: Option<NodeId>,
+    pub(crate) handler: Option<Box<dyn InputHandler + Send + Sync>>,
+}
 
-pub(crate) struct WindowHandle {}
+pub(crate) struct WindowHandle {
+    pub(crate) wayland_handle: Option<Arc<WaylandWindow>>,
+    pub(crate) input_handler: Arc<RwLock<InputHandlerVars>>,
+}
 
 impl Clone for WindowHandle {
     fn clone(&self) -> Self {
-        Self {}
+        Self {
+            wayland_handle: self.wayland_handle.clone(),
+            input_handler: self.input_handler.clone(),
+        }
     }
 }
 
@@ -28,7 +40,12 @@ impl HasDisplayHandle for WindowHandle {
 }
 
 impl WindowHandle {
-    pub fn set_input_handler(&self, _id: Option<NodeId>, _handler: Option<Box<dyn InputHandler + Send + Sync>>) {}
+    pub fn set_input_handler(&self, _id: Option<NodeId>, _handler: Option<Box<dyn InputHandler + Send + Sync>>) {
+        let clone: &RwLock<InputHandlerVars> = self.input_handler.borrow();
+        let mut input_handle = clone.write();
+        input_handle.handler = _handler;
+        input_handle.id = _id;
+    }
 
     pub fn get_logical_size(&self) -> Size {
         Size::ZERO
@@ -64,9 +81,19 @@ impl WindowHandle {
 
     pub fn request_exit(&self) {}
 
-    pub fn set_max_size(&self, _size: Option<impl Into<Size>>) {}
+    pub fn set_max_size(&self, size: Option<impl Into<Size>>) {
+        if size.is_some() {
+            let s = size.unwrap().into();
+            self.wayland_handle.clone().unwrap().xdg_toplevel.set_max_size(s.width as i32, s.height as i32);
+        }
+    }
 
-    pub fn set_min_size(&self, _size: Option<impl Into<Size>>) {}
+    pub fn set_min_size(&self, size: Option<impl Into<Size>>) {
+        if size.is_some() {
+            let s = size.unwrap().into();
+            self.wayland_handle.clone().unwrap().xdg_toplevel.set_min_size(s.width as i32, s.height as i32);
+        }
+    }
 
     pub fn set_position(&self, _position: impl Into<Point>) {}
 
@@ -74,11 +101,17 @@ impl WindowHandle {
 
     pub fn set_size(&self, _size: impl Into<Size>) {}
 
-    pub fn set_title(&self, _title: impl Into<String>) {}
+    pub fn set_title(&self, title: impl Into<String>) {
+        self.wayland_handle.clone().unwrap().xdg_toplevel.set_title(title.into());
+    }
 
-    pub fn minimize(&self) {}
+    pub fn minimize(&self) {
+        self.wayland_handle.clone().unwrap().xdg_toplevel.set_minimized();
+    }
 
-    pub fn maximize(&self) {}
+    pub fn maximize(&self) {
+        self.wayland_handle.clone().unwrap().xdg_toplevel.set_maximized();
+    }
 
     pub fn restore(&self) {}
 
@@ -93,8 +126,13 @@ impl WindowHandle {
     pub fn get_clipboard_text(&self) -> Option<String> {
         None
     }
-
-    pub fn open_url(&self, _url: &str) {}
+    // TODO: make safer?
+    pub fn open_url(&self, url: &str) {
+        use std::process::Command;
+        let mut cmd = Command::new("xdg-open");
+        cmd.arg(url);
+        let _ = cmd.spawn();
+    }
 
     pub fn open_file_dialog(&self, _node: Option<NodeId>, _options: FileDialogOptions) {}
 
