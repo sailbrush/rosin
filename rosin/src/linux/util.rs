@@ -1,12 +1,11 @@
-
+use crate::prelude::Modifiers;
 use rosin_core::{
     keyboard_types::{Code, KeyboardEvent, Location},
     prelude::{Key, NamedKey},
 };
-use xkbcommon::xkb;
 use wayland_client::WEnum;
-use crate::prelude::Modifiers;
 use wayland_client::protocol::wl_keyboard::KeyState;
+use xkbcommon::xkb;
 pub(crate) fn panic_and_print(msg: String) -> ! {
     println!("{}", msg);
     std::process::abort()
@@ -17,24 +16,16 @@ pub(crate) fn convert_wayland_key(key: u32, state: WEnum<KeyState>, mods: u32) -
     let k = convert_key(xkb_key);
     let mut repeat = false;
     let s = match state {
-        WEnum::Value(sta) => {
-            match sta {
-                KeyState::Released => {
-                    rosin_core::keyboard_types::KeyState::Up
-                }
-                KeyState::Pressed => {
-                    rosin_core::keyboard_types::KeyState::Down
-                }
-                KeyState::Repeated => {
-                    repeat = true;
-                    rosin_core::keyboard_types::KeyState::Down
-                }
-                _ => {
-                    rosin_core::keyboard_types::KeyState::Up
-                }
+        WEnum::Value(sta) => match sta {
+            KeyState::Released => rosin_core::keyboard_types::KeyState::Up,
+            KeyState::Pressed => rosin_core::keyboard_types::KeyState::Down,
+            KeyState::Repeated => {
+                repeat = true;
+                rosin_core::keyboard_types::KeyState::Down
             }
-        }
-        _ => {rosin_core::keyboard_types::KeyState::Up}
+            _ => rosin_core::keyboard_types::KeyState::Up,
+        },
+        _ => rosin_core::keyboard_types::KeyState::Up,
     };
     KeyboardEvent {
         code: xkb_key,
@@ -42,9 +33,8 @@ pub(crate) fn convert_wayland_key(key: u32, state: WEnum<KeyState>, mods: u32) -
         is_composing: false,
         location: convert_location(xkb_key),
         modifiers: convert_modifiers(mods),
-        repeat: repeat,
+        repeat,
         state: s,
-
     }
 }
 fn convert_modifiers(mods: u32) -> Modifiers {
@@ -58,7 +48,6 @@ fn convert_modifiers(mods: u32) -> Modifiers {
     println!("{:?}", mods);
     retval
 }
-
 
 fn to_char(s: &str) -> char {
     match s {
@@ -103,11 +92,14 @@ fn to_char(s: &str) -> char {
         "Period" => '.',
         "Slash" => '/',
         "Backslash" => '\\',
-        _ => {println!("{:?}", s); ' '},
+        _ => {
+            println!("{:?}", s);
+            ' '
+        }
     }
 }
 pub fn valid_char(c: char) -> bool {
-    return (c as u32) >= 32 && (c as u32) < 127;
+    (c as u32) >= 32 && (c as u32) < 127
 }
 pub fn kb_event_to_str(kbe: &KeyboardEvent) -> String {
     let mut retval = String::new();
@@ -132,7 +124,6 @@ pub fn kb_event_to_str(kbe: &KeyboardEvent) -> String {
         Key::Named(NamedKey::Delete) => 46,
         Key::Character(ref c) => to_char(c) as u32,
         _ => 0,
-        
     })
     .unwrap();
     if kbe.modifiers.shift() {
@@ -376,5 +367,44 @@ fn convert_code(key_code: u32) -> Code {
         0xff54 => Code::ArrowDown,
         0xff52 => Code::ArrowUp,
         _ => Code::Unidentified,
+    }
+}
+
+use crate::prelude::PointerButton;
+pub fn linux_mouse_btn_convert(btn: u16) -> PointerButton {
+    if btn == 0x110 {
+        return PointerButton::from(1);
+    }
+
+    if btn == 0x111 {
+        return PointerButton::from(2);
+    }
+
+    if btn == 0x112 {
+        return PointerButton::from(3);
+    }
+
+    if btn == 0x116 {
+        return PointerButton::from(4);
+    }
+
+    if btn == 0x117 {
+        return PointerButton::from(5);
+    }
+    PointerButton::from(0)
+}
+use wayland_protocols::xdg::shell::client::xdg_toplevel::ResizeEdge;
+pub fn csd_resize_to_wayland(edge: wayland_csd_frame::ResizeEdge) -> wayland_protocols::xdg::shell::client::xdg_toplevel::ResizeEdge {
+    match edge {
+        wayland_csd_frame::ResizeEdge::None => ResizeEdge::None,
+        wayland_csd_frame::ResizeEdge::Top => ResizeEdge::Top,
+        wayland_csd_frame::ResizeEdge::Bottom => ResizeEdge::Bottom,
+        wayland_csd_frame::ResizeEdge::Left => ResizeEdge::Left,
+        wayland_csd_frame::ResizeEdge::TopLeft => ResizeEdge::TopLeft,
+        wayland_csd_frame::ResizeEdge::BottomLeft => ResizeEdge::BottomLeft,
+        wayland_csd_frame::ResizeEdge::Right => ResizeEdge::Right,
+        wayland_csd_frame::ResizeEdge::TopRight => ResizeEdge::TopRight,
+        wayland_csd_frame::ResizeEdge::BottomRight => ResizeEdge::BottomRight,
+        _ => ResizeEdge::None
     }
 }

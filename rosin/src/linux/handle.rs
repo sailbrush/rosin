@@ -3,11 +3,17 @@ use crate::{
     kurbo::{Point, Size},
     prelude::*,
 };
+use raw_window_handle::RawWindowHandle;
+use raw_window_handle::WaylandWindowHandle;
 use raw_window_handle::{DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle as RWHWindowHandle};
 use rosin_core::parking_lot::RwLock;
 use std::borrow::Borrow;
+use std::ptr::NonNull;
 use std::sync::Arc;
 use std::{any::Any, time::Duration};
+use wayland_client::Proxy;
+use raw_window_handle::WaylandDisplayHandle;
+use raw_window_handle::RawDisplayHandle;
 pub(crate) struct InputHandlerVars {
     pub(crate) id: Option<NodeId>,
     pub(crate) handler: Option<Box<dyn InputHandler + Send + Sync>>,
@@ -29,13 +35,19 @@ impl Clone for WindowHandle {
 
 impl HasWindowHandle for WindowHandle {
     fn window_handle(&self) -> Result<RWHWindowHandle<'_>, HandleError> {
-        Err(HandleError::Unavailable)
+        unsafe {
+            Ok(RWHWindowHandle::borrow_raw(raw_window_handle::RawWindowHandle::Wayland(WaylandWindowHandle::new(
+                NonNull::new(self.wayland_handle.as_ref().unwrap().surface.id().as_ptr() as *mut _).unwrap(),
+            ))))
+        }
     }
 }
 
 impl HasDisplayHandle for WindowHandle {
     fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
-        Err(HandleError::Unavailable)
+        unsafe {
+            Ok(DisplayHandle::borrow_raw(RawDisplayHandle::Wayland(WaylandDisplayHandle::new(NonNull::new(self.wayland_handle.as_ref().unwrap().conn.as_ref().unwrap().backend().display_ptr() as *mut _).unwrap()))))
+        }
     }
 }
 
@@ -113,7 +125,10 @@ impl WindowHandle {
         self.wayland_handle.clone().unwrap().xdg_toplevel.set_maximized();
     }
 
-    pub fn restore(&self) {}
+    pub fn restore(&self) {
+        self.wayland_handle.clone().unwrap().xdg_toplevel.unset_maximized();
+
+    }
 
     pub fn set_cursor(&self, _cursor: CursorType) {}
 

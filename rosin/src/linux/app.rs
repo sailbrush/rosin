@@ -10,7 +10,8 @@ use std::cell::RefCell;
 use std::ptr::NonNull;
 use std::rc::Rc;
 use std::sync::OnceLock;
-
+use wayland_backend::client::ObjectId;
+use crate::linux::create_window::WaylandWindow;
 static _APP_STARTED: OnceLock<()> = OnceLock::new();
 
 pub(crate) struct AppLauncher<S: Sync + 'static> {
@@ -53,6 +54,7 @@ impl<S: Sync + 'static> AppLauncher<S> {
         let way_conn = wayland_client::Connection::connect_to_env();
         use wayland_client::Proxy;
 
+        use crate::linux::csd_frame::frame::FallbackFrame;
         use crate::linux::{create_window::create_window_wayland, handle::InputHandlerVars, wayland::RosinWaylandState};
 
         let conn = way_conn.unwrap();
@@ -60,9 +62,10 @@ impl<S: Sync + 'static> AppLauncher<S> {
         let qh = event_queue.handle();
 
         let desc = self.windows[0].clone();
-        let window = create_window_wayland(&desc, &globals, &qh);
+        let mut window = create_window_wayland(&desc, &globals, &qh);
         let raw_display_handle = RawDisplayHandle::Wayland(WaylandDisplayHandle::new(NonNull::new(conn.backend().display_ptr() as *mut _).unwrap()));
         let raw_window_handle = RawWindowHandle::Wayland(WaylandWindowHandle::new(NonNull::new(window.surface.id().as_ptr() as *mut _).unwrap()));
+        std::sync::Arc::<WaylandWindow>::get_mut(&mut window).unwrap().conn = Some(conn);
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: self.wgpu_config.backends,
             ..Default::default()
@@ -156,7 +159,16 @@ impl<S: Sync + 'static> AppLauncher<S> {
             Rc::new(RefCell::new(renderer))
         };
         use crate::kurbo::Vec2;
-        let mut window: RosinWaylandState<S> = RosinWaylandState {
+
+        let mut frame = if wh.0.wayland_handle.as_ref().unwrap().toplevel_decoration.is_none() {
+            Some(FallbackFrame::new(wh.0.wayland_handle.as_ref().unwrap().as_ref(), qh).expect("msg"))
+        } else {
+            None
+        };
+        if frame.is_some() {
+            frame.as_mut().unwrap().update_state(wayland_csd_frame::WindowState::ACTIVATED);
+        }
+        let mut rosin_window: RosinWaylandState<S> = RosinWaylandState {
             exit: false,
             width: desc.size.width as u32,
             height: desc.size.height as u32,
@@ -170,9 +182,12 @@ impl<S: Sync + 'static> AppLauncher<S> {
             last_mouse_pos: Vec2::new(0.0, 0.0),
             wgpufn: desc.wgpufn,
             pressed_modifiers: 0,
+            fallback_frame: frame,
+            last_surface_id: ObjectId::null(),
+            seat: None
         };
-        let _ = window.run_loop(event_queue);
-
+        use wayland_csd_frame::DecorationsFrame;
+        let _ = rosin_window.run_loop(event_queue);
         Ok(())
     }
 

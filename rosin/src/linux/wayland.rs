@@ -1,8 +1,10 @@
 use crate::gpu::GpuCtx;
 use crate::kurbo::Point;
 use crate::kurbo::Vec2;
-use crate::linux::handle::InputHandlerVars;
+use crate::linux::csd_frame::frame::FallbackFrame;
 use crate::linux::util::convert_wayland_key;
+use crate::linux::util::linux_mouse_btn_convert;
+use crate::linux::util::valid_char;
 use crate::peniko;
 use crate::prelude::OverlayPipeline;
 use crate::prelude::WgpuCtx;
@@ -15,10 +17,12 @@ use rosin_core::{
     vello::{self},
     wgpu,
 };
-use crate::linux::util::valid_char;
 use std::borrow::Cow;
 use std::cell::RefCell;
+use std::num::NonZero;
 use std::rc::Rc;
+use std::time::Duration;
+use wayland_backend::client::ObjectId;
 use wayland_client::Dispatch;
 use wayland_client::Proxy;
 use wayland_client::WEnum;
@@ -36,13 +40,16 @@ use wayland_client::protocol::wl_subcompositor;
 use wayland_client::protocol::wl_subsurface;
 use wayland_client::protocol::wl_surface::WlSurface;
 use wayland_client::{Connection, EventQueue, QueueHandle, protocol::wl_surface};
+use wayland_csd_frame::DecorationsFrame;
+use wayland_csd_frame::FrameAction;
+use wayland_csd_frame::FrameClick;
 use wayland_protocols::xdg::decoration::zv1::client::zxdg_decoration_manager_v1;
 use wayland_protocols::xdg::decoration::zv1::client::zxdg_toplevel_decoration_v1;
 use wayland_protocols::xdg::shell::client::xdg_surface;
 use wayland_protocols::xdg::shell::client::xdg_toplevel::XdgToplevel;
 use wayland_protocols::xdg::shell::client::xdg_wm_base;
 use wayland_protocols::xdg::shell::client::xdg_wm_base::XdgWmBase;
-
+use crate::linux::util::csd_resize_to_wayland;
 pub(crate) const SRGB_SHADER: &str = r#"
 @vertex
 fn vs_main(@builtin(vertex_index) vertex_index: u32) -> @builtin(position) vec4<f32> {
@@ -83,6 +90,9 @@ pub(crate) struct RosinWaylandState<S: Sync + 'static> {
     pub(crate) last_mouse_pos: Vec2,
     pub(crate) wgpufn: Option<WgpuFn<S>>,
     pub(crate) pressed_modifiers: u32,
+    pub(crate) fallback_frame: Option<FallbackFrame<RosinWaylandState<S>>>,
+    pub(crate) last_surface_id: ObjectId,
+    pub(crate) seat: Option<wl_seat::WlSeat>,
 }
 
 impl<S: Sync + 'static> RosinWaylandState<S> {
@@ -145,7 +155,7 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
 
                 let layout = self.gpu_ctx.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     label: Some("Rosin Compositor Layout"),
-                    entries: &[
+                    entries: [
                         wgpu::BindGroupLayoutEntry {
                             binding: 0,
                             visibility: wgpu::ShaderStages::FRAGMENT,
@@ -168,8 +178,8 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
 
                 let pipeline_layout = self.gpu_ctx.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("Rosin Compositor Pipeline Layout"),
-                    bind_group_layouts: &[&layout].as_slice(),
-                    immediate_size: 0
+                    bind_group_layouts: [&layout].as_slice(),
+                    immediate_size: 0,
                 });
 
                 let pipeline = self.gpu_ctx.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -179,13 +189,13 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
                         module: &shader,
                         entry_point: Some("vs_main"),
                         compilation_options: Default::default(),
-                        buffers: &[].as_slice(),
+                        buffers: [].as_slice(),
                     },
                     fragment: Some(wgpu::FragmentState {
                         module: &shader,
                         entry_point: Some("fs_main"),
                         compilation_options: Default::default(),
-                        targets: &[Some(wgpu::ColorTargetState {
+                        targets: [Some(wgpu::ColorTargetState {
                             format: cap.formats[0],
                             blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                             write_mask: wgpu::ColorWrites::ALL,
@@ -215,7 +225,7 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
             let bind_group = self.gpu_ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("Compositor Bind Group"),
                 layout: &compositor.layout,
-                entries: &[
+                entries: [
                     wgpu::BindGroupEntry {
                         binding: 0,
                         resource: wgpu::BindingResource::TextureView(&texture_view),
@@ -230,7 +240,7 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
 
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Rosin UI Composite Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                color_attachments: [Some(wgpu::RenderPassColorAttachment {
                     view: &swapchain_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
@@ -243,14 +253,14 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
-                multiview_mask: None
+                multiview_mask: None,
             });
             pass.set_pipeline(&compositor.pipeline);
             pass.set_bind_group(0, &bind_group, &[]);
             pass.draw(0..3, 0..1);
         } else {
             let mut compositor = self.gpu_ctx.compositor.blitter.borrow_mut();
-            let compositor = compositor.get_or_insert_with(|| wgpu::util::TextureBlitter::new(&self.gpu_ctx.device, cap.formats[0]));
+            let _compositor = compositor.get_or_insert_with(|| wgpu::util::TextureBlitter::new(&self.gpu_ctx.device, cap.formats[0]));
 
             // Queue gpu commands
             let shader = self.gpu_ctx.device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -260,7 +270,7 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
 
             let layout = self.gpu_ctx.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("Rosin gamma Layout"),
-                entries: &[
+                entries: [
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
                         visibility: wgpu::ShaderStages::FRAGMENT,
@@ -283,8 +293,8 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
 
             let pipeline_layout = self.gpu_ctx.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Rosin gamma Pipeline Layout"),
-                bind_group_layouts: &[&layout].as_slice(),
-                immediate_size: 0
+                bind_group_layouts: [&layout].as_slice(),
+                immediate_size: 0,
             });
             let pipeline = self.gpu_ctx.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("gamma pipeline"),
@@ -293,13 +303,13 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
                     module: &shader,
                     entry_point: Some("vs_main"),
                     compilation_options: Default::default(),
-                    buffers: &[].as_slice(),
+                    buffers: [].as_slice(),
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &shader,
                     entry_point: Some("fs_main"),
                     compilation_options: Default::default(),
-                    targets: &[Some(wgpu::ColorTargetState {
+                    targets: [Some(wgpu::ColorTargetState {
                         format: cap.formats[0],
                         blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                         write_mask: wgpu::ColorWrites::ALL,
@@ -325,7 +335,7 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
             let bind_group = self.gpu_ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("gamma Bind Group"),
                 layout: &layout,
-                entries: &[
+                entries: [
                     wgpu::BindGroupEntry {
                         binding: 0,
                         resource: wgpu::BindingResource::TextureView(&texture_view),
@@ -340,7 +350,7 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
 
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Rosin UI gamma Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                color_attachments: [Some(wgpu::RenderPassColorAttachment {
                     view: &swapchain_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
@@ -353,7 +363,7 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
-                multiview_mask: None
+                multiview_mask: None,
             });
             pass.set_pipeline(&pipeline);
             pass.set_bind_group(0, &bind_group, &[]);
@@ -362,6 +372,9 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
 
         queue.submit(Some(encoder.finish()));
         surface_texture.present();
+        if self.fallback_frame.is_some() {
+            self.fallback_frame.as_mut().unwrap().draw();
+        }
     }
     pub fn configure(&mut self) {
         let adapter = &self.gpu_ctx.adapter;
@@ -379,6 +392,12 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
             present_mode: wgpu::PresentMode::Mailbox,
         };
         surface.configure(&self.gpu_ctx.device, &surface_config);
+        if self.fallback_frame.is_some() {
+            self.fallback_frame
+                .as_mut()
+                .unwrap()
+                .resize(NonZero::new(self.width).unwrap(), NonZero::new(self.height).unwrap());
+        }
     }
     pub fn run_loop(&mut self, mut event_queue: EventQueue<RosinWaylandState<S>>) -> Result<(), ()> {
         loop {
@@ -388,6 +407,7 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
                 return Ok(());
             }
         }
+        Ok(())
     }
 }
 
@@ -441,11 +461,35 @@ impl<S: Sync + 'static> Dispatch<xdg_toplevel::XdgToplevel, ()> for RosinWayland
         if let xdg_toplevel::Event::Close = event {
             data.exit = true;
         }
-        if let xdg_toplevel::Event::Configure { width, height, states } = event {
-            if width != 0 && height != 0 {
-                data.width = width as u32;
-                data.height = height as u32;
-            }
+        if let xdg_toplevel::Event::Configure { width, height, states: _ } = event
+            && width != 0
+            && height != 0
+        {
+            let w = if data.fallback_frame.is_some() && width as u32 != data.width {
+                data.fallback_frame
+                    .as_mut()
+                    .unwrap()
+                    .subtract_borders(NonZero::new(width as u32).unwrap(), NonZero::new(height as u32).unwrap())
+                    .0
+                    .unwrap()
+                    .into()
+            } else {
+                width as u32
+            };
+
+            let h = if data.fallback_frame.is_some() && height as u32 != data.height {
+                data.fallback_frame
+                    .as_mut()
+                    .unwrap()
+                    .subtract_borders(NonZero::new(width as u32).unwrap(), NonZero::new(height as u32).unwrap())
+                    .1
+                    .unwrap()
+                    .into()
+            } else {
+                height as u32
+            };
+            data.width = w;
+            data.height = h;
         }
     }
 }
@@ -465,11 +509,12 @@ impl<S: Sync + 'static> Dispatch<xdg_wm_base::XdgWmBase, ()> for RosinWaylandSta
     }
 }
 impl<S: Sync + 'static> Dispatch<wl_seat::WlSeat, ()> for RosinWaylandState<S> {
-    fn event(_: &mut RosinWaylandState<S>, seat: &wl_seat::WlSeat, event: wl_seat::Event, _: &(), _: &Connection, qh: &QueueHandle<RosinWaylandState<S>>) {
+    fn event(data: &mut RosinWaylandState<S>, seat: &wl_seat::WlSeat, event: wl_seat::Event, _: &(), _: &Connection, qh: &QueueHandle<RosinWaylandState<S>>) {
         if let wl_seat::Event::Capabilities {
             capabilities: WEnum::Value(capabilities),
         } = event
         {
+            data.seat = Some(seat.clone());
             if capabilities.contains(wl_seat::Capability::Keyboard) {
                 seat.get_keyboard(qh, ());
             }
@@ -520,7 +565,7 @@ impl<S: Sync + 'static> Dispatch<wl_keyboard::WlKeyboard, ()> for RosinWaylandSt
                         handler.set_composition_range(None);
                         s.viewport.queue_change_event(input_handle.id.expect("panic"));
                     } else {
-                        if text.chars().last().is_some() && text.chars().last().unwrap() == '\u{8}' && e.state == rosin_core::keyboard_types::KeyState::Down {
+                        if text.chars().last().is_some() && text.ends_with('\u{8}') && e.state == rosin_core::keyboard_types::KeyState::Down {
                             // Determine the range in the document to overwrite.
                             let range = handler.composition_range().unwrap_or_else(|| handler.selection());
                             if range.start != 0 {
@@ -605,12 +650,19 @@ impl<S: Sync + 'static> Dispatch<WlPointer, ()> for RosinWaylandState<S> {
     ) {
         match event {
             wl_pointer::Event::Enter {
-                surface: _,
-                surface_x: _,
-                surface_y: _,
+                surface,
+                surface_x,
+                surface_y,
                 serial: _,
             } => {
-                let pe = PointerEvent { ..Default::default() };
+                let _pe = PointerEvent { ..Default::default() };
+                data.last_surface_id = surface.id();
+                if data.fallback_frame.is_some() {
+                    data.fallback_frame
+                        .as_mut()
+                        .unwrap()
+                        .click_point_moved(Duration::new(0, 0), &data.last_surface_id, surface_x, surface_y);
+                }
                 //data.viewport.queue_pointer_move_event(&pe);
             }
             wl_pointer::Event::Leave { surface: _, serial: _ } => {}
@@ -620,25 +672,73 @@ impl<S: Sync + 'static> Dispatch<WlPointer, ()> for RosinWaylandState<S> {
                     viewport_pos: Point::new(data.last_mouse_pos.x, data.last_mouse_pos.y),
                     ..Default::default()
                 };
+
+                if data.fallback_frame.is_some() {
+                    data.fallback_frame
+                        .as_mut()
+                        .unwrap()
+                        .click_point_moved(Duration::new(0, 0), &data.last_surface_id, surface_x, surface_y);
+                }
                 data.viewport.queue_pointer_move_event(&pe);
             }
             wl_pointer::Event::Button {
                 time: _,
                 button,
                 state,
-                serial: _,
+                serial,
             } => {
+                let consumed = false;
                 let pe = PointerEvent {
                     viewport_pos: Point::new(data.last_mouse_pos.x, data.last_mouse_pos.y),
-                    button: PointerButton::from(button as isize),
+                    button: linux_mouse_btn_convert(button as u16),
                     ..Default::default()
                 };
+
+                if data.fallback_frame.is_some() {
+                    let action = data.fallback_frame.as_mut().unwrap().on_click(
+                        Duration::new(0, 0),
+                        if pe.button == PointerButton::Primary {
+                            FrameClick::Normal
+                        } else {
+                            FrameClick::Alternate
+                        },
+                        state == WEnum::Value(wl_pointer::ButtonState::Pressed),
+                    );
+                    match action {
+                        Some(FrameAction::Close) => {
+                            data.exit = true;
+                        }
+                        Some(FrameAction::Maximize) => {
+                            data.window_handle.maximize();
+                        }
+                        Some(FrameAction::UnMaximize) => {
+                            data.window_handle.restore();
+                        }
+                        Some(FrameAction::Minimize) => {
+                            data.window_handle.minimize();
+                        }
+                        Some(FrameAction::Resize(edge)) => {
+                            data.window_handle.0.wayland_handle.as_mut().unwrap().xdg_toplevel.resize(
+                                data.seat.as_ref().unwrap(),
+                                serial,
+                                csd_resize_to_wayland(edge)
+                            );
+                        }
+                        _ => {
+                            println!("{:?}", action);
+                        }
+                    }
+                }
                 match state {
                     WEnum::Value(wl_pointer::ButtonState::Pressed) => {
-                        data.viewport.queue_pointer_down_event(&pe);
+                        if !consumed {
+                            data.viewport.queue_pointer_down_event(&pe);
+                        }
                     }
                     WEnum::Value(wl_pointer::ButtonState::Released) => {
-                        data.viewport.queue_pointer_up_event(&pe);
+                        if !consumed {
+                            data.viewport.queue_pointer_up_event(&pe);
+                        }
                     }
                     WEnum::Unknown(_unknown) => {}
                     _ => unreachable!(),
@@ -714,5 +814,36 @@ impl<S: Sync + 'static> Dispatch<wl_shm::WlShm, ()> for RosinWaylandState<S> {
         _: &wayland_client::Connection,
         _: &QueueHandle<RosinWaylandState<S>>,
     ) {
+    }
+}
+use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_manager_v2;
+impl<S: Sync + 'static> Dispatch<zwp_tablet_manager_v2::ZwpTabletManagerV2, ()> for RosinWaylandState<S> {
+    fn event(
+        _: &mut RosinWaylandState<S>,
+        _: &zwp_tablet_manager_v2::ZwpTabletManagerV2,
+        _: <zwp_tablet_manager_v2::ZwpTabletManagerV2 as Proxy>::Event,
+        _: &(),
+        _: &wayland_client::Connection,
+        _: &QueueHandle<RosinWaylandState<S>>,
+    ) {
+    }
+}
+
+use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_seat_v2;
+impl<S: Sync + 'static> Dispatch<zwp_tablet_seat_v2::ZwpTabletSeatV2, ()> for RosinWaylandState<S> {
+    fn event(
+        _: &mut RosinWaylandState<S>,
+        _: &zwp_tablet_seat_v2::ZwpTabletSeatV2,
+        event: <zwp_tablet_seat_v2::ZwpTabletSeatV2 as Proxy>::Event,
+        _: &(),
+        _: &wayland_client::Connection,
+        _: &QueueHandle<RosinWaylandState<S>>,
+    ) {
+        match event {
+            zwp_tablet_seat_v2::Event::TabletAdded { id: _ } => {}
+            zwp_tablet_seat_v2::Event::ToolAdded { id: _ } => {}
+            zwp_tablet_seat_v2::Event::PadAdded { id: _ } => {}
+            _ => {}
+        };
     }
 }
