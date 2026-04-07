@@ -184,7 +184,7 @@ impl<S: Sync + 'static> AppLauncher<S> {
             pressed_modifiers: 0,
             fallback_frame: frame,
             last_surface_id: ObjectId::null(),
-            seat: None
+            seat: None,
         };
         use wayland_csd_frame::DecorationsFrame;
         let _ = rosin_window.run_loop(event_queue);

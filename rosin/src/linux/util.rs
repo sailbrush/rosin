@@ -92,6 +92,10 @@ fn to_char(s: &str) -> char {
         "Period" => '.',
         "Slash" => '/',
         "Backslash" => '\\',
+        "BracketRight" => ']',
+        "BracketLeft" => '[',
+        "Minus" => '-',
+        "Equal" => '=',
         _ => {
             println!("{:?}", s);
             ' '
@@ -406,5 +410,42 @@ pub fn csd_resize_to_wayland(edge: wayland_csd_frame::ResizeEdge) -> wayland_pro
         wayland_csd_frame::ResizeEdge::TopRight => ResizeEdge::TopRight,
         wayland_csd_frame::ResizeEdge::BottomRight => ResizeEdge::BottomRight,
         _ => ResizeEdge::None
+    }
+}
+use wayland_protocols::wp::cursor_shape::v1::client::wp_cursor_shape_device_v1::Shape;
+use crate::prelude::CursorType;
+pub(crate) fn cursor_icon_to_shape(cursor_icon: CursorType) -> Shape {
+    match cursor_icon {
+        CursorType::Default => Shape::Default,
+        CursorType::ContextMenu => Shape::ContextMenu,
+        CursorType::Help => Shape::Help,
+        CursorType::Pointer => Shape::Pointer,
+        CursorType::Cell => Shape::Cell,
+        CursorType::Crosshair => Shape::Crosshair,
+        CursorType::Text => Shape::Text,
+        CursorType::VerticalText => Shape::VerticalText,
+        CursorType::Alias => Shape::Alias,
+        CursorType::Copy => Shape::Copy,
+        CursorType::Move => Shape::Move,
+        CursorType::NotAllowed => Shape::NotAllowed,
+        CursorType::Grab => Shape::Grab,
+        CursorType::Grabbing => Shape::Grabbing,
+        CursorType::EResize => Shape::EResize,
+        CursorType::NResize => Shape::NResize,
+        CursorType::NEResize => Shape::NeResize,
+        CursorType::NWResize => Shape::NwResize,
+        CursorType::SResize => Shape::SResize,
+        CursorType::SEResize => Shape::SeResize,
+        CursorType::SWResize => Shape::SwResize,
+        CursorType::WResize => Shape::WResize,
+        CursorType::EWResize => Shape::EwResize,
+        CursorType::NSResize => Shape::NsResize,
+        CursorType::NESWResize => Shape::NeswResize,
+        CursorType::NWSEResize => Shape::NwseResize,
+        CursorType::ColResize => Shape::ColResize,
+        CursorType::RowResize => Shape::RowResize,
+        CursorType::ZoomIn => Shape::ZoomIn,
+        CursorType::ZoomOut => Shape::ZoomOut,
+        _ => Shape::Default,
     }
 }

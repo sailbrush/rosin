@@ -3,6 +3,7 @@ use crate::kurbo::Point;
 use crate::kurbo::Vec2;
 use crate::linux::csd_frame::frame::FallbackFrame;
 use crate::linux::util::convert_wayland_key;
+use crate::linux::util::csd_resize_to_wayland;
 use crate::linux::util::linux_mouse_btn_convert;
 use crate::linux::util::valid_char;
 use crate::peniko;
@@ -43,13 +44,13 @@ use wayland_client::{Connection, EventQueue, QueueHandle, protocol::wl_surface};
 use wayland_csd_frame::DecorationsFrame;
 use wayland_csd_frame::FrameAction;
 use wayland_csd_frame::FrameClick;
+use wayland_protocols::wp::cursor_shape::v1::client::wp_cursor_shape_device_v1::WpCursorShapeDeviceV1;
 use wayland_protocols::xdg::decoration::zv1::client::zxdg_decoration_manager_v1;
 use wayland_protocols::xdg::decoration::zv1::client::zxdg_toplevel_decoration_v1;
 use wayland_protocols::xdg::shell::client::xdg_surface;
 use wayland_protocols::xdg::shell::client::xdg_toplevel::XdgToplevel;
 use wayland_protocols::xdg::shell::client::xdg_wm_base;
 use wayland_protocols::xdg::shell::client::xdg_wm_base::XdgWmBase;
-use crate::linux::util::csd_resize_to_wayland;
 pub(crate) const SRGB_SHADER: &str = r#"
 @vertex
 fn vs_main(@builtin(vertex_index) vertex_index: u32) -> @builtin(position) vec4<f32> {
@@ -258,7 +259,8 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
             pass.set_pipeline(&compositor.pipeline);
             pass.set_bind_group(0, &bind_group, &[]);
             pass.draw(0..3, 0..1);
-        } else {
+        }
+        {
             let mut compositor = self.gpu_ctx.compositor.blitter.borrow_mut();
             let _compositor = compositor.get_or_insert_with(|| wgpu::util::TextureBlitter::new(&self.gpu_ctx.device, cap.formats[0]));
 
@@ -642,18 +644,33 @@ impl<S: Sync + 'static> Dispatch<zxdg_toplevel_decoration_v1::ZxdgToplevelDecora
 impl<S: Sync + 'static> Dispatch<WlPointer, ()> for RosinWaylandState<S> {
     fn event(
         data: &mut RosinWaylandState<S>,
-        _pointer: &WlPointer,
+        pointer: &WlPointer,
         event: wl_pointer::Event,
         _udata: &(),
         _conn: &Connection,
-        _qh: &QueueHandle<RosinWaylandState<S>>,
+        qh: &QueueHandle<RosinWaylandState<S>>,
     ) {
+        if data.window_handle.0.wayland_handle.as_mut().unwrap().pointer_shape.is_none() {
+            std::sync::Arc::<WaylandWindow>::get_mut(&mut data.window_handle.0.wayland_handle.as_mut().unwrap())
+                .unwrap()
+                .pointer_shape = Some(
+                data.window_handle
+                    .0
+                    .wayland_handle
+                    .as_mut()
+                    .unwrap()
+                    .cursor_shape_manager
+                    .as_ref()
+                    .unwrap()
+                    .get_pointer(pointer, qh, ()),
+            );
+        }
         match event {
             wl_pointer::Event::Enter {
                 surface,
                 surface_x,
                 surface_y,
-                serial: _,
+                serial,
             } => {
                 let _pe = PointerEvent { ..Default::default() };
                 data.last_surface_id = surface.id();
@@ -664,6 +681,9 @@ impl<S: Sync + 'static> Dispatch<WlPointer, ()> for RosinWaylandState<S> {
                         .click_point_moved(Duration::new(0, 0), &data.last_surface_id, surface_x, surface_y);
                 }
                 //data.viewport.queue_pointer_move_event(&pe);
+                std::sync::Arc::<WaylandWindow>::get_mut(&mut data.window_handle.0.wayland_handle.as_mut().unwrap())
+                .unwrap()
+                .last_pointer_serial = serial;
             }
             wl_pointer::Event::Leave { surface: _, serial: _ } => {}
             wl_pointer::Event::Motion { time: _, surface_x, surface_y } => {
@@ -721,14 +741,17 @@ impl<S: Sync + 'static> Dispatch<WlPointer, ()> for RosinWaylandState<S> {
                             data.window_handle.0.wayland_handle.as_mut().unwrap().xdg_toplevel.resize(
                                 data.seat.as_ref().unwrap(),
                                 serial,
-                                csd_resize_to_wayland(edge)
+                                csd_resize_to_wayland(edge),
                             );
                         }
                         Some(FrameAction::Move) => {
-                            data.window_handle.0.wayland_handle.as_mut().unwrap().xdg_toplevel._move(
-                                data.seat.as_ref().unwrap(),
-                                serial
-                            );
+                            data.window_handle
+                                .0
+                                .wayland_handle
+                                .as_mut()
+                                .unwrap()
+                                .xdg_toplevel
+                                ._move(data.seat.as_ref().unwrap(), serial);
                         }
                         _ => {
                             println!("{:?}", action);
@@ -834,7 +857,30 @@ impl<S: Sync + 'static> Dispatch<zwp_tablet_manager_v2::ZwpTabletManagerV2, ()> 
     ) {
     }
 }
-
+use wayland_protocols::wp::cursor_shape::v1::client::wp_cursor_shape_manager_v1;
+impl<S: Sync + 'static> Dispatch<wp_cursor_shape_manager_v1::WpCursorShapeManagerV1, ()> for RosinWaylandState<S> {
+    fn event(
+        _: &mut RosinWaylandState<S>,
+        _: &wp_cursor_shape_manager_v1::WpCursorShapeManagerV1,
+        _: <wp_cursor_shape_manager_v1::WpCursorShapeManagerV1 as Proxy>::Event,
+        _: &(),
+        _: &wayland_client::Connection,
+        _: &QueueHandle<RosinWaylandState<S>>,
+    ) {
+    }
+}
+use wayland_protocols::wp::cursor_shape::v1::client::wp_cursor_shape_device_v1;
+impl<S: Sync + 'static> Dispatch<wp_cursor_shape_device_v1::WpCursorShapeDeviceV1, ()> for RosinWaylandState<S> {
+    fn event(
+        _: &mut RosinWaylandState<S>,
+        _: &wp_cursor_shape_device_v1::WpCursorShapeDeviceV1,
+        _: <wp_cursor_shape_device_v1::WpCursorShapeDeviceV1 as Proxy>::Event,
+        _: &(),
+        _: &wayland_client::Connection,
+        _: &QueueHandle<RosinWaylandState<S>>,
+    ) {
+    }
+}
 use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_seat_v2;
 impl<S: Sync + 'static> Dispatch<zwp_tablet_seat_v2::ZwpTabletSeatV2, ()> for RosinWaylandState<S> {
     fn event(
@@ -853,7 +899,7 @@ impl<S: Sync + 'static> Dispatch<zwp_tablet_seat_v2::ZwpTabletSeatV2, ()> for Ro
         };
     }
 }
-use crate::{desc::WindowDesc};
+use crate::desc::WindowDesc;
 
 use std::any::Any;
 use std::sync::Arc;
@@ -874,7 +920,10 @@ pub struct WaylandWindow {
     pub(crate) subcompositor: Arc<wl_subcompositor::WlSubcompositor>,
     pub(crate) compositor: Arc<wl_compositor::WlCompositor>,
     pub(crate) tablet: Option<zwp_tablet_tool_v2::ZwpTabletToolV2>,
-    pub(crate) conn: Option<Connection>
+    pub(crate) conn: Option<Connection>,
+    pub(crate) cursor_shape_manager: Option<wp_cursor_shape_manager_v1::WpCursorShapeManagerV1>,
+    pub(crate) pointer_shape: Option<WpCursorShapeDeviceV1>,
+    pub(crate) last_pointer_serial: u32
 }
 
 pub(crate) fn create_window_wayland<S: Any + Sync + 'static>(
@@ -918,7 +967,10 @@ pub(crate) fn create_window_wayland<S: Any + Sync + 'static>(
             subcompositor: Arc::new(globals.bind(qh, 1..=1, ()).unwrap()),
             compositor: Arc::new(wl_compositor),
             tablet: None,
-            conn: None
+            conn: None,
+            cursor_shape_manager: Some(globals.bind(qh, 1..=1, ()).unwrap()),
+            pointer_shape: None,
+            last_pointer_serial: 0
         }
     });
     // Explicitly drop the queue freeze to allow the queue to resume work.
