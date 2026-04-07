@@ -1,4 +1,4 @@
-use crate::linux::create_window::WaylandWindow;
+use crate::linux::wayland::WaylandWindow;
 use crate::{
     kurbo::{Point, Size},
     prelude::*,

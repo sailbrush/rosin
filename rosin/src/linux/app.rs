@@ -11,7 +11,7 @@ use std::ptr::NonNull;
 use std::rc::Rc;
 use std::sync::OnceLock;
 use wayland_backend::client::ObjectId;
-use crate::linux::create_window::WaylandWindow;
+use crate::linux::wayland::WaylandWindow;
 static _APP_STARTED: OnceLock<()> = OnceLock::new();
 
 pub(crate) struct AppLauncher<S: Sync + 'static> {
@@ -55,7 +55,7 @@ impl<S: Sync + 'static> AppLauncher<S> {
         use wayland_client::Proxy;
 
         use crate::linux::csd_frame::frame::FallbackFrame;
-        use crate::linux::{create_window::create_window_wayland, handle::InputHandlerVars, wayland::RosinWaylandState};
+        use crate::linux::{wayland::create_window_wayland, handle::InputHandlerVars, wayland::RosinWaylandState};
 
         let conn = way_conn.unwrap();
         let (globals, event_queue) = wayland_client::globals::registry_queue_init(&conn).unwrap();
