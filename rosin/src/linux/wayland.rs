@@ -897,7 +897,7 @@ pub(crate) fn create_window_wayland<S: Any + Sync + 'static>(
         let xdg_decoration_manager: Result<zxdg_decoration_manager_v1::ZxdgDecorationManagerV1, BindError> = globals.bind(qh, 1..=1, ());
         surface.commit();
         let toplevel_decoration = {
-            if let Ok(ref xdg_deco) = xdg_decoration_manager && false {
+            if let Ok(ref xdg_deco) = xdg_decoration_manager {
                 let toplevel_decoration = xdg_deco.get_toplevel_decoration(&xdg_toplevel, qh, ());
                 toplevel_decoration.set_mode(Mode::ServerSide);
                 Some(toplevel_decoration)
