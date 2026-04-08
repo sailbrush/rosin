@@ -5,8 +5,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{error::Error, num::NonZeroU32};
 
-use crate::linux::wayland::WaylandWindow;
 use crate::linux::csd_frame::slot::SlotPool;
+use crate::linux::wayland::WaylandWindow;
 use wayland_backend::client::ObjectId;
 use wayland_client::protocol::wl_compositor::WlCompositor;
 use wayland_client::protocol::wl_subcompositor::WlSubcompositor;

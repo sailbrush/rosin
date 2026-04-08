@@ -409,11 +409,11 @@ pub fn csd_resize_to_wayland(edge: wayland_csd_frame::ResizeEdge) -> wayland_pro
         wayland_csd_frame::ResizeEdge::Right => ResizeEdge::Right,
         wayland_csd_frame::ResizeEdge::TopRight => ResizeEdge::TopRight,
         wayland_csd_frame::ResizeEdge::BottomRight => ResizeEdge::BottomRight,
-        _ => ResizeEdge::None
+        _ => ResizeEdge::None,
     }
 }
-use wayland_protocols::wp::cursor_shape::v1::client::wp_cursor_shape_device_v1::Shape;
 use crate::prelude::CursorType;
+use wayland_protocols::wp::cursor_shape::v1::client::wp_cursor_shape_device_v1::Shape;
 pub(crate) fn cursor_icon_to_shape(cursor_icon: CursorType) -> Shape {
     match cursor_icon {
         CursorType::Default => Shape::Default,

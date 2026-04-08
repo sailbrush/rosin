@@ -5,7 +5,6 @@ use crate::{
     prelude::*,
 };
 use raw_window_handle::RawDisplayHandle;
-use raw_window_handle::RawWindowHandle;
 use raw_window_handle::WaylandDisplayHandle;
 use raw_window_handle::WaylandWindowHandle;
 use raw_window_handle::{DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle as RWHWindowHandle};
@@ -13,6 +12,7 @@ use rosin_core::parking_lot::RwLock;
 use std::borrow::Borrow;
 use std::ptr::NonNull;
 use std::sync::Arc;
+use dbus::blocking::Connection;
 use std::{any::Any, time::Duration};
 use wayland_client::Proxy;
 pub(crate) struct InputHandlerVars {
@@ -159,7 +159,13 @@ impl WindowHandle {
         let _ = cmd.spawn();
     }
 
-    pub fn open_file_dialog(&self, _node: Option<NodeId>, _options: FileDialogOptions) {}
+    pub fn open_file_dialog(&self, _node: Option<NodeId>, _options: FileDialogOptions) {
+        let conn = Connection::new_session().expect("msg");
+
+        let proxy = conn.with_proxy("org.freedesktop.portal.Desktop", "/", Duration::from_millis(5000));
+
+        let (loc,): (Vec<String>,) = proxy.method_call("org.freedesktop.portal.FileChooser", "OpenFile", ()).unwrap();
+    }
 
     pub fn save_file_dialog(&self, _node: Option<NodeId>, _options: FileDialogOptions) {}
 
