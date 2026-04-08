@@ -10,11 +10,12 @@ use raw_window_handle::WaylandWindowHandle;
 use raw_window_handle::{DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle as RWHWindowHandle};
 use rosin_core::parking_lot::RwLock;
 use std::borrow::Borrow;
+use std::option;
 use std::ptr::NonNull;
 use std::sync::Arc;
-use dbus::blocking::Connection;
 use std::{any::Any, time::Duration};
 use wayland_client::Proxy;
+use zbus::blocking::Connection;
 pub(crate) struct InputHandlerVars {
     pub(crate) id: Option<NodeId>,
     pub(crate) handler: Option<Box<dyn InputHandler + Send + Sync>>,
@@ -159,15 +160,23 @@ impl WindowHandle {
         let _ = cmd.spawn();
     }
 
-    pub fn open_file_dialog(&self, _node: Option<NodeId>, _options: FileDialogOptions) {
-        let conn = Connection::new_session().expect("msg");
-
-        let proxy = conn.with_proxy("org.freedesktop.portal.Desktop", "/", Duration::from_millis(5000));
-
-        let (loc,): (Vec<String>,) = proxy.method_call("org.freedesktop.portal.FileChooser", "OpenFile", ()).unwrap();
+    pub fn open_file_dialog(&self, _node: Option<NodeId>, options: FileDialogOptions) {
+        use crate::linux::util::file_dialog_to_open;
+        let conn = Connection::session().expect("msg");
+        let proxy =
+            zbus::blocking::Proxy::new(&conn, "org.freedesktop.portal.Desktop", "/org/freedesktop/portal/desktop", "org.freedesktop.portal.FileChooser")
+                .unwrap();
+        let loc: String = proxy.call("OpenFile", &("", "", file_dialog_to_open(options))).unwrap();
     }
 
-    pub fn save_file_dialog(&self, _node: Option<NodeId>, _options: FileDialogOptions) {}
+    pub fn save_file_dialog(&self, _node: Option<NodeId>, options: FileDialogOptions) {
+        use crate::linux::util::file_dialog_to_save;
+        let conn = Connection::session().expect("msg");
+        let proxy =
+            zbus::blocking::Proxy::new(&conn, "org.freedesktop.portal.Desktop", "/org/freedesktop/portal/desktop", "org.freedesktop.portal.FileChooser")
+                .unwrap();
+        let loc: String = proxy.call("SaveFile", &("", "", file_dialog_to_save(options))).unwrap();
+    }
 
     pub fn timer(&self, _node: Option<NodeId>, _delay: Duration) {}
 

@@ -1,4 +1,4 @@
-use crate::prelude::Modifiers;
+use crate::{dialog::FileDialogOptions, prelude::Modifiers};
 use rosin_core::{
     keyboard_types::{Code, KeyboardEvent, Location},
     prelude::{Key, NamedKey},
@@ -447,5 +447,149 @@ pub(crate) fn cursor_icon_to_shape(cursor_icon: CursorType) -> Shape {
         CursorType::ZoomIn => Shape::ZoomIn,
         CursorType::ZoomOut => Shape::ZoomOut,
         _ => Shape::Default,
+    }
+}
+use serde::*;
+use serde_repr::{Deserialize_repr, Serialize_repr};
+use std::ffi::{CStr, CString};
+use std::fmt;
+use std::fmt::Debug;
+use zbus::zvariant::{DeserializeDict, SerializeDict, Type};
+use std::ffi::c_uint;
+use std::ffi::c_void;
+unsafe extern "C" {
+    pub unsafe fn getrandom(buf: *mut c_void, buflen: usize, flags: c_uint) -> usize;
+}
+
+#[derive(Serialize, Type, PartialEq, Eq, Hash, Clone)]
+pub struct HandleToken(zbus::names::OwnedMemberName);
+impl Default for HandleToken {
+    fn default() -> Self {
+        const ALPHANUMERIC: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+
+        let mut token = String::with_capacity(16); // "rosin_" + 10 chars
+        token.push_str("rosin_");
+
+        let mut rnd_bytes = [0u8; 10];
+        unsafe {
+            getrandom(rnd_bytes.as_mut_ptr() as *mut c_void, rnd_bytes.len(), 0);
+        }
+        for byte in rnd_bytes.iter() {
+            let idx = (*byte as usize) % ALPHANUMERIC.len();
+            token.push(ALPHANUMERIC[idx] as char);
+        }
+
+        println!("{:?}", token);
+        Self(zbus::names::OwnedMemberName::try_from(token).unwrap())
+    }
+}
+impl Debug for HandleToken {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("HandleToken").field(&self.0.as_str()).finish()
+    }
+}
+#[derive(Clone, Serialize, Deserialize, Type, Debug)]
+/// Presents the user with a choice to select from or as a checkbox.
+pub struct Choice(String, String, Vec<(String, String)>, String);
+
+#[derive(Clone, Serialize, Deserialize, Type, Debug, PartialEq)]
+pub struct FileFilter(String, Vec<(FilterType, String)>);
+
+#[derive(Clone, Serialize_repr, Deserialize_repr, Debug, Type, PartialEq)]
+#[repr(u32)]
+enum FilterType {
+    GlobPattern = 0,
+    MimeType = 1,
+}
+#[derive(Serialize, Deserialize, Type, Debug, Default)]
+#[zvariant(signature = "dict")]
+pub struct OpenFileOptions {
+    #[serde(skip_deserializing)]
+    handle_token: HandleToken,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    accept_label: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    modal: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    multiple: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    directory: Option<bool>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    filters: Vec<FileFilter>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    current_filter: Option<FileFilter>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    choices: Vec<Choice>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    current_folder: Option<CString>,
+}
+
+pub fn file_dialog_to_open(opt: FileDialogOptions) -> OpenFileOptions {
+    OpenFileOptions {
+        handle_token: Default::default(),
+        accept_label: opt.submit_label,
+        modal: None,
+        multiple: Some(opt.allow_multiple),
+        directory: Some(opt.pick_folders),
+        filters: vec![],
+        current_filter: None,
+        choices: vec![],
+        current_folder: Some(
+            CString::new(if opt.initial_path.is_some() {
+                opt.initial_path.as_ref().unwrap().to_str().unwrap()
+            } else {
+                ""
+            })
+            .unwrap(),
+        ),
+    }
+}
+#[derive(Serialize, Deserialize, Type, Debug, Default)]
+#[zvariant(signature = "dict")]
+pub struct SaveFileOptions {
+    #[serde(skip_deserializing)]
+    handle_token: HandleToken,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    accept_label: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    modal: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    current_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    current_folder: Option<CString>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    current_file: Option<CString>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    filters: Vec<FileFilter>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    current_filter: Option<FileFilter>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    choices: Vec<Choice>,
+}
+pub fn file_dialog_to_save(opt: FileDialogOptions) -> SaveFileOptions {
+    SaveFileOptions {
+        handle_token: Default::default(),
+        accept_label: opt.submit_label,
+        modal: None,
+        filters: vec![],
+        current_filter: None,
+        choices: vec![],
+        current_folder: Some(
+            CString::new(if opt.initial_path.is_some() {
+                opt.initial_path.as_ref().unwrap().to_str().unwrap()
+            } else {
+                ""
+            })
+            .unwrap(),
+        ),
+        current_file: Some(
+            CString::new(if opt.initial_path.is_some() {
+                opt.initial_path.as_ref().unwrap().to_str().unwrap()
+            } else {
+                ""
+            })
+            .unwrap(),
+        ),
+        current_name: opt.filename_label
     }
 }
