@@ -46,6 +46,7 @@ zbus = "5.14.0"
 #serde is required here for serializing file dialog options
 serde = { version = "1.0", features = ["derive"] }
 serde_repr = "0.1.19"
+serde_json = { version = "1.0" }
 
 [features]
 default = ["system_fonts"]

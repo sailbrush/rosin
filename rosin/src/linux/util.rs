@@ -454,9 +454,13 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::ffi::{CStr, CString};
 use std::fmt;
 use std::fmt::Debug;
-use zbus::zvariant::{DeserializeDict, SerializeDict, Type};
+use zbus::zvariant::{DeserializeDict, SerializeDict};
 use std::ffi::c_uint;
 use std::ffi::c_void;
+use zbus::zvariant::{
+    Optional, Type,
+    as_value::{self, optional},
+};
 unsafe extern "C" {
     pub unsafe fn getrandom(buf: *mut c_void, buflen: usize, flags: c_uint) -> usize;
 }
@@ -489,7 +493,6 @@ impl Debug for HandleToken {
     }
 }
 #[derive(Clone, Serialize, Deserialize, Type, Debug)]
-/// Presents the user with a choice to select from or as a checkbox.
 pub struct Choice(String, String, Vec<(String, String)>, String);
 
 #[derive(Clone, Serialize, Deserialize, Type, Debug, PartialEq)]
@@ -501,27 +504,54 @@ enum FilterType {
     GlobPattern = 0,
     MimeType = 1,
 }
+
+#[derive(Type, Debug, Default, PartialEq)]
+#[zvariant(signature = "ay")]
+pub struct FilePath(CString);
+
+impl Serialize for FilePath {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_bytes(self.0.as_bytes_with_nul())
+    }
+}
+
+impl<'de> Deserialize<'de> for FilePath {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let bytes = <Vec<u8>>::deserialize(deserializer)?;
+        let c_string = CString::from_vec_with_nul(bytes)
+            .map_err(|_| serde::de::Error::custom("Bytes are not nul-terminated"))?;
+
+        Ok(Self(c_string))
+    }
+}
+
 #[derive(Serialize, Deserialize, Type, Debug, Default)]
 #[zvariant(signature = "dict")]
 pub struct OpenFileOptions {
-    #[serde(skip_deserializing)]
+    #[serde(with = "as_value", skip_deserializing)]
     handle_token: HandleToken,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, with = "optional", skip_serializing_if = "Option::is_none")]
     accept_label: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, with = "optional", skip_serializing_if = "Option::is_none")]
     modal: Option<bool>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, with = "optional", skip_serializing_if = "Option::is_none")]
     multiple: Option<bool>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, with = "optional", skip_serializing_if = "Option::is_none")]
     directory: Option<bool>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, with = "as_value", skip_serializing_if = "Vec::is_empty")]
     filters: Vec<FileFilter>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, with = "optional", skip_serializing_if = "Option::is_none")]
     current_filter: Option<FileFilter>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, with = "as_value", skip_serializing_if = "Vec::is_empty")]
     choices: Vec<Choice>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    current_folder: Option<CString>,
+    #[serde(default, with = "optional", skip_serializing_if = "Option::is_none")]
+    current_folder: Option<FilePath>,
 }
 
 pub fn file_dialog_to_open(opt: FileDialogOptions) -> OpenFileOptions {
@@ -535,35 +565,35 @@ pub fn file_dialog_to_open(opt: FileDialogOptions) -> OpenFileOptions {
         current_filter: None,
         choices: vec![],
         current_folder: Some(
-            CString::new(if opt.initial_path.is_some() {
+            FilePath(CString::new(if opt.initial_path.is_some() {
                 opt.initial_path.as_ref().unwrap().to_str().unwrap()
             } else {
                 ""
             })
             .unwrap(),
-        ),
+        )),
     }
 }
 #[derive(Serialize, Deserialize, Type, Debug, Default)]
 #[zvariant(signature = "dict")]
 pub struct SaveFileOptions {
-    #[serde(skip_deserializing)]
+    #[serde(with = "as_value", skip_deserializing)]
     handle_token: HandleToken,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, with = "optional", skip_serializing_if = "Option::is_none")]
     accept_label: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, with = "optional", skip_serializing_if = "Option::is_none")]
     modal: Option<bool>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, with = "optional", skip_serializing_if = "Option::is_none")]
     current_name: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    current_folder: Option<CString>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    current_file: Option<CString>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, with = "optional", skip_serializing_if = "Option::is_none")]
+    current_folder: Option<FilePath>,
+    #[serde(default, with = "optional", skip_serializing_if = "Option::is_none")]
+    current_file: Option<FilePath>,
+    #[serde(default, with = "as_value", skip_serializing_if = "Vec::is_empty")]
     filters: Vec<FileFilter>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, with = "optional", skip_serializing_if = "Option::is_none")]
     current_filter: Option<FileFilter>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, with = "as_value", skip_serializing_if = "Vec::is_empty")]
     choices: Vec<Choice>,
 }
 pub fn file_dialog_to_save(opt: FileDialogOptions) -> SaveFileOptions {
@@ -575,21 +605,21 @@ pub fn file_dialog_to_save(opt: FileDialogOptions) -> SaveFileOptions {
         current_filter: None,
         choices: vec![],
         current_folder: Some(
-            CString::new(if opt.initial_path.is_some() {
+            FilePath(CString::new(if opt.initial_path.is_some() {
                 opt.initial_path.as_ref().unwrap().to_str().unwrap()
             } else {
                 ""
             })
             .unwrap(),
-        ),
+        )),
         current_file: Some(
-            CString::new(if opt.initial_path.is_some() {
+            FilePath(CString::new(if opt.initial_path.is_some() {
                 opt.initial_path.as_ref().unwrap().to_str().unwrap()
             } else {
                 ""
             })
             .unwrap(),
-        ),
+        )),
         current_name: opt.filename_label
     }
 }

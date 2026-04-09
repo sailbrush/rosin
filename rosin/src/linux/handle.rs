@@ -160,22 +160,37 @@ impl WindowHandle {
         let _ = cmd.spawn();
     }
 
-    pub fn open_file_dialog(&self, _node: Option<NodeId>, options: FileDialogOptions) {
+    pub fn open_file_dialog(&self, node: Option<NodeId>, options: FileDialogOptions) {
+        let Some(node) = node else {
+            return;
+        };
         use crate::linux::util::file_dialog_to_open;
         let conn = Connection::session().expect("msg");
-        let proxy =
-            zbus::blocking::Proxy::new(&conn, "org.freedesktop.portal.Desktop", "/org/freedesktop/portal/desktop", "org.freedesktop.portal.FileChooser")
-                .unwrap();
-        let loc: String = proxy.call("OpenFile", &("", "", file_dialog_to_open(options))).unwrap();
+        let res = conn.call_method(
+            Some("org.freedesktop.portal.Desktop"),
+            "/org/freedesktop/portal/desktop",
+            Some("org.freedesktop.portal.FileChooser"),
+            "OpenFile",
+            &("", "", file_dialog_to_open(options)),
+        ).unwrap();
+        println!("{:?}", res);
+        
     }
 
-    pub fn save_file_dialog(&self, _node: Option<NodeId>, options: FileDialogOptions) {
+    pub fn save_file_dialog(&self, node: Option<NodeId>, options: FileDialogOptions) {
+        let Some(node) = node else {
+            return;
+        };
         use crate::linux::util::file_dialog_to_save;
         let conn = Connection::session().expect("msg");
-        let proxy =
-            zbus::blocking::Proxy::new(&conn, "org.freedesktop.portal.Desktop", "/org/freedesktop/portal/desktop", "org.freedesktop.portal.FileChooser")
-                .unwrap();
-        let loc: String = proxy.call("SaveFile", &("", "", file_dialog_to_save(options))).unwrap();
+        let res = conn.call_method(
+            Some("org.freedesktop.portal.Desktop"),
+            "/org/freedesktop/portal/desktop",
+            Some("org.freedesktop.portal.FileChooser"),
+            "SaveFile",
+            &("", "", file_dialog_to_save(options)),
+        ).unwrap();
+        println!("{:?}", res);
     }
 
     pub fn timer(&self, _node: Option<NodeId>, _delay: Duration) {}
