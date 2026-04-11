@@ -42,11 +42,8 @@ wayland-cursor = "0.31.0"
 wayland-protocols = { version = "0.32.1", features = ["client", "staging", "unstable"] }
 xkbcommon = "0.9.0"
 wayland-csd-frame = "0.3.0"
-zbus = "5.14.0"
-#serde is required here for serializing file dialog options
-serde = { version = "1.0", features = ["derive"] }
-serde_repr = "0.1.19"
-serde_json = { version = "1.0" }
+log = "0.4"
+percent-encoding = "2.3.2"
 
 [features]
 default = ["system_fonts"]

@@ -15,7 +15,9 @@ use std::ptr::NonNull;
 use std::sync::Arc;
 use std::{any::Any, time::Duration};
 use wayland_client::Proxy;
-use zbus::blocking::Connection;
+use pollster::block_on;
+
+
 pub(crate) struct InputHandlerVars {
     pub(crate) id: Option<NodeId>,
     pub(crate) handler: Option<Box<dyn InputHandler + Send + Sync>>,
@@ -164,33 +166,12 @@ impl WindowHandle {
         let Some(node) = node else {
             return;
         };
-        use crate::linux::util::file_dialog_to_open;
-        let conn = Connection::session().expect("msg");
-        let res = conn.call_method(
-            Some("org.freedesktop.portal.Desktop"),
-            "/org/freedesktop/portal/desktop",
-            Some("org.freedesktop.portal.FileChooser"),
-            "OpenFile",
-            &("", "", file_dialog_to_open(options)),
-        ).unwrap();
-        println!("{:?}", res);
-        
     }
 
     pub fn save_file_dialog(&self, node: Option<NodeId>, options: FileDialogOptions) {
         let Some(node) = node else {
             return;
         };
-        use crate::linux::util::file_dialog_to_save;
-        let conn = Connection::session().expect("msg");
-        let res = conn.call_method(
-            Some("org.freedesktop.portal.Desktop"),
-            "/org/freedesktop/portal/desktop",
-            Some("org.freedesktop.portal.FileChooser"),
-            "SaveFile",
-            &("", "", file_dialog_to_save(options)),
-        ).unwrap();
-        println!("{:?}", res);
     }
 
     pub fn timer(&self, _node: Option<NodeId>, _delay: Duration) {}
