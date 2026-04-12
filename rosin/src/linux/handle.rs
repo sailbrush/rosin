@@ -1,26 +1,30 @@
-use crate::linux::util::cursor_icon_to_shape;
+use crate::linux::util::{cursor_icon_to_shape};
 use crate::linux::wayland::WaylandWindow;
+use crate::linux::{rfd_dialog, util};
 use crate::{
     kurbo::{Point, Size},
     prelude::*,
 };
+use pollster::block_on;
 use raw_window_handle::RawDisplayHandle;
 use raw_window_handle::WaylandDisplayHandle;
 use raw_window_handle::WaylandWindowHandle;
 use raw_window_handle::{DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle as RWHWindowHandle};
 use rosin_core::parking_lot::RwLock;
 use std::borrow::Borrow;
+use std::ffi::OsStr;
 use std::option;
+use std::path::PathBuf;
 use std::ptr::NonNull;
 use std::sync::Arc;
 use std::{any::Any, time::Duration};
 use wayland_client::Proxy;
-use pollster::block_on;
-
 
 pub(crate) struct InputHandlerVars {
     pub(crate) id: Option<NodeId>,
     pub(crate) handler: Option<Box<dyn InputHandler + Send + Sync>>,
+    pub(crate) file_dialog_result: Option<FileDialogResponse>,
+    pub(crate) dialog_id: Option<NodeId>,
 }
 
 pub(crate) struct WindowHandle {
@@ -166,12 +170,31 @@ impl WindowHandle {
         let Some(node) = node else {
             return;
         };
+        let files = rfd_dialog::open_file(util::dialog_convert_open(options));
+        let clone: &RwLock<InputHandlerVars> = self.input_handler.borrow();
+        let mut input_handle = clone.write();
+        input_handle.file_dialog_result = Some(if files.is_some() {
+            FileDialogResponse::Opened(rfd_dialog::uris_to_paths(files.unwrap()))
+        } else {
+            FileDialogResponse::Cancelled
+        });
+        input_handle.dialog_id = Some(node);
     }
 
     pub fn save_file_dialog(&self, node: Option<NodeId>, options: FileDialogOptions) {
         let Some(node) = node else {
             return;
         };
+        let files = rfd_dialog::save_file(util::dialog_convert_save(options));
+
+        let clone: &RwLock<InputHandlerVars> = self.input_handler.borrow();
+        let mut input_handle = clone.write();
+        input_handle.file_dialog_result = Some(if files.is_some() {
+            FileDialogResponse::Saved(rfd_dialog::uris_to_paths(files.unwrap())[0].clone())
+        } else {
+            FileDialogResponse::Cancelled
+        });
+        input_handle.dialog_id = Some(node);
     }
 
     pub fn timer(&self, _node: Option<NodeId>, _delay: Duration) {}

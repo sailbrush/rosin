@@ -405,6 +405,13 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
         loop {
             event_queue.dispatch_pending(self).unwrap();
             self.draw();
+            let mut input_handle = self.window_handle.0.input_handler.write();
+            if input_handle.file_dialog_result.is_some() {
+                self.viewport.queue_file_dialog_event(input_handle.dialog_id.unwrap(), input_handle.file_dialog_result.clone().unwrap());
+                input_handle.file_dialog_result = None;
+                input_handle.dialog_id = None;
+                
+            }
             if self.exit {
                 return Ok(());
             }

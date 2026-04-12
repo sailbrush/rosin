@@ -140,7 +140,7 @@ impl<S: Sync + 'static> AppLauncher<S> {
 
         let wh = crate::prelude::WindowHandle(crate::linux::handle::WindowHandle {
             wayland_handle: Some(window),
-            input_handler: std::sync::Arc::new(rosin_core::parking_lot::RwLock::new(InputHandlerVars { id: None, handler: None })),
+            input_handler: std::sync::Arc::new(rosin_core::parking_lot::RwLock::new(InputHandlerVars { id: None, handler: None, file_dialog_result: None, dialog_id: None })),
         });
         let vello_renderer = {
             let renderer = match vello::Renderer::new(

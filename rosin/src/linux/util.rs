@@ -1,4 +1,6 @@
-use crate::{dialog::FileDialogOptions, prelude::Modifiers};
+use std::{ffi::CString, path::PathBuf};
+
+use crate::{dialog::FileDialogOptions, linux::rfd_dialog::{self, file_dialog::FilePath}, prelude::Modifiers};
 use rosin_core::{
     keyboard_types::{Code, KeyboardEvent, Location},
     prelude::{Key, NamedKey},
@@ -447,5 +449,34 @@ pub(crate) fn cursor_icon_to_shape(cursor_icon: CursorType) -> Shape {
         CursorType::ZoomIn => Shape::ZoomIn,
         CursorType::ZoomOut => Shape::ZoomOut,
         _ => Shape::Default,
+    }
+}
+use crate::linux::rfd_dialog::file_dialog;
+pub fn dialog_convert_open(opt: FileDialogOptions) -> file_dialog::OpenFileOptions {
+    file_dialog::OpenFileOptions {
+        parent_window: CString::new("").unwrap(),
+        title: CString::new("").unwrap(),
+        handle_token: file_dialog::HandleToken::default(),
+        accept_label: Some(CString::new("").unwrap()),
+        modal: Some(true),
+        multiple: Some(opt.allow_multiple),
+        directory: Some(opt.pick_folders),
+        filters: vec![],
+        current_filter: Some((CString::new("").unwrap(), vec![])),
+        current_folder: None
+    }
+}
+
+pub fn dialog_convert_save(opt: FileDialogOptions) -> file_dialog::SaveFileOptions {
+    file_dialog::SaveFileOptions {
+        parent_window: CString::new("").unwrap(),
+        title: CString::new("").unwrap(),
+        handle_token: file_dialog::HandleToken::default(),
+        accept_label: Some(CString::new("").unwrap()),
+        modal: Some(true),
+        filters: vec![],
+        current_filter: Some((CString::new("").unwrap(), vec![])),
+        current_folder: None,
+        ..Default::default()
     }
 }

@@ -4,14 +4,12 @@ use rosin::{keyboard_types::NamedKey, prelude::*, widgets::*};
 
 struct State {
     location: Var<String>,
-    textbox: TextBox,
 }
 
 impl Default for State {
     fn default() -> Self {
         Self {
             location: Var::new("/".into()),
-            textbox: TextBox::default(),
         }
     }
 }
@@ -32,6 +30,7 @@ fn main_view(state: &State, ui: &mut Ui<State, WindowHandle>) {
         .classes("root").children(|ui| {
             button(ui, id!(), "Open Dialog", |s, ctx| s.go(ctx));
             button(ui, id!(), "Save Dialog", |s, ctx| s.go2(ctx));
+            label(ui, id!(), ui_format!("{:?}", state.location));
         });
 }
 

@@ -91,9 +91,9 @@ pub struct DBusMessageIter {
     pub pad2_added_by_rust: c_int,
     pub pad3: *mut c_void,
 }
-
+#[derive(Debug)]
 pub struct Libdbus {
-    _handle: Liblary,
+    _handle: Library,
     // Bus Connections
     pub dbus_bus_get_private:
         unsafe extern "C" fn(DBusBusType, *mut DBusError) -> *mut DBusConnection,
@@ -174,10 +174,10 @@ macro_rules! load_symbols {
     };
 }
 
-static LIB: OnceLock<Libdbus> = OnceLock::new();
+pub static LIB: OnceLock<Libdbus> = OnceLock::new();
 
 impl Libdbus {
-    fn new(mut handle: Liblary) -> Option<Self> {
+    fn new(mut handle: Library) -> Option<Self> {
         Some(load_symbols!(
             handle,
             [
@@ -218,8 +218,8 @@ impl Libdbus {
             return Some(lib);
         }
 
-        let lib = Liblary::open(c"libdbus-1.so.3").or_else(|| Liblary::open(c"libdbus-1.so"))?;
-
+        let lib = Library::open(c"libdbus-1.so.3").or_else(|| Library::open(c"libdbus-1.so"))?;
+        
         let lib = Self::new(lib)?;
         LIB.set(lib).ok();
         LIB.get()
@@ -229,19 +229,20 @@ impl Libdbus {
         LIB.get().unwrap()
     }
 }
+#[derive(Debug)]
+struct Library(pub NonNull<c_void>);
+unsafe impl Send for Library {}
+unsafe impl Sync for Library {}
 
-struct Liblary(pub NonNull<c_void>);
-unsafe impl Send for Liblary {}
-unsafe impl Sync for Liblary {}
-
-impl Liblary {
+impl Library {
     pub fn open(lib: &CStr) -> Option<Self> {
         unsafe {
-            NonNull::new(dlopen(
+            let retval = NonNull::new(dlopen(
                 lib.as_ptr(),
-                RTLD_LAZY | RTLD_LOCAL,
+                RTLD_LAZY,
             ))
-            .map(Self)
+            .map(Self);
+            retval
         }
     }
 
@@ -250,7 +251,7 @@ impl Liblary {
     }
 }
 
-impl Drop for Liblary {
+impl Drop for Library {
     fn drop(&mut self) {
         unsafe { dlclose(self.0.as_ptr()) };
     }

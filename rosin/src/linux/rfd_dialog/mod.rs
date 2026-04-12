@@ -6,7 +6,7 @@ use std::{
 
 mod ffi;
 mod libdbus;
-mod file_dialog;
+pub mod file_dialog;
 use libdbus::*;
 use crate::linux::rfd_dialog::file_dialog::*;
 
