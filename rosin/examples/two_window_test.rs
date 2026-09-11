@@ -34,8 +34,8 @@ fn main() {
 
     let window2 = WindowDesc::new(callback!(main_view2))
         .title("Two Window Test")
-        .min_size(800, 650)
-        .size(800, 650);
+        .min_size(800, 400)
+        .size(800, 400);
 
     AppLauncher::new(window1).add_window(window2)
         .run(State::default(), TranslationMap::default())

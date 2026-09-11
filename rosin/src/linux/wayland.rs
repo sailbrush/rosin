@@ -8,6 +8,7 @@ use crate::linux::util::linux_mouse_btn_convert;
 use crate::linux::util::valid_char;
 use crate::peniko;
 use crate::prelude::OverlayPipeline;
+use crate::prelude::PointerButtons;
 use crate::prelude::WgpuCtx;
 use crate::prelude::WgpuFn;
 use crate::wgpu::TextureViewDescriptor;
@@ -19,10 +20,6 @@ use rosin_core::{
     vello::{self},
     wgpu,
 };
-use wayland_client::event_created_child;
-use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_pad_group_v2;
-use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_pad_v2;
-use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_v2;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::num::NonZero;
@@ -32,6 +29,7 @@ use wayland_backend::client::ObjectId;
 use wayland_client::Dispatch;
 use wayland_client::Proxy;
 use wayland_client::WEnum;
+use wayland_client::event_created_child;
 use wayland_client::globals::GlobalListContents;
 use wayland_client::protocol::wl_compositor;
 use wayland_client::protocol::wl_compositor::WlCompositor;
@@ -50,13 +48,15 @@ use wayland_csd_frame::DecorationsFrame;
 use wayland_csd_frame::FrameAction;
 use wayland_csd_frame::FrameClick;
 use wayland_protocols::wp::cursor_shape::v1::client::wp_cursor_shape_device_v1::WpCursorShapeDeviceV1;
+use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_pad_group_v2;
+use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_pad_v2;
+use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_v2;
 use wayland_protocols::xdg::decoration::zv1::client::zxdg_decoration_manager_v1;
 use wayland_protocols::xdg::decoration::zv1::client::zxdg_toplevel_decoration_v1;
 use wayland_protocols::xdg::shell::client::xdg_surface;
 use wayland_protocols::xdg::shell::client::xdg_toplevel::XdgToplevel;
 use wayland_protocols::xdg::shell::client::xdg_wm_base;
 use wayland_protocols::xdg::shell::client::xdg_wm_base::XdgWmBase;
-use crate::prelude::PointerButtons;
 pub(crate) const SRGB_SHADER: &str = r#"
 @vertex
 fn vs_main(@builtin(vertex_index) vertex_index: u32) -> @builtin(position) vec4<f32> {
@@ -411,16 +411,12 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
         }
     }
     pub fn run_loop(&mut self, event_queue: &mut EventQueue<RosinWaylandState<S>>) -> Result<(), ()> {
-            event_queue.dispatch_pending(self).unwrap();
-            
-            self.draw();
-            let mut input_handle = self.window_handle.0.input_handler.write();
-            if input_handle.file_dialog_result.is_some() {
-                self.viewport.queue_file_dialog_event(input_handle.dialog_id.unwrap(), input_handle.file_dialog_result.clone().unwrap());
-                input_handle.file_dialog_result = None;
-                input_handle.dialog_id = None;
-                
-            }
+        self.draw();
+
+        let mut input_handle = self.window_handle.0.input_handler.write();
+        if let Some(result) = input_handle.file_dialog_result.take() {
+            self.viewport.queue_file_dialog_event(input_handle.dialog_id.take().unwrap(), result);
+        }
         Ok(())
     }
 }
@@ -466,7 +462,7 @@ use wayland_protocols::xdg::shell::client::xdg_toplevel;
 impl<S: Sync + 'static> Dispatch<xdg_toplevel::XdgToplevel, ()> for RosinWaylandState<S> {
     fn event(
         data: &mut RosinWaylandState<S>,
-        _: &XdgToplevel,
+        toplevel: &XdgToplevel,
         event: <XdgToplevel as Proxy>::Event,
         _: &(),
         _: &wayland_client::Connection,
@@ -663,13 +659,8 @@ impl<S: Sync + 'static> Dispatch<WlPointer, ()> for RosinWaylandState<S> {
         qh: &QueueHandle<RosinWaylandState<S>>,
     ) {
         if data.window_handle.0.wayland_handle.as_ref().unwrap().write().pointer_shape.is_none() {
-                let mut write = data.window_handle.0.wayland_handle.as_ref().unwrap().write();
-                write
-                .pointer_shape = Some(write.cursor_shape_manager
-                    .as_ref()
-                    .unwrap()
-                    .get_pointer(pointer, qh, ()),
-            );
+            let mut write = data.window_handle.0.wayland_handle.as_ref().unwrap().write();
+            write.pointer_shape = Some(write.cursor_shape_manager.as_ref().unwrap().get_pointer(pointer, qh, ()));
         }
         match event {
             wl_pointer::Event::Enter {
@@ -693,7 +684,7 @@ impl<S: Sync + 'static> Dispatch<WlPointer, ()> for RosinWaylandState<S> {
                 data.last_mouse_pos = Vec2::new(surface_x, surface_y);
                 let pe = PointerEvent {
                     viewport_pos: Point::new(data.last_mouse_pos.x, data.last_mouse_pos.y),
-					buttons: data.held_mouse_btns,
+                    buttons: data.held_mouse_btns,
                     ..Default::default()
                 };
 
@@ -754,7 +745,8 @@ impl<S: Sync + 'static> Dispatch<WlPointer, ()> for RosinWaylandState<S> {
                                 .wayland_handle
                                 .as_ref()
                                 .unwrap()
-                                .read().xdg_toplevel
+                                .read()
+                                .xdg_toplevel
                                 ._move(data.seat.as_ref().unwrap(), serial);
                         }
                         _ => {
@@ -765,13 +757,13 @@ impl<S: Sync + 'static> Dispatch<WlPointer, ()> for RosinWaylandState<S> {
                 match state {
                     WEnum::Value(wl_pointer::ButtonState::Pressed) => {
                         if !consumed {
-							data.held_mouse_btns.insert(pe.button);
+                            data.held_mouse_btns.insert(pe.button);
                             data.viewport.queue_pointer_down_event(&pe);
                         }
                     }
                     WEnum::Value(wl_pointer::ButtonState::Released) => {
                         if !consumed {
-							data.held_mouse_btns.remove(pe.button);
+                            data.held_mouse_btns.remove(pe.button);
                             data.viewport.queue_pointer_up_event(&pe);
                         }
                     }
@@ -900,9 +892,7 @@ impl<S: Sync + 'static> Dispatch<zwp_tablet_seat_v2::ZwpTabletSeatV2, ()> for Ro
         println!("{:?}", event);
         match event {
             zwp_tablet_seat_v2::Event::TabletAdded { id: _ } => {}
-            zwp_tablet_seat_v2::Event::ToolAdded { id } => {
-                
-            }
+            zwp_tablet_seat_v2::Event::ToolAdded { id } => {}
             zwp_tablet_seat_v2::Event::PadAdded { id: _ } => {}
             _ => {}
         };
@@ -912,7 +902,6 @@ impl<S: Sync + 'static> Dispatch<zwp_tablet_seat_v2::ZwpTabletSeatV2, ()> for Ro
         zwp_tablet_seat_v2::EVT_TABLET_ADDED_OPCODE => (zwp_tablet_v2::ZwpTabletV2, ()),
         zwp_tablet_seat_v2::EVT_TOOL_ADDED_OPCODE => (zwp_tablet_tool_v2::ZwpTabletToolV2, ()),
     ]);
-    
 }
 
 impl<S: Sync + 'static> Dispatch<wayland_protocols::wp::tablet::zv2::client::zwp_tablet_pad_v2::ZwpTabletPadV2, ()> for RosinWaylandState<S> {
@@ -937,9 +926,7 @@ impl<S: Sync + 'static> Dispatch<zwp_tablet_pad_group_v2::ZwpTabletPadGroupV2, (
         data: &(),
         conn: &Connection,
         qhandle: &QueueHandle<Self>,
-    )
-    {
-        
+    ) {
     }
 }
 
@@ -953,9 +940,7 @@ impl<S: Sync + 'static> Dispatch<wayland_protocols::wp::tablet::zv2::client::zwp
         qhandle: &QueueHandle<Self>,
     ) {
     }
-    event_created_child!(RosinWaylandState<S>, zwp_tablet_v2::ZwpTabletV2, [
-        
-    ]);
+    event_created_child!(RosinWaylandState<S>, zwp_tablet_v2::ZwpTabletV2, []);
 }
 impl<S: Sync + 'static> Dispatch<zwp_tablet_tool_v2::ZwpTabletToolV2, ()> for RosinWaylandState<S> {
     fn event(
@@ -967,18 +952,17 @@ impl<S: Sync + 'static> Dispatch<zwp_tablet_tool_v2::ZwpTabletToolV2, ()> for Ro
         _: &QueueHandle<RosinWaylandState<S>>,
     ) {
         match event {
-            zwp_tablet_tool_v2::Event::Motion {x, y} => {
+            zwp_tablet_tool_v2::Event::Motion { x, y } => {
                 state.curr_pen_event.viewport_pos = Point::new(x, y);
             }
-            zwp_tablet_tool_v2::Event::Pressure {pressure} => {
+            zwp_tablet_tool_v2::Event::Pressure { pressure } => {
                 state.curr_pen_event.pressure = pressure as f32 / 65535 as f32;
             }
-            zwp_tablet_tool_v2::Event::Distance {distance} => {
-            }
-            zwp_tablet_tool_v2::Event::Tilt {tilt_x, tilt_y} => {
+            zwp_tablet_tool_v2::Event::Distance { distance } => {}
+            zwp_tablet_tool_v2::Event::Tilt { tilt_x, tilt_y } => {
                 state.curr_pen_event.tilt = Vec2::new(tilt_x, tilt_y);
             }
-            zwp_tablet_tool_v2::Event::Down {serial} => {
+            zwp_tablet_tool_v2::Event::Down { serial } => {
                 state.curr_pen_event.buttons = PointerButtons::empty().with(PointerButton::Primary);
                 state.pen_down = true;
             }
@@ -986,11 +970,11 @@ impl<S: Sync + 'static> Dispatch<zwp_tablet_tool_v2::ZwpTabletToolV2, ()> for Ro
                 state.curr_pen_event.buttons = PointerButtons::empty();
                 state.pen_up = true;
             }
-            zwp_tablet_tool_v2::Event::Frame {time} => {
+            zwp_tablet_tool_v2::Event::Frame { time } => {
                 if state.pen_down {
                     state.viewport.queue_pointer_down_event(&state.curr_pen_event);
                     state.pen_down = false;
-                } 
+                }
                 if state.pen_up {
                     state.viewport.queue_pointer_up_event(&state.curr_pen_event);
                     state.pen_up = false;
@@ -1003,7 +987,6 @@ impl<S: Sync + 'static> Dispatch<zwp_tablet_tool_v2::ZwpTabletToolV2, ()> for Ro
         }
     }
 }
-
 
 use crate::desc::WindowDesc;
 
@@ -1045,38 +1028,40 @@ pub(crate) fn create_window_wayland<S: Any + Sync + 'static>(
 
     let freeze = qh.freeze();
 
-    let window = Arc::new_cyclic(|_weak| rosin_core::parking_lot::RwLock::new({
-        let xdg_surface = xdg_wm_base.get_xdg_surface(&surface, qh, ());
-        let xdg_toplevel = xdg_surface.get_toplevel(qh, ());
-        let xdg_decoration_manager: Result<zxdg_decoration_manager_v1::ZxdgDecorationManagerV1, BindError> = globals.bind(qh, 1..=1, ());
-        surface.commit();
-        let toplevel_decoration = {
-            if let Ok(ref xdg_deco) = xdg_decoration_manager {
-                let toplevel_decoration = xdg_deco.get_toplevel_decoration(&xdg_toplevel, qh, ());
-                toplevel_decoration.set_mode(Mode::ServerSide);
-                Some(toplevel_decoration)
-            } else {
-                None
+    let window = Arc::new_cyclic(|_weak| {
+        rosin_core::parking_lot::RwLock::new({
+            let xdg_surface = xdg_wm_base.get_xdg_surface(&surface, qh, ());
+            let xdg_toplevel = xdg_surface.get_toplevel(qh, ());
+            let xdg_decoration_manager: Result<zxdg_decoration_manager_v1::ZxdgDecorationManagerV1, BindError> = globals.bind(qh, 1..=1, ());
+            surface.commit();
+            let toplevel_decoration = {
+                if let Ok(ref xdg_deco) = xdg_decoration_manager {
+                    let toplevel_decoration = xdg_deco.get_toplevel_decoration(&xdg_toplevel, qh, ());
+                    toplevel_decoration.set_mode(Mode::ServerSide);
+                    Some(toplevel_decoration)
+                } else {
+                    None
+                }
+            };
+            use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_manager_v2;
+            let tablet_manager: zwp_tablet_manager_v2::ZwpTabletManagerV2 = globals.bind(qh, 1..=2, ()).unwrap();
+            let _tablet_seat = tablet_manager.get_tablet_seat(&seat, qh, ());
+            WaylandWindow {
+                xdg_surface,
+                xdg_toplevel,
+                surface,
+                xdg_decoration_manager: xdg_decoration_manager.ok(),
+                toplevel_decoration,
+                shm: Some(globals.bind(qh, 1..=1, ()).unwrap()),
+                subcompositor: Arc::new(globals.bind(qh, 1..=1, ()).unwrap()),
+                compositor: Arc::new(wl_compositor),
+                tablet: None,
+                conn: None,
+                cursor_shape_manager: Some(globals.bind(qh, 1..=1, ()).unwrap()),
+                pointer_shape: None,
             }
-        };
-        use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_manager_v2;
-        let tablet_manager: zwp_tablet_manager_v2::ZwpTabletManagerV2 = globals.bind(qh, 1..=2, ()).unwrap();
-        let _tablet_seat = tablet_manager.get_tablet_seat(&seat, qh, ());
-        WaylandWindow {
-            xdg_surface,
-            xdg_toplevel,
-            surface,
-            xdg_decoration_manager: xdg_decoration_manager.ok(),
-            toplevel_decoration,
-            shm: Some(globals.bind(qh, 1..=1, ()).unwrap()),
-            subcompositor: Arc::new(globals.bind(qh, 1..=1, ()).unwrap()),
-            compositor: Arc::new(wl_compositor),
-            tablet: None,
-            conn: None,
-            cursor_shape_manager: Some(globals.bind(qh, 1..=1, ()).unwrap()),
-            pointer_shape: None,
-        }
-    }));
+        })
+    });
     // Explicitly drop the queue freeze to allow the queue to resume work.
     drop(freeze);
 

@@ -50,7 +50,7 @@ impl<S: Sync + 'static> AppLauncher<S> {
     // No hot-reload, no serde requirement
     #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
     pub fn run(mut self, _state: S, _translation_map: TranslationMap) -> Result<(), LaunchError> {
-        let mut wayland_states: Vec<RosinWaylandState<S>> = Vec::new();
+        let mut wayland_windows: Vec<(RosinWaylandState<S>, wayland_client::EventQueue<RosinWaylandState<S>>)> = Vec::new();
         self.state = Some(Rc::new(RefCell::new(_state)));
         use wayland_client::Proxy;
 
@@ -59,14 +59,18 @@ impl<S: Sync + 'static> AppLauncher<S> {
 
         let way_conn = wayland_client::Connection::connect_to_env();
         let conn = way_conn.unwrap();
-        let (globals, mut event_queue) = wayland_client::globals::registry_queue_init(&conn).unwrap();
-
+        let (globals, mut event_queue) = wayland_client::globals::registry_queue_init::<RosinWaylandState<S>>(&conn).unwrap();
         for desc in self.windows {
+            let mut event_queue = conn.new_event_queue();
             let qh = event_queue.handle();
+
             let mut window = create_window_wayland(&desc, &globals, &qh);
             let raw_display_handle = RawDisplayHandle::Wayland(WaylandDisplayHandle::new(NonNull::new(conn.backend().display_ptr() as *mut _).unwrap()));
             let raw_window_handle = RawWindowHandle::Wayland(WaylandWindowHandle::new(NonNull::new(window.read().surface.id().as_ptr() as *mut _).unwrap()));
-            std::sync::Arc::<rosin_core::parking_lot::RwLock<WaylandWindow>>::get_mut(&mut window).unwrap().write().conn = Some(conn.clone());
+            std::sync::Arc::<rosin_core::parking_lot::RwLock<WaylandWindow>>::get_mut(&mut window)
+                .unwrap()
+                .write()
+                .conn = Some(conn.clone());
             let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
                 backends: self.wgpu_config.backends,
                 ..Default::default()
@@ -176,7 +180,7 @@ impl<S: Sync + 'static> AppLauncher<S> {
             if frame.is_some() {
                 frame.as_mut().unwrap().update_state(wayland_csd_frame::WindowState::ACTIVATED);
             }
-            wayland_states.push(RosinWaylandState {
+            wayland_windows.push((RosinWaylandState {
                 exit: false,
                 width: desc.size.width as u32,
                 height: desc.size.height as u32,
@@ -202,14 +206,16 @@ impl<S: Sync + 'static> AppLauncher<S> {
                 },
                 pen_down: false,
                 pen_up: false,
-            });
+            }, event_queue));
         }
 
         loop {
-            for w_state in &mut wayland_states {
-                let _ = w_state.run_loop(&mut event_queue);
-                if w_state.exit {
-                    
+            for (state, event_queue) in &mut wayland_windows {
+                event_queue.dispatch_pending(state).unwrap();
+                state.draw();
+
+                if state.exit {
+                    // Mark this window for removal or shut down the app.
                 }
             }
         }
