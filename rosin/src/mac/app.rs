@@ -151,6 +151,7 @@ impl<S: Sync + 'static> AppLauncher<S> {
                 power_preference: self.wgpu_config.power_preference,
                 force_fallback_adapter: false,
                 compatible_surface: None,
+                apply_limit_buckets: false,
             })
             .block_on()
         {

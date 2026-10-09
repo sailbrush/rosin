@@ -512,6 +512,7 @@ impl<'a, S: Sync + 'static> ViewportTrait for ViewportContainer<'a, S> {
             let config = wgpu::SurfaceConfiguration {
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
                 format,
+                color_space: wgpu::SurfaceColorSpace::Auto,
                 width: physical_size.width as u32,
                 height: physical_size.height as u32,
                 present_mode: wgpu::PresentMode::AutoVsync,
@@ -743,8 +744,7 @@ impl<'a, S: Sync + 'static> ViewportTrait for ViewportContainer<'a, S> {
         }
 
         gpu_ctx.queue.submit(Some(encoder.finish()));
-
-        surface_texture.present();
+        gpu_ctx.queue.present(surface_texture);
         self.viewport.report_paint_time(Instant::now().duration_since(begin_paint));
 
         // Check if the animation nodes changed after calling frame()
