@@ -158,6 +158,10 @@ impl<S: Sync + 'static> AppLauncher<S> {
             Err(e) => util::fatal_alert_and_quit(mtm, "GPU initialization failed", &format!("Failed to request a WGPU adapter.\n\n{e}")),
         };
 
+        if let Some(on_adapter_init) = self.wgpu_config.on_adapter_init {
+            on_adapter_init(&adapter);
+        }
+
         let (device, queue) = match adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("RosinDevice"),
@@ -172,6 +176,10 @@ impl<S: Sync + 'static> AppLauncher<S> {
             Ok((device, queue)) => (device, queue),
             Err(e) => util::fatal_alert_and_quit(mtm, "GPU initialization failed", &format!("Failed to create a WGPU device.\n\n{e}")),
         };
+
+        if let Some(on_device_init) = self.wgpu_config.on_device_init {
+            on_device_init(&device);
+        }
 
         let compositor = Compositor {
             blitter: RefCell::new(None),

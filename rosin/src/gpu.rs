@@ -40,6 +40,10 @@ pub struct WgpuConfig {
     pub memory_hints: wgpu::MemoryHints,
     /// Which graphics APIs to enable.
     pub backends: wgpu::Backends,
+    /// Called on the main thread after adapter selection.
+    pub on_adapter_init: Option<fn(&wgpu::Adapter)>,
+    /// Called on the main thread after device creation.
+    pub on_device_init: Option<fn(&wgpu::Device)>,
 }
 
 impl Default for WgpuConfig {
@@ -50,6 +54,8 @@ impl Default for WgpuConfig {
             limits: wgpu::Limits::default(),
             memory_hints: wgpu::MemoryHints::default(),
             backends: wgpu::Backends::all(),
+            on_adapter_init: None,
+            on_device_init: None,
         }
     }
 }
