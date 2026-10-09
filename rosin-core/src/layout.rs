@@ -973,7 +973,7 @@ pub(crate) fn align_and_position_text(style: &Style, rect: &RoundedRect, layout:
     let padding_box = padding_box(style, rect);
     let padding_box_w = padding_box.width() as f32;
     let padding_box_h = padding_box.height() as f32;
-    
+
     // Solve X Axis
     let mut x_items = [
         StretchItem::edge_space(Axis::X, Edge::Before, &Style::default(), style),
