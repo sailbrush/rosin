@@ -200,6 +200,13 @@ impl WindowHandle {
         self.0.save_file_dialog(id, options)
     }
 
+    /// Queues an [`On::Command`] event for the specified node.
+    ///
+    /// Disabled nodes do not receive commands.
+    pub fn send_command(&self, id: Option<NodeId>, command: impl Into<CommandId>) {
+        self.0.send_command(id, command.into())
+    }
+
     /// Queues an [`On::Timer`] event for the node after `delay`.
     pub fn timer(&self, id: Option<NodeId>, delay: Duration) {
         self.0.timer(id, delay)

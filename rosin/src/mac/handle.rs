@@ -579,6 +579,15 @@ impl WindowHandle {
         });
     }
 
+    pub fn send_command(&self, node: Option<NodeId>, command: CommandId) {
+        let Some(node) = node else {
+            return;
+        };
+        self.queue_on_main(move |view, _| {
+            view_ivars(view).viewport.borrow_mut().command_event(view, Some(node), command);
+        });
+    }
+
     pub fn timer(&self, node: Option<NodeId>, delay: Duration) {
         let Some(node) = node else {
             return;
