@@ -1,0 +1,16 @@
+.root {
+    background-color:oklch(30% 0 0);
+    color: oklch(100% 0 0);
+    display: row;
+    font-size: 16px;
+}
+
+.label {
+    space:1s 1em;
+    height:1em;
+}
+
+.text-box {
+    space:1s 1em 1s 2em;
+    width: 2s;
+}
