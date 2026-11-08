@@ -4,6 +4,42 @@ use crate::sync::*;
 const PREEMPTION_BOUND: Option<usize> = None;
 
 #[test]
+fn write_count_polling() {
+    let mut model = loom::model::Builder::default();
+    model.preemption_bound = PREEMPTION_BOUND;
+    model.check(|| {
+        let registry: &'static Registry = Box::leak(Box::new(Registry::default()));
+
+        let var = Var::new_in(registry, 0u32);
+        let weak = var.downgrade();
+        let deps = DependencyMap::default().read_scope(|| {
+            assert_eq!(var.get(), 0);
+        });
+        let mut last_write_count = registry.write_count();
+        let mut update_requested = false;
+
+        let writer = loom::thread::spawn(move || {
+            *weak.write().unwrap() = 1;
+        });
+
+        let mut poll = || {
+            let current_write_count = registry.write_count();
+            if current_write_count != last_write_count {
+                last_write_count = current_write_count;
+                update_requested |= deps.any_changed();
+            }
+        };
+
+        poll();
+        writer.join().unwrap();
+        poll();
+
+        assert!(deps.any_changed());
+        assert!(update_requested);
+    });
+}
+
+#[test]
 fn no_deadlock_cross_var_writes() {
     let mut model = loom::model::Builder::default();
     model.preemption_bound = PREEMPTION_BOUND;

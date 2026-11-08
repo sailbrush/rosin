@@ -708,8 +708,9 @@ impl<'a, T: ?Sized + Send + Sync + 'static> Drop for VarWriteGuard<'a, T> {
         }
 
         let version = if self.changed {
+            let version = self.meta.slot.version.fetch_add(1, Ordering::Release) + 1;
             self.meta.registry.write_count.fetch_add(1, Ordering::Release);
-            self.meta.slot.version.fetch_add(1, Ordering::Release) + 1
+            version
         } else {
             self.meta.slot.version.load(Ordering::Acquire)
         };
