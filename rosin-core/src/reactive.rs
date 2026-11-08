@@ -289,9 +289,14 @@ impl<T: Send + Sync + 'static> WeakVar<T> {
     ///
     /// Returns [`None`] if the [`Var`] has been destroyed.
     pub fn read<'a>(&'a self) -> Option<VarReadGuard<'a, T>> {
+        if !self.is_alive() {
+            self.slot.attempt_cleanup(self.registry, self.generation + 1);
+            return None;
+        }
+
         let guard = self.slot.value.read();
 
-        if self.slot.generation.load(Ordering::Acquire) != self.generation {
+        if !self.is_alive() {
             drop(guard);
             self.slot.attempt_cleanup(self.registry, self.generation + 1);
             return None;
@@ -321,9 +326,14 @@ impl<T: Send + Sync + 'static> WeakVar<T> {
     ///
     /// Returns [`None`] if the [`Var`] has been destroyed.
     pub fn write<'a>(&'a self) -> Option<VarWriteGuard<'a, T>> {
+        if !self.is_alive() {
+            self.slot.attempt_cleanup(self.registry, self.generation + 1);
+            return None;
+        }
+
         let guard = self.slot.value.write();
 
-        if self.slot.generation.load(Ordering::Acquire) != self.generation {
+        if !self.is_alive() {
             drop(guard);
             self.slot.attempt_cleanup(self.registry, self.generation + 1);
             return None;
