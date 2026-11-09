@@ -1,6 +1,9 @@
-use std::{ffi::CString};
+use std::ffi::CString;
 
-use crate::{dialog::FileDialogOptions, prelude::Modifiers};
+use crate::{
+    dialog::{FileDesc, FileDialogOptions},
+    prelude::Modifiers,
+};
 use rosin_core::{
     keyboard_types::{Code, KeyboardEvent, Location},
     prelude::{Key, NamedKey},
@@ -452,7 +455,27 @@ pub(crate) fn cursor_icon_to_shape(cursor_icon: CursorType) -> Shape {
     }
 }
 use crate::linux::rfd_dialog::file_dialog;
+
+fn rosin_to_rfd(desc: FileDesc) -> file_dialog::FileFilter {
+    let mut retval: file_dialog::FileFilter = (CString::new(desc.name).unwrap(), vec![]);
+    for i in desc.extensions {
+        retval.1.push(CString::new(*i).unwrap());
+    }
+    retval
+}
+fn get_filters(descs: Vec<FileDesc>) -> Vec<file_dialog::FileFilter> {
+    let mut retval = vec![];
+    for i in descs.iter() {
+        retval.push(rosin_to_rfd(*i));
+    }
+    retval
+}
+use std::str::FromStr;
 pub fn dialog_convert_open(opt: FileDialogOptions) -> file_dialog::OpenFileOptions {
+    let allowed_types = opt.allowed_types.unwrap_or_default();
+    let filters = get_filters(allowed_types);
+    let current_filter = filters.first().cloned();
+    let path = opt.initial_path.unwrap_or(std::env::current_dir().unwrap_or(std::path::PathBuf::new())).into_string().unwrap();
     file_dialog::OpenFileOptions {
         parent_window: CString::new("").unwrap(),
         title: CString::new("").unwrap(),
@@ -461,22 +484,28 @@ pub fn dialog_convert_open(opt: FileDialogOptions) -> file_dialog::OpenFileOptio
         modal: Some(true),
         multiple: Some(opt.allow_multiple),
         directory: Some(opt.pick_folders),
-        filters: vec![],
-        current_filter: Some((CString::new("").unwrap(), vec![])),
-        current_folder: None
+        filters: filters,
+        current_filter: current_filter,
+        current_folder: Some(file_dialog::FilePath(CString::from_str(&path).unwrap())),
     }
 }
 
-pub fn dialog_convert_save(_opt: FileDialogOptions) -> file_dialog::SaveFileOptions {
+pub fn dialog_convert_save(opt: FileDialogOptions) -> file_dialog::SaveFileOptions {
+
+    let allowed_types = opt.allowed_types.unwrap_or_default();
+    let filters = get_filters(allowed_types);
+    let current_filter = filters.first().cloned();
+    let path = opt.initial_path.unwrap_or(std::env::current_dir().unwrap_or(std::path::PathBuf::new())).into_string().unwrap();
+    
     file_dialog::SaveFileOptions {
         parent_window: CString::new("").unwrap(),
         title: CString::new("").unwrap(),
         handle_token: file_dialog::HandleToken::default(),
         accept_label: Some(CString::new("").unwrap()),
         modal: Some(true),
-        filters: vec![],
-        current_filter: Some((CString::new("").unwrap(), vec![])),
-        current_folder: None,
+        filters: filters,
+        current_filter: current_filter,
+        current_folder: Some(file_dialog::FilePath(CString::from_str(&path).unwrap())),
         ..Default::default()
     }
 }

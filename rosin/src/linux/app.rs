@@ -46,7 +46,7 @@ impl<S: Sync + 'static> AppLauncher<S> {
         self.windows.push(window);
         self
     }
-    // based on https://github.com/Smithay/client-toolkit/blob/master/examples/wgpu.rs
+
     // No hot-reload, no serde requirement
     #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
     pub fn run(mut self, _state: S, _translation_map: TranslationMap) -> Result<(), LaunchError> {
@@ -150,6 +150,7 @@ impl<S: Sync + 'static> AppLauncher<S> {
                     handler: None,
                     file_dialog_result: None,
                     dialog_id: None,
+                    timer_events: vec![],
                 })),
                 last_pointer_serial: 0,
             });
@@ -180,33 +181,36 @@ impl<S: Sync + 'static> AppLauncher<S> {
             if frame.is_some() {
                 frame.as_mut().unwrap().update_state(wayland_csd_frame::WindowState::ACTIVATED);
             }
-            wayland_windows.push((RosinWaylandState {
-                exit: false,
-                width: desc.size.width as u32,
-                height: desc.size.height as u32,
-                gpu_ctx,
-                vello_renderer,
-                tex_to_render: vello_texture,
-                surface: wgpu_surface,
-                viewport,
-                app_state: self.state.clone().unwrap(),
-                window_handle: wh,
-                last_mouse_pos: Vec2::new(0.0, 0.0),
-                wgpufn: desc.wgpufn,
-                pressed_modifiers: 0,
-                fallback_frame: frame,
-                last_surface_id: ObjectId::null(),
-                seat: None,
-                held_mouse_btns: PointerButtons::empty(),
-                curr_pen_event: PointerEvent {
-                    button: PointerButton::None,
-                    buttons: PointerButtons::empty(),
-                    count: 0,
-                    ..PointerEvent::default()
+            wayland_windows.push((
+                RosinWaylandState {
+                    exit: false,
+                    width: desc.size.width as u32,
+                    height: desc.size.height as u32,
+                    gpu_ctx,
+                    vello_renderer,
+                    tex_to_render: vello_texture,
+                    surface: wgpu_surface,
+                    viewport,
+                    app_state: self.state.clone().unwrap(),
+                    window_handle: wh,
+                    last_mouse_pos: Vec2::new(0.0, 0.0),
+                    wgpufn: desc.wgpufn,
+                    pressed_modifiers: 0,
+                    fallback_frame: frame,
+                    last_surface_id: ObjectId::null(),
+                    seat: None,
+                    held_mouse_btns: PointerButtons::empty(),
+                    curr_pen_event: PointerEvent {
+                        button: PointerButton::None,
+                        buttons: PointerButtons::empty(),
+                        count: 0,
+                        ..PointerEvent::default()
+                    },
+                    pen_down: false,
+                    pen_up: false,
                 },
-                pen_down: false,
-                pen_up: false,
-            }, event_queue));
+                event_queue,
+            ));
         }
 
         loop {
@@ -217,7 +221,9 @@ impl<S: Sync + 'static> AppLauncher<S> {
 
                 if state.exit {
                     state.viewport.queue_close_event();
-                    return Ok(())
+                    event_queue.dispatch_pending(state).unwrap();
+                    let _ = state.run_loop();
+                    return Ok(());
                 }
             }
         }

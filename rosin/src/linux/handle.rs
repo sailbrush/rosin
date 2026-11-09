@@ -13,14 +13,20 @@ use rosin_core::parking_lot::RwLock;
 use std::borrow::Borrow;
 use std::ptr::NonNull;
 use std::sync::Arc;
-use std::{any::Any, time::Duration};
+use std::{any::Any, thread, time::Duration};
 use wayland_client::Proxy;
+
+pub(crate) struct TimerEventInfo {
+    pub(crate) id: NodeId,
+    pub(crate) fired: bool,
+}
 
 pub(crate) struct SharedVars {
     pub(crate) id: Option<NodeId>,
     pub(crate) handler: Option<Box<dyn InputHandler + Send + Sync>>,
     pub(crate) file_dialog_result: Option<FileDialogResponse>, // this being something is used as a signal to send a dialog event, probably should be different
     pub(crate) dialog_id: Option<NodeId>,
+    pub(crate) timer_events: Vec<TimerEventInfo>,
 }
 
 pub(crate) struct WindowHandle {
@@ -226,7 +232,18 @@ impl WindowHandle {
         input_handle.dialog_id = Some(node);
     }
 
-    pub fn timer(&self, _node: Option<NodeId>, _delay: Duration) {}
+    pub fn timer(&self, node: Option<NodeId>, delay: Duration) {
+        let Some(node) = node else {
+            return;
+        };
+        let inp_handler = self.input_handler.clone();
+        thread::spawn(move || {
+            thread::sleep(delay);
+            let clone: &RwLock<SharedVars> = inp_handler.borrow();
+            let mut input_handle = clone.write();
+            input_handle.timer_events.push(TimerEventInfo { id: node, fired: true });
+        });
+    }
 
     pub fn alert<C>(&self, _node: Option<NodeId>, _png_bytes: Option<&'static [u8]>, _title: &str, _details: &str, _options: &[(&'static str, C)])
     where

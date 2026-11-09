@@ -416,6 +416,12 @@ impl<S: Sync + 'static> RosinWaylandState<S> {
         if let Some(result) = input_handle.file_dialog_result.take() {
             self.viewport.queue_file_dialog_event(input_handle.dialog_id.take().unwrap(), result);
         }
+        if input_handle.timer_events.len() > 0 {
+            for n in 1..input_handle.timer_events.len() {
+                let event = input_handle.timer_events.pop();
+                self.viewport.queue_timer_event(event.unwrap().id);
+            }
+        }
         Ok(())
     }
 }
