@@ -910,7 +910,7 @@ loom::thread_local! {
 
 /// Notify read scopes of a dependency.
 fn notify_scopes(key: VarKey, version: u64) {
-    READ_SCOPES.with(|stack| {
+    let _ = READ_SCOPES.try_with(|stack| {
         for vars in stack.borrow_mut().iter_mut() {
             vars.record(key, version);
         }
