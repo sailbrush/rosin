@@ -127,11 +127,11 @@ impl<T: Send + Sync + 'static> Drop for Var<T> {
     fn drop(&mut self) {
         let registry = self.0.registry;
         let slot = self.0.slot;
-        let prev = slot.generation.fetch_add(1, Ordering::Release);
+        slot.generation.fetch_add(1, Ordering::Release);
         registry.write_count.fetch_add(1, Ordering::Release);
 
         // If a WeakVar has a lock on the data, it will handle the cleanup when it's done.
-        slot.attempt_cleanup(registry, prev + 1);
+        slot.attempt_cleanup(registry);
     }
 }
 
@@ -290,7 +290,7 @@ impl<T: Send + Sync + 'static> WeakVar<T> {
     /// Returns [`None`] if the [`Var`] has been destroyed.
     pub fn read<'a>(&'a self) -> Option<VarReadGuard<'a, T>> {
         if !self.is_alive() {
-            self.slot.attempt_cleanup(self.registry, self.generation + 1);
+            self.slot.attempt_cleanup(self.registry);
             return None;
         }
 
@@ -298,7 +298,7 @@ impl<T: Send + Sync + 'static> WeakVar<T> {
 
         if !self.is_alive() {
             drop(guard);
-            self.slot.attempt_cleanup(self.registry, self.generation + 1);
+            self.slot.attempt_cleanup(self.registry);
             return None;
         }
 
@@ -327,7 +327,7 @@ impl<T: Send + Sync + 'static> WeakVar<T> {
     /// Returns [`None`] if the [`Var`] has been destroyed.
     pub fn write<'a>(&'a self) -> Option<VarWriteGuard<'a, T>> {
         if !self.is_alive() {
-            self.slot.attempt_cleanup(self.registry, self.generation + 1);
+            self.slot.attempt_cleanup(self.registry);
             return None;
         }
 
@@ -335,7 +335,7 @@ impl<T: Send + Sync + 'static> WeakVar<T> {
 
         if !self.is_alive() {
             drop(guard);
-            self.slot.attempt_cleanup(self.registry, self.generation + 1);
+            self.slot.attempt_cleanup(self.registry);
             return None;
         }
 
@@ -580,9 +580,7 @@ impl<'a, T: ?Sized + Send + Sync + 'static> Drop for VarReadGuard<'a, T> {
         let version = self.meta.slot.version.load(Ordering::Acquire);
         drop(self.guard.take());
         notify_scopes(self.meta.key(), version);
-        if self.meta.slot.generation.load(Ordering::Acquire) != self.meta.generation {
-            self.meta.slot.attempt_cleanup(self.meta.registry, self.meta.generation + 1);
-        }
+        self.meta.slot.attempt_cleanup(self.meta.registry);
     }
 }
 
@@ -727,9 +725,7 @@ impl<'a, T: ?Sized + Send + Sync + 'static> Drop for VarWriteGuard<'a, T> {
 
         drop(self.guard.take());
         notify_scopes(self.meta.key(), version);
-        if self.meta.slot.generation.load(Ordering::Acquire) != self.meta.generation {
-            self.meta.slot.attempt_cleanup(self.meta.registry, self.meta.generation + 1);
-        }
+        self.meta.slot.attempt_cleanup(self.meta.registry);
     }
 }
 
@@ -856,12 +852,30 @@ impl Slot {
         }
     }
 
-    fn attempt_cleanup(&'static self, registry: &'static Registry, expected_gen: u64) {
-        // We only recycle the slot if we are the thread that transitions the value from Some -> None.
-        if let Some(mut guard) = self.value.try_write()
-            && self.generation.load(Ordering::Acquire) == expected_gen
-            && guard.is_some()
-        {
+    fn attempt_cleanup(&'static self, registry: &'static Registry) {
+        loop {
+            // Prevent the owner and last guard from both assuming the other will clean up.
+            fence(Ordering::SeqCst);
+            let generation = self.generation.load(Ordering::Acquire);
+            if generation & 1 == 0 {
+                // Even generations are alive and don't need to be cleaned up.
+                return;
+            }
+
+            let Some(mut guard) = self.value.try_write() else {
+                return;
+            };
+            if self.generation.load(Ordering::Acquire) != generation {
+                // The slot was reused, and this lock may have blocked the new owner's cleanup.
+                // Unlock and try again.
+                drop(guard);
+                continue;
+            }
+            if guard.is_none() {
+                return;
+            }
+
+            // Only the thread that takes the value may recycle the slot.
             let value = guard.take();
             drop(guard);
 
@@ -878,6 +892,7 @@ impl Slot {
 
             let _recycle_guard = RecycleGuard { registry, slot: self };
             drop(value);
+            return;
         }
     }
 }
@@ -1104,7 +1119,7 @@ pub mod serde_impl {
                 Ok((entry.slot, entry.pending_generation))
             } else {
                 let (slot, generation) = registry.alloc_slot();
-                let pending_generation = generation + 1;
+                let pending_generation = generation + 2;
 
                 ctx.de_map.insert(
                     id,

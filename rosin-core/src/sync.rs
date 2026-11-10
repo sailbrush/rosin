@@ -2,7 +2,7 @@
 #[cfg(not(loom))]
 mod internal {
     pub use std::sync::Arc;
-    pub use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+    pub use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering, fence};
     pub use std::thread::{self, ThreadId};
 
     pub use parking_lot::{MappedRwLockReadGuard, MappedRwLockWriteGuard, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -15,7 +15,7 @@ mod internal {
     use std::ops::{Deref, DerefMut};
 
     pub use loom::sync::Arc;
-    pub use loom::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+    pub use loom::sync::atomic::{AtomicU64, AtomicUsize, Ordering, fence};
     pub use loom::thread::{self, ThreadId};
 
     pub struct Mutex<T>(loom::sync::Mutex<T>);

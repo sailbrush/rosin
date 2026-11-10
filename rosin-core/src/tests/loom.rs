@@ -3,6 +3,14 @@ use crate::sync::*;
 
 const PREEMPTION_BOUND: Option<usize> = None;
 
+struct CountDrop(Arc<AtomicUsize>);
+
+impl Drop for CountDrop {
+    fn drop(&mut self) {
+        self.0.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
 #[test]
 fn write_count_polling() {
     let mut model = loom::model::Builder::default();
@@ -302,6 +310,116 @@ fn drop_while_write_guard_held_no_panic() {
         assert!(!weak.is_alive());
         assert!(weak.get().is_none());
         assert!(weak.read().is_none());
+    });
+}
+
+#[test]
+fn stale_weakvar_read_does_not_prevent_reused_slot_cleanup() {
+    let mut model = loom::model::Builder::default();
+    model.preemption_bound = PREEMPTION_BOUND;
+    model.check(|| {
+        let registry: &'static Registry = Box::leak(Box::new(Registry::default()));
+
+        let original = Var::new_in(registry, 0u32);
+        let stale = original.downgrade();
+        drop(original);
+
+        let drops = Arc::new(AtomicUsize::new(0));
+        let replacement = Var::new_in(registry, CountDrop(drops.clone()));
+        assert!(std::ptr::eq(stale.slot, replacement.slot));
+
+        let reader = loom::thread::spawn(move || {
+            assert!(stale.read().is_none());
+        });
+
+        let owner = loom::thread::spawn(move || drop(replacement));
+
+        reader.join().unwrap();
+        owner.join().unwrap();
+
+        assert_eq!(drops.load(Ordering::SeqCst), 1);
+    });
+}
+
+#[test]
+fn read_started_before_reuse_does_not_leak() {
+    let mut model = loom::model::Builder::new();
+    model.preemption_bound = Some(3);
+    model.check(|| {
+        let registry: &'static Registry = Box::leak(Box::new(Registry::default()));
+
+        let original = Var::new_in(registry, 0u32);
+        let weak = original.downgrade();
+
+        let drops = Arc::new(AtomicUsize::new(0));
+
+        let reader = loom::thread::spawn(move || {
+            drop(weak.read());
+        });
+
+        let counter = drops.clone();
+        let owner = loom::thread::spawn(move || {
+            drop(original);
+            let replacement = Var::new_in(registry, CountDrop(counter));
+            drop(replacement);
+        });
+
+        reader.join().unwrap();
+        owner.join().unwrap();
+
+        assert_eq!(drops.load(Ordering::SeqCst), 1);
+    });
+}
+
+#[test]
+fn racing_read_guard_drop_cleans_up_value() {
+    let mut model = loom::model::Builder::new();
+    model.preemption_bound = Some(3);
+    model.check(|| {
+        let registry: &'static Registry = Box::leak(Box::new(Registry::default()));
+
+        let drops = Arc::new(AtomicUsize::new(0));
+        let original = Var::new_in(registry, CountDrop(drops.clone()));
+        let weak = original.downgrade();
+
+        let reader = loom::thread::spawn(move || {
+            drop(weak.read());
+        });
+
+        let owner = loom::thread::spawn(move || {
+            drop(original);
+        });
+
+        reader.join().unwrap();
+        owner.join().unwrap();
+
+        assert_eq!(drops.load(Ordering::SeqCst), 1);
+    });
+}
+
+#[test]
+fn racing_write_guard_drop_cleans_up_value() {
+    let mut model = loom::model::Builder::new();
+    model.preemption_bound = Some(3);
+    model.check(|| {
+        let registry: &'static Registry = Box::leak(Box::new(Registry::default()));
+
+        let drops = Arc::new(AtomicUsize::new(0));
+        let original = Var::new_in(registry, CountDrop(drops.clone()));
+        let weak = original.downgrade();
+
+        let reader = loom::thread::spawn(move || {
+            drop(weak.write());
+        });
+
+        let owner = loom::thread::spawn(move || {
+            drop(original);
+        });
+
+        reader.join().unwrap();
+        owner.join().unwrap();
+
+        assert_eq!(drops.load(Ordering::SeqCst), 1);
     });
 }
 
