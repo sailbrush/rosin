@@ -175,8 +175,10 @@ fn versions_change_detection_monotonic() {
 
         assert!(deps.any_changed());
 
-        // Bring snapshot up to date.
-        assert!(deps.any_changed_update());
+        // Collect a fresh snapshot.
+        deps = deps.cleared().read_scope(|| {
+            let _ = var_ref.read();
+        });
         assert!(!deps.any_changed());
 
         if let Some(mut guard) = var.downgrade().write() {
@@ -445,10 +447,6 @@ fn slot_reuse_does_not_confuse_dependency_keys() {
 
         assert!(deps1.any_changed());
 
-        let mut deps1u = deps1.clone();
-        assert!(deps1u.any_changed_update());
-        assert!(deps1u.deps.is_empty());
-
         let var2 = Var::new_in(registry_ref, 2u32);
         let w2 = var2.downgrade();
 
@@ -456,7 +454,8 @@ fn slot_reuse_does_not_confuse_dependency_keys() {
             *g = 3;
         }
 
-        assert!(deps1u.deps.is_empty());
+        assert_ne!(key1, w2.get_key());
+        assert!(deps1.any_changed());
     });
 }
 

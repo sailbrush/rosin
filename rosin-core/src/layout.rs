@@ -581,11 +581,9 @@ fn measure_node<S, H>(ctx: &mut LayoutCtx<'_, S>, tree: &'_ Ui<S, H>, idx: usize
 
         let mut from_cache: Option<Size> = None;
         if let Some(cache) = ctx.text_cache.get_mut(&idx) {
-            // even if we don't use the cache, we still depend on the vars
-            cache.deps.mark_read();
-
             // reuse cache if still valid
-            if !cache.deps.any_changed_update() && cache.font_style == font_style {
+            if !cache.deps.any_changed() && cache.font_style == font_style {
+                cache.deps.mark_read();
                 cache.layout.break_all_lines(max_width);
                 cache.max_width = max_width;
 
@@ -599,7 +597,8 @@ fn measure_node<S, H>(ctx: &mut LayoutCtx<'_, S>, tree: &'_ Ui<S, H>, idx: usize
         from_cache.unwrap_or_else(|| {
             // resolve text, layout, cache
             let mut final_layout = None;
-            let deps = DependencyMap::default().read_scope(|| {
+            let deps = ctx.text_cache.remove(&idx).map(|cache| cache.deps).unwrap_or_default();
+            let deps = deps.cleared().read_scope(|| {
                 if let Some(resolved) = text.resolve(ctx.translation_map) {
                     let layout = text::layout_text(&font_style, max_width, &resolved);
                     final_layout = Some(layout);

@@ -406,19 +406,22 @@ pub(crate) fn draw<S, H>(
                         let wrap_width = if style.text_wrap == TextWrap::Nowrap { None } else { Some(max_width) };
                         let font_style = style.get_font_layout_style();
 
+                        let previous_deps = if tree
+                            .text_cache
+                            .get(&idx)
+                            .is_some_and(|cache| cache.deps.any_changed() || cache.font_style != font_style)
+                        {
+                            tree.text_cache.remove(&idx).map(|cache| cache.deps).unwrap_or_default()
+                        } else {
+                            DependencyMap::default()
+                        };
+
                         if let Some(cache) = tree.text_cache.get_mut(&idx) {
                             // even if we use the cache, we still depend on these vars
                             cache.deps.mark_read();
-                            // if the text has changed since last time it was laid out, we need to redo that
-                            if (cache.deps.any_changed_update() || cache.font_style != font_style)
-                                && let Some(resolved) = text.resolve(&translation_map)
-                            {
-                                cache.layout = text::layout_text(&font_style, wrap_width, &resolved);
-                                cache.font_style = font_style;
-                                cache.max_width = Some(max_width);
 
-                            // else if wrap_width changed more than a logical pixel, re-wrap.
-                            } else if match (cache.max_width, max_width) {
+                            // if wrap_width changed more than a logical pixel, re-wrap.
+                            if match (cache.max_width, max_width) {
                                 (Some(a), b) => (a - b).abs() > 1.0,
                                 _ => true,
                             } {
@@ -433,7 +436,7 @@ pub(crate) fn draw<S, H>(
                         } else {
                             // No cache entry, need to resolve string, cache the result, and draw
                             let mut layout = None;
-                            let deps = DependencyMap::default().read_scope(|| {
+                            let deps = previous_deps.cleared().read_scope(|| {
                                 if let Some(resolved) = text.resolve(&translation_map) {
                                     layout = Some(text::layout_text(&font_style, wrap_width, &resolved));
                                 }

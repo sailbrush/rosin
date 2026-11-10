@@ -439,7 +439,7 @@ pub struct DependencyMap {
 
 impl DependencyMap {
     pub(crate) fn record(&mut self, key: VarKey, version: u64) {
-        self.deps.entry(key).and_modify(|v| *v = std::cmp::max(*v, version)).or_insert(version);
+        self.deps.entry(key).and_modify(|v| *v = std::cmp::min(*v, version)).or_insert(version);
     }
 
     /// Removes all dependencies from the map.
@@ -454,8 +454,6 @@ impl DependencyMap {
     }
 
     /// Returns `true` as soon as it finds any var in the map that's been dropped, or whose current_version != last_seen.
-    ///
-    /// Does not update the last seen versions.
     pub fn any_changed(&self) -> bool {
         for (key, last_seen) in self.deps.iter() {
             let current = key.slot.version.load(Ordering::Acquire);
@@ -469,40 +467,10 @@ impl DependencyMap {
         false
     }
 
-    /// Returns `true` if any var in the map changed since last time this function was called, or if any var was dropped.
-    ///
-    /// Updates the last seen versions and removes dropped vars.
-    pub fn any_changed_update(&mut self) -> bool {
-        let mut changed = false;
-
-        self.deps.retain(|key, last_seen| {
-            // If the var was dropped, remove it and report changed.
-            if key.slot.generation.load(Ordering::Acquire) != key.generation {
-                changed = true;
-                return false;
-            }
-
-            // Otherwise update the stored value if it changed.
-            let current = key.slot.version.load(Ordering::Acquire);
-            if current != *last_seen {
-                changed = true;
-                *last_seen = current;
-            }
-
-            true
-        });
-
-        changed
-    }
-
     /// Marks all dependencies in the map as read from.
     pub fn mark_read(&self) {
-        for key in self.deps.keys() {
-            // Only mark if still alive
-            if key.slot.generation.load(Ordering::Acquire) == key.generation {
-                let version = key.slot.version.load(Ordering::Acquire);
-                notify_scopes(*key, version);
-            }
+        for (key, version) in &self.deps {
+            notify_scopes(*key, *version);
         }
     }
 

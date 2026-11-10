@@ -1208,8 +1208,8 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
 
             // mark dirty any nodes with changed dependencies for on_style callbacks
             for idx in &self.curr_tree.on_style_nodes {
-                if let Some(deps) = self.curr_tree.on_style_deps.get_mut(idx)
-                    && deps.any_changed_update()
+                if let Some(deps) = self.curr_tree.on_style_deps.get(idx)
+                    && deps.any_changed()
                 {
                     self.curr_tree.dirty_roots.push(*idx);
                 }
@@ -1219,13 +1219,6 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
         // The style pass always runs, and triggers a layout if needed.
         let mut changed_layout = false;
         let style_deps = std::mem::take(&mut self.style_deps).cleared().read_scope(|| {
-            // mark the on_style deps as read so the style pass knows it still depends on those vars
-            for idx in &self.curr_tree.on_style_nodes {
-                if let Some(deps) = self.curr_tree.on_style_deps.get(idx) {
-                    deps.mark_read();
-                }
-            }
-
             // this needs to run in the scope so that deps get registered on the first pass
             changed_layout = css::style_pass(
                 &self.temp,
@@ -1236,6 +1229,13 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
                 &self.curr_hot_indexes,
                 &mut self.ancestor_classes,
             );
+
+            // mark dependencies for both updated and reused styles
+            for idx in &self.curr_tree.on_style_nodes {
+                if let Some(deps) = self.curr_tree.on_style_deps.get(idx) {
+                    deps.mark_read();
+                }
+            }
         });
         self.style_deps = style_deps;
 

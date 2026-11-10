@@ -623,13 +623,14 @@ mod changes {
         let var_ref = var.downgrade();
 
         let deps = DependencyMap::default().read_scope(|| {
-            var_ref.mark_read();
-            var_ref.set(20);
-            var_ref.mark_read();
+            assert_eq!(var_ref.get(), Some(10));
+            thread::spawn(move || var_ref.set(20)).join().unwrap();
+            assert_eq!(var_ref.get(), Some(20));
         });
 
         let recorded_version = deps.deps.get(&var_ref.get_key()).unwrap();
-        assert_eq!(*recorded_version, 1);
+        assert_eq!(*recorded_version, 0);
+        assert!(deps.any_changed());
     }
 
     #[test]
@@ -978,33 +979,6 @@ mod dependency_map {
     }
 
     #[test]
-    fn any_changed_update_updates_versions_and_removes_dropped_vars() {
-        let registry: &'static Registry = Box::leak(Box::new(Registry::default()));
-        let var = Var::new_in(registry, 10i32);
-        let var_ref = var.downgrade();
-        let key = var_ref.get_key();
-
-        let mut deps = DependencyMap::default().read_scope(|| {
-            var_ref.mark_read();
-        });
-
-        assert!(deps.deps.contains_key(&key));
-        assert_eq!(*deps.deps.get(&key).unwrap(), 0);
-        assert!(!deps.any_changed());
-
-        var_ref.set(11);
-        assert!(deps.any_changed_update());
-        assert_eq!(*deps.deps.get(&key).unwrap(), 1);
-
-        assert!(!deps.any_changed());
-        assert!(!deps.any_changed_update());
-
-        drop(var);
-        assert!(deps.any_changed_update());
-        assert!(deps.deps.is_empty());
-    }
-
-    #[test]
     fn dependency_map_mark_read_propagates_to_active_scope() {
         let registry: &'static Registry = Box::leak(Box::new(Registry::default()));
         let var = Var::new_in(registry, 42i32);
@@ -1017,10 +991,24 @@ mod dependency_map {
         assert!(cached.deps.contains_key(&key));
 
         let forwarded = DependencyMap::default().read_scope(|| {
+            assert!(!cached.any_changed());
+            thread::spawn(move || var_ref.set(43)).join().unwrap();
             cached.mark_read();
         });
 
         assert!(forwarded.deps.contains_key(&key));
+        assert!(forwarded.any_changed());
+
+        // Marking older cached dependencies must also invalidate a newer direct read.
+        let forwarded = DependencyMap::default().read_scope(|| {
+            assert_eq!(var_ref.get(), Some(43));
+            cached.mark_read();
+        });
+        assert!(forwarded.any_changed());
+
+        drop(var);
+        let forwarded = DependencyMap::default().read_scope(|| cached.mark_read());
+        assert!(forwarded.any_changed());
     }
 
     #[test]

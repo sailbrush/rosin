@@ -5,6 +5,9 @@ pub mod css;
 pub mod reactive;
 
 #[cfg(not(loom))]
+mod caching;
+
+#[cfg(not(loom))]
 pub mod localization;
 
 #[cfg(loom)]
