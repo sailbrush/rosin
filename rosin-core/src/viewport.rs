@@ -47,6 +47,7 @@ struct QueuedEvent {
     event_id: EventId,
     event_type: On,
     event_info: EventInfo,
+    pointer_delta: Option<Vec2>,
     depth: u32,
 }
 
@@ -57,8 +58,14 @@ impl QueuedEvent {
             event_id,
             event_type,
             event_info,
+            pointer_delta: None,
             depth: 0,
         }
+    }
+
+    fn with_pointer_delta(mut self, pointer_delta: Option<Vec2>) -> Self {
+        self.pointer_delta = pointer_delta;
+        self
     }
 }
 
@@ -103,9 +110,6 @@ pub struct Viewport<S: Sync + 'static, H: Clone + 'static> {
 
     /// The last received pointer event
     last_pointer_event: Option<PointerEvent>,
-
-    /// The distance the pointer moved to arrive at `last_pointer_event.pos`
-    pointer_delta: Option<Vec2>,
 
     /// The nodes that are below the pointer.
     curr_hot_indexes: Vec<usize>,
@@ -203,7 +207,6 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
             focused_node: None,
             capture: None,
             last_pointer_event: None,
-            pointer_delta: None,
             curr_hot_indexes: Vec::new(),
             prev_hot_indexes: Vec::new(),
             curr_tree: Ui::new(),
@@ -301,14 +304,12 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
     }
 
     pub fn set_size(&mut self, new_size: Size) {
-        self.pointer_delta = None;
         self.last_pointer_event = None;
         self.size = new_size;
         self.phase.update(Phase::Layout);
     }
 
     pub fn set_scale(&mut self, scale: Vec2) {
-        self.pointer_delta = None;
         self.last_pointer_event = None;
         self.scale = scale;
         self.phase.update(Phase::Layout);
@@ -699,13 +700,12 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
 
     pub fn queue_pointer_leave_event(&mut self) {
         self.temp.reset();
-        self.pointer_delta = None;
         self.last_pointer_event = None;
 
         std::mem::swap(&mut self.curr_hot_indexes, &mut self.prev_hot_indexes);
         self.curr_hot_indexes.clear(); // nothing is hot because we're leaving the window
 
-        self.queue_pointer_leave_enter_events(EventInfo::None);
+        self.queue_pointer_leave_enter_events(EventInfo::None, None);
     }
 
     pub fn queue_pointer_wheel_event(&mut self, event: &PointerEvent) {
@@ -727,11 +727,7 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
     fn queue_pointer_event(&mut self, event: &PointerEvent, event_type: On) {
         self.temp.reset();
         let last_event_pos = event.viewport_pos;
-        if let Some(prev_event) = &self.last_pointer_event {
-            self.pointer_delta = Some(event.viewport_pos - prev_event.viewport_pos);
-        } else {
-            self.pointer_delta = None;
-        }
+        let pointer_delta = self.last_pointer_event.map(|prev| event.viewport_pos - prev.viewport_pos);
         self.last_pointer_event = Some(*event);
 
         std::mem::swap(&mut self.curr_hot_indexes, &mut self.prev_hot_indexes);
@@ -739,24 +735,24 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
 
         let capture_idx = self.capture.and_then(|nid| self.curr_tree.nid_map.get(&nid).copied());
 
-        self.queue_pointer_leave_enter_events(EventInfo::Pointer(*event));
+        self.queue_pointer_leave_enter_events(EventInfo::Pointer(*event), pointer_delta);
 
         let event_id = self.next_event_id();
 
         if let Some(idx) = capture_idx {
             // While captured, always dispatch to the captured node.
             self.event_queue
-                .push_back(QueuedEvent::new(idx, event_id, event_type, EventInfo::Pointer(*event)));
+                .push_back(QueuedEvent::new(idx, event_id, event_type, EventInfo::Pointer(*event)).with_pointer_delta(pointer_delta));
         } else {
             // PointerDown, PointerMove, PointerUp, and PointerWheel are all sent to the frontmost nodes first
             for &idx in self.curr_hot_indexes.iter().rev() {
                 self.event_queue
-                    .push_back(QueuedEvent::new(idx, event_id, event_type, EventInfo::Pointer(*event)));
+                    .push_back(QueuedEvent::new(idx, event_id, event_type, EventInfo::Pointer(*event)).with_pointer_delta(pointer_delta));
             }
         }
     }
 
-    fn queue_pointer_leave_enter_events(&mut self, info: EventInfo) {
+    fn queue_pointer_leave_enter_events(&mut self, info: EventInfo, pointer_delta: Option<Vec2>) {
         let mut pointer_enter_nodes: BumpVec<usize> = BumpVec::with_capacity_in(self.curr_hot_indexes.len(), &self.temp);
         let mut pointer_leave_nodes: BumpVec<usize> = BumpVec::with_capacity_in(self.prev_hot_indexes.len(), &self.temp);
 
@@ -791,11 +787,13 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
         // Normal enter/leave dispatch
         for &idx in pointer_leave_nodes.iter().rev() {
             let event_id = self.next_event_id();
-            self.event_queue.push_back(QueuedEvent::new(idx, event_id, On::PointerLeave, info.clone()));
+            self.event_queue
+                .push_back(QueuedEvent::new(idx, event_id, On::PointerLeave, info.clone()).with_pointer_delta(pointer_delta));
         }
         for &idx in pointer_enter_nodes.iter().rev() {
             let event_id = self.next_event_id();
-            self.event_queue.push_back(QueuedEvent::new(idx, event_id, On::PointerEnter, info.clone()));
+            self.event_queue
+                .push_back(QueuedEvent::new(idx, event_id, On::PointerEnter, info.clone()).with_pointer_delta(pointer_delta));
         }
 
         // Commit hot set changes so we don't queue the same events again
@@ -861,8 +859,6 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
 
             // ---------- Call Callback ----------
 
-            let pointer_delta = if qe.event_type.is_pointer() { self.pointer_delta } else { None };
-
             let (has_callback, mut ctx) = if qe.event_type == On::Destroy {
                 let mut ctx = EventCtx {
                     active_nodes: &mut self.active_nodes,
@@ -877,7 +873,7 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
                     info: qe.event_info,
                     is_enabled: self.prev_tree.nodes[qe.idx].enabled.get_or(true),
                     perf_info: &self.perf_info,
-                    pointer_delta,
+                    pointer_delta: qe.pointer_delta,
                     rect: &self.prev_tree.layout_cache[qe.idx],
                     stop_bubbling: false,
                     stop_window_close: false,
@@ -901,7 +897,7 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
                     info: qe.event_info,
                     is_enabled: self.curr_tree.nodes[qe.idx].enabled.get_or(true),
                     perf_info: &self.perf_info,
-                    pointer_delta,
+                    pointer_delta: qe.pointer_delta,
                     rect: &self.curr_tree.layout_cache[qe.idx],
                     stop_bubbling: false,
                     stop_window_close: false,
@@ -961,6 +957,7 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
                         event_id: qe.event_id,
                         event_type: On::Change,
                         event_info: EventInfo::None,
+                        pointer_delta: None,
                         depth: qe.depth + 1,
                     });
                 } else {
@@ -973,6 +970,7 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
                                 event_id: qe.event_id,
                                 event_type: On::Change,
                                 event_info: EventInfo::None,
+                                pointer_delta: None,
                                 depth: qe.depth + 1,
                             });
                             break;
@@ -1037,6 +1035,7 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
                                 event_id: qe.event_id,
                                 event_type: On::Blur,
                                 event_info: EventInfo::None,
+                                pointer_delta: None,
                                 depth: qe.depth + 1,
                             });
                         }
@@ -1046,6 +1045,7 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
                                 event_id: qe.event_id,
                                 event_type: On::Focus,
                                 event_info: EventInfo::None,
+                                pointer_delta: None,
                                 depth: qe.depth + 1,
                             });
                         }
@@ -1057,6 +1057,7 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
                                 event_id: qe.event_id,
                                 event_type: On::Blur,
                                 event_info: EventInfo::None,
+                                pointer_delta: None,
                                 depth: qe.depth + 1,
                             });
                         }
@@ -1068,6 +1069,7 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
                                 event_id: qe.event_id,
                                 event_type: On::Focus,
                                 event_info: EventInfo::None,
+                                pointer_delta: None,
                                 depth: qe.depth + 1,
                             });
                         }
@@ -1329,7 +1331,7 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
         }
         self.phase = Phase::Idle;
         if let Some(info) = self.last_pointer_event {
-            self.queue_pointer_leave_enter_events(EventInfo::Pointer(info)); // could modify self.phase
+            self.queue_pointer_leave_enter_events(EventInfo::Pointer(info), None); // could modify self.phase
         }
 
         self.perf_info = perf_info;
