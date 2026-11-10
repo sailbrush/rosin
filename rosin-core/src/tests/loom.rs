@@ -1,4 +1,4 @@
-use crate::reactive::{DependencyMap, Registry, Var, VarReadGuard};
+use crate::reactive::{DependencyMap, Registry, Var, VarReadGuard, VarWriteGuard};
 use crate::sync::*;
 
 const PREEMPTION_BOUND: Option<usize> = None;
@@ -173,6 +173,52 @@ fn read_guard_mapping_panics_preserve_observed_version() {
             assert_eq!(deps.deps.get(&weak.get_key()), Some(&0));
             assert!(deps.any_changed());
         });
+    }
+}
+
+#[test]
+fn write_guard_mapping_panics_do_not_commit_to_reused_slots() {
+    for mapping in 0..3 {
+        for canceled in [false, true] {
+            let mut model = loom::model::Builder::default();
+            model.preemption_bound = PREEMPTION_BOUND;
+            model.check(move || {
+                let registry: &'static Registry = Box::leak(Box::new(Registry::default()));
+                let drops = Arc::new(AtomicUsize::new(0));
+                let owner = Var::new_in(registry, CountDrop(drops.clone()));
+                let weak = owner.downgrade();
+                let (ready, started) = loom::sync::mpsc::channel();
+
+                let mapper = loom::thread::spawn(move || {
+                    let mut guard = weak.write().unwrap();
+                    if canceled {
+                        guard.cancel_change();
+                    }
+                    ready.send(()).unwrap();
+                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match mapping {
+                        0 => {
+                            let _ = VarWriteGuard::map::<u32>(guard, |_| panic!("intentional panic"));
+                        }
+                        1 => {
+                            let _ = VarWriteGuard::try_map::<u32>(guard, |_| panic!("intentional panic"));
+                        }
+                        _ => {
+                            let _ = VarWriteGuard::try_map_or_err::<u32, ()>(guard, |_| panic!("intentional panic"));
+                        }
+                    }));
+                    assert!(result.is_err());
+                });
+
+                started.recv().unwrap();
+                drop(owner);
+                let replacement = Var::new_in(registry, 1u32);
+                mapper.join().unwrap();
+
+                assert_eq!(replacement.get_version(), 0);
+                assert_eq!(registry.write_count(), 1 + u64::from(!canceled));
+                assert_eq!(drops.load(Ordering::SeqCst), 1);
+            });
+        }
     }
 }
 

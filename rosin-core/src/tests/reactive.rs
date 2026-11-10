@@ -1040,6 +1040,50 @@ mod guard_mapping {
     use crate::reactive::{VarReadGuard, VarWriteGuard};
 
     #[test]
+    fn write_guard_mapping_panics_commit_once_and_preserve_cancellation() {
+        for mapping in 0..3 {
+            for canceled in [false, true] {
+                let registry: &'static Registry = Box::leak(Box::new(Registry::default()));
+                let var = Var::new_in(registry, 0u32);
+                let deps = DependencyMap::default().read_scope(|| {
+                    let result = panic::catch_unwind(AssertUnwindSafe(|| {
+                        let mut guard = var.write();
+                        if canceled {
+                            guard.cancel_change();
+                        }
+                        let write_and_panic = |value: &mut u32| -> ! {
+                            if !canceled {
+                                *value = 1;
+                            }
+                            panic::panic_any("panic");
+                        };
+                        match mapping {
+                            0 => {
+                                let _ = VarWriteGuard::map::<u32>(guard, |v| write_and_panic(v));
+                            }
+                            1 => {
+                                let _ = VarWriteGuard::try_map::<u32>(guard, |v| write_and_panic(v));
+                            }
+                            _ => {
+                                let _ = VarWriteGuard::try_map_or_err::<u32, ()>(guard, |v| write_and_panic(v));
+                            }
+                        }
+                    }));
+                    let payload = result.expect_err("map should panic");
+                    assert_eq!(payload.downcast_ref::<&str>(), Some(&"panic"));
+                });
+
+                let expected = u64::from(!canceled);
+                assert_eq!(var.get(), expected as u32);
+                assert_eq!(var.get_version(), expected);
+                assert_eq!(registry.write_count(), expected);
+                assert_eq!(deps.deps.get(&var.get_key()), Some(&expected));
+                assert!(!deps.any_changed());
+            }
+        }
+    }
+
+    #[test]
     fn read_guard_map_tracks_and_projects_subfield() {
         let registry: &'static Registry = Box::leak(Box::new(Registry::default()));
         let var = Var::new_in(registry, (123i32, 456i32));

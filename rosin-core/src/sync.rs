@@ -107,36 +107,48 @@ mod internal {
     }
 
     impl<'a, T: ?Sized> MappedRwLockWriteGuard<'a, T> {
-        pub fn map<U: ?Sized, F>(mut self, f: F) -> MappedRwLockWriteGuard<'a, U>
+        pub fn map<U: ?Sized, F>(self, f: F) -> MappedRwLockWriteGuard<'a, U>
         where
             F: FnOnce(&mut T) -> &mut U,
         {
-            let data_ref: &mut T = unsafe { &mut *self.data }; // SAFETY: This is only used in test code.
-            let new_ref: &mut U = f(data_ref);
-            let new_ptr = new_ref as *mut U;
-
-            MappedRwLockWriteGuard {
-                _guard: self._guard,
-                data: new_ptr,
-                marker: PhantomData,
+            match Self::try_map_or_err::<U, _, std::convert::Infallible>(self, |t| Ok(f(t))) {
+                Ok(mapped) => mapped,
+                Err((_, never)) => match never {},
             }
         }
 
-        pub fn try_map<U: ?Sized, F>(mut self, f: F) -> Result<MappedRwLockWriteGuard<'a, U>, Self>
+        pub fn try_map<U: ?Sized, F>(self, f: F) -> Result<MappedRwLockWriteGuard<'a, U>, Self>
         where
             F: FnOnce(&mut T) -> Option<&mut U>,
         {
+            Self::try_map_or_err(self, |t| f(t).ok_or(())).map_err(|(guard, ())| guard)
+        }
+
+        pub fn try_map_or_err<U: ?Sized, F, E>(self, f: F) -> Result<MappedRwLockWriteGuard<'a, U>, (Self, E)>
+        where
+            F: FnOnce(&mut T) -> Result<&mut U, E>,
+        {
             let data_ref: &mut T = unsafe { &mut *self.data }; // SAFETY: This is only used in test code.
 
-            if let Some(new_ref) = f(data_ref) {
-                let new_ptr = new_ref as *mut U;
-                Ok(MappedRwLockWriteGuard {
-                    _guard: self._guard,
-                    data: new_ptr,
-                    marker: PhantomData,
-                })
-            } else {
-                Err(self)
+            // parking_lot doesn't poison locks
+            let mapped = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(data_ref))) {
+                Ok(mapped) => mapped,
+                Err(payload) => {
+                    drop(self);
+                    std::panic::resume_unwind(payload);
+                }
+            };
+
+            match mapped {
+                Ok(new_ref) => {
+                    let new_ptr = new_ref as *mut U;
+                    Ok(MappedRwLockWriteGuard {
+                        _guard: self._guard,
+                        data: new_ptr,
+                        marker: PhantomData,
+                    })
+                }
+                Err(err) => Err((self, err)),
             }
         }
     }

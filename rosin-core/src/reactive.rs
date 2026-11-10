@@ -349,8 +349,7 @@ impl<T: Send + Sync + 'static> WeakVar<T> {
                 generation: self.generation,
             },
             guard: Some(guard),
-            changed: true,
-            armed: true,
+            state: WriteGuardState::Pending,
             _marker: PhantomData,
         })
     }
@@ -659,9 +658,16 @@ impl<'a, T: ?Sized + Send + Sync + 'static> VarReadGuard<'a, T> {
 pub struct VarWriteGuard<'a, T: ?Sized + Send + Sync + 'static> {
     meta: VarGuardMeta,
     guard: Option<MappedRwLockWriteGuard<'a, T>>,
-    changed: bool,
-    armed: bool,
+    state: WriteGuardState,
     _marker: PhantomData<*const ()>, // !Send + !Sync
+}
+
+#[derive(Clone, Copy)]
+enum WriteGuardState {
+    Pending,
+    Canceled,
+    Committed(u64),
+    Disarmed,
 }
 
 impl<'a, T: ?Sized + Send + Sync + 'static> Deref for VarWriteGuard<'a, T> {
@@ -679,21 +685,13 @@ impl<'a, T: ?Sized + Send + Sync + 'static> DerefMut for VarWriteGuard<'a, T> {
 
 impl<'a, T: ?Sized + Send + Sync + 'static> Drop for VarWriteGuard<'a, T> {
     fn drop(&mut self) {
-        if !self.armed {
-            return;
+        self.commit();
+
+        if let WriteGuardState::Committed(version) = self.state {
+            drop(self.guard.take());
+            notify_scopes(self.meta.key(), version);
+            self.meta.slot.attempt_cleanup(self.meta.registry);
         }
-
-        let version = if self.changed {
-            let version = self.meta.slot.version.fetch_add(1, Ordering::Release) + 1;
-            self.meta.registry.write_count.fetch_add(1, Ordering::Release);
-            version
-        } else {
-            self.meta.slot.version.load(Ordering::Acquire)
-        };
-
-        drop(self.guard.take());
-        notify_scopes(self.meta.key(), version);
-        self.meta.slot.attempt_cleanup(self.meta.registry);
     }
 }
 
@@ -702,29 +700,16 @@ impl<'a, T: ?Sized + Send + Sync + 'static> VarWriteGuard<'a, T> {
     ///
     /// When this is called, the [`Var`]'s version number will not be incremented upon `Drop`.
     pub fn cancel_change(&mut self) {
-        self.changed = false;
+        self.state = WriteGuardState::Canceled;
     }
 
     /// Maps a write guard to a subfield, like `RwLockWriteGuard::map`.
     ///
     /// This is an associated function that needs to be used as `VarWriteGuard::map(...)`.
-    pub fn map<U: ?Sized + Send + Sync + 'static>(mut this: Self, f: impl FnOnce(&mut T) -> &mut U) -> VarWriteGuard<'a, U> {
-        let meta = this.meta;
-        let changed = this.changed;
-        let guard = this.guard.take().expect("mapped guard is missing");
-
-        // If `f` panics, `this` will be dropped with `armed = true`, notifying once.
-        let guard = MappedRwLockWriteGuard::map(guard, f);
-
-        // Disarm so we don't double-notify on Drop.
-        this.armed = false;
-
-        VarWriteGuard {
-            meta,
-            guard: Some(guard),
-            changed,
-            armed: true,
-            _marker: PhantomData,
+    pub fn map<U: ?Sized + Send + Sync + 'static>(this: Self, f: impl FnOnce(&mut T) -> &mut U) -> VarWriteGuard<'a, U> {
+        match Self::try_map_or_err::<U, std::convert::Infallible>(this, |t| Ok(f(t))) {
+            Ok(mapped) => mapped,
+            Err((_, never)) => match never {},
         }
     }
 
@@ -732,32 +717,10 @@ impl<'a, T: ?Sized + Send + Sync + 'static> VarWriteGuard<'a, T> {
     ///
     /// This is an associated function that needs to be used as `VarWriteGuard::try_map(...)`.
     pub fn try_map<U: ?Sized + Send + Sync + 'static>(
-        mut this: Self,
+        this: Self,
         f: impl FnOnce(&mut T) -> Option<&mut U>,
     ) -> Result<VarWriteGuard<'a, U>, VarWriteGuard<'a, T>> {
-        let meta = this.meta;
-        let changed = this.changed;
-        let guard = this.guard.take().expect("mapped guard is missing");
-
-        match MappedRwLockWriteGuard::try_map(guard, f) {
-            Ok(mapped) => {
-                // Disarm so we don't double-notify on Drop.
-                this.armed = false;
-
-                Ok(VarWriteGuard {
-                    meta,
-                    guard: Some(mapped),
-                    changed,
-                    armed: true,
-                    _marker: PhantomData,
-                })
-            }
-            Err(original) => {
-                // Put the original guard back and return it.
-                this.guard = Some(original);
-                Err(this)
-            }
-        }
+        Self::try_map_or_err(this, |t| f(t).ok_or(())).map_err(|(guard, ())| guard)
     }
 
     /// Fallible map, like `RwLockWriteGuard::try_map`, but returns the error produced by the mapping function.
@@ -768,39 +731,61 @@ impl<'a, T: ?Sized + Send + Sync + 'static> VarWriteGuard<'a, T> {
         f: impl FnOnce(&mut T) -> Result<&mut U, E>,
     ) -> Result<VarWriteGuard<'a, U>, (VarWriteGuard<'a, T>, E)> {
         let meta = this.meta;
-        let changed = this.changed;
-        let guard = this.guard.take().expect("mapped guard is missing");
+        let state = this.state;
+        let guard = this.guard.take().expect("map guard is missing");
 
-        let mut err: Option<E> = None;
+        struct CommitGuard<F: FnOnce()>(Option<F>);
 
-        let mapped = MappedRwLockWriteGuard::try_map(guard, |t| match f(t) {
-            Ok(r) => Some(r),
-            Err(e) => {
-                err = Some(e);
-                None
+        impl<F: FnOnce()> Drop for CommitGuard<F> {
+            fn drop(&mut self) {
+                if let Some(commit) = self.0.take() {
+                    commit();
+                }
             }
+        }
+
+        let mapped = MappedRwLockWriteGuard::try_map_or_err(guard, |t| {
+            // commit before unlocking if the callback panics
+            let mut commit = CommitGuard(Some(|| {
+                this.commit();
+            }));
+            let result = f(t);
+            commit.0 = None;
+            result
         });
 
         match mapped {
             Ok(mapped) => {
                 // Disarm so we don't double-notify on Drop.
-                this.armed = false;
+                this.state = WriteGuardState::Disarmed;
 
                 Ok(VarWriteGuard {
                     meta,
                     guard: Some(mapped),
-                    changed,
-                    armed: true,
+                    state,
                     _marker: PhantomData,
                 })
             }
-            Err(original) => {
+            Err((original, err)) => {
                 // Put the original guard back and return it along with the error.
                 this.guard = Some(original);
-                let e = err.expect("try_map_or_err failed without producing an error");
-                Err((this, e))
+                Err((this, err))
             }
         }
+    }
+
+    /// Increment the version unless canceled, and mark the write as committed.
+    fn commit(&mut self) {
+        let version = match self.state {
+            WriteGuardState::Pending => {
+                let version = self.meta.slot.version.fetch_add(1, Ordering::Release) + 1;
+                self.meta.registry.write_count.fetch_add(1, Ordering::Release);
+                version
+            }
+            WriteGuardState::Canceled => self.meta.slot.version.load(Ordering::Acquire),
+            WriteGuardState::Committed(_) | WriteGuardState::Disarmed => return,
+        };
+        self.state = WriteGuardState::Committed(version);
     }
 }
 
