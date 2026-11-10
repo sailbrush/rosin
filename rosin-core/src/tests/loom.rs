@@ -1,4 +1,4 @@
-use crate::reactive::{DependencyMap, Registry, Var};
+use crate::reactive::{DependencyMap, Registry, Var, VarReadGuard};
 use crate::sync::*;
 
 const PREEMPTION_BOUND: Option<usize> = None;
@@ -133,6 +133,47 @@ fn read_scope_tracks_reads_under_race() {
         let count = deps.deps.len();
         assert!(count == 1 || count == 2, "unexpected deps size: {count}");
     });
+}
+
+#[test]
+fn read_guard_mapping_panics_preserve_observed_version() {
+    for mapping in 0..3 {
+        let mut model = loom::model::Builder::default();
+        model.preemption_bound = PREEMPTION_BOUND;
+        model.check(move || {
+            let registry: &'static Registry = Box::leak(Box::new(Registry::default()));
+            let var = Var::new_in(registry, 0u32);
+            let weak = var.downgrade();
+            let mut guard = Some(var.read());
+            let writer = loom::thread::spawn(move || weak.set(1));
+
+            let deps = DependencyMap::default().read_scope(|| {
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    let guard = guard.take().unwrap();
+                    let read_and_panic = |value: &u32| -> ! {
+                        assert_eq!(*value, 0);
+                        panic!("intentional panic");
+                    };
+                    match mapping {
+                        0 => {
+                            let _ = VarReadGuard::map::<u32>(guard, |v| read_and_panic(v));
+                        }
+                        1 => {
+                            let _ = VarReadGuard::try_map::<u32>(guard, |v| read_and_panic(v));
+                        }
+                        _ => {
+                            let _ = VarReadGuard::try_map_or_err::<u32, ()>(guard, |v| read_and_panic(v));
+                        }
+                    }
+                }));
+                assert!(result.is_err());
+            });
+
+            writer.join().unwrap();
+            assert_eq!(deps.deps.get(&weak.get_key()), Some(&0));
+            assert!(deps.any_changed());
+        });
+    }
 }
 
 #[test]

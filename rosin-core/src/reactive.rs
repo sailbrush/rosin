@@ -310,6 +310,7 @@ impl<T: Send + Sync + 'static> WeakVar<T> {
                 slot: self.slot,
                 generation: self.generation,
             },
+            version: self.slot.version.load(Ordering::Acquire),
             guard: Some(guard),
             armed: true,
             _marker: PhantomData,
@@ -523,6 +524,7 @@ impl VarGuardMeta {
 /// behavior: dependency tracking happens when the final mapped guard is dropped.
 pub struct VarReadGuard<'a, T: ?Sized + Send + Sync + 'static> {
     meta: VarGuardMeta,
+    version: u64,
     guard: Option<MappedRwLockReadGuard<'a, T>>,
     armed: bool,
     _marker: PhantomData<*const ()>, // !Send + !Sync
@@ -541,9 +543,8 @@ impl<'a, T: ?Sized + Send + Sync + 'static> Drop for VarReadGuard<'a, T> {
             return;
         }
 
-        let version = self.meta.slot.version.load(Ordering::Acquire);
         drop(self.guard.take());
-        notify_scopes(self.meta.key(), version);
+        notify_scopes(self.meta.key(), self.version);
         self.meta.slot.attempt_cleanup(self.meta.registry);
     }
 }
@@ -564,6 +565,7 @@ impl<'a, T: ?Sized + Send + Sync + 'static> VarReadGuard<'a, T> {
 
         VarReadGuard {
             meta,
+            version: this.version,
             guard: Some(guard),
             armed: true,
             _marker: PhantomData,
@@ -584,6 +586,7 @@ impl<'a, T: ?Sized + Send + Sync + 'static> VarReadGuard<'a, T> {
 
                 Ok(VarReadGuard {
                     meta,
+                    version: this.version,
                     guard: Some(mapped),
                     armed: true,
                     _marker: PhantomData,
@@ -624,6 +627,7 @@ impl<'a, T: ?Sized + Send + Sync + 'static> VarReadGuard<'a, T> {
 
                 Ok(VarReadGuard {
                     meta,
+                    version: this.version,
                     guard: Some(mapped),
                     armed: true,
                     _marker: PhantomData,
