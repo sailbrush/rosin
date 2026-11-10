@@ -189,6 +189,27 @@ fn versions_change_detection_monotonic() {
 }
 
 #[test]
+fn get_version_does_not_return_reused_slot_version() {
+    let mut model = loom::model::Builder::default();
+    model.preemption_bound = PREEMPTION_BOUND;
+    model.check(|| {
+        let registry: &'static Registry = Box::leak(Box::new(Registry::default()));
+        let var = Var::new_in(registry, 0u32);
+        let weak = var.downgrade();
+
+        let reader = loom::thread::spawn(move || weak.get_version());
+
+        drop(var);
+        let replacement = Var::new_in(registry, 10u32);
+        assert!(std::ptr::eq(weak.slot, replacement.downgrade().slot));
+        replacement.set(11);
+
+        let observed = reader.join().unwrap();
+        assert!(matches!(observed, None | Some(0)));
+    });
+}
+
+#[test]
 fn drop_makes_weakvar_dead_and_accessors_return_none() {
     let mut model = loom::model::Builder::default();
     model.preemption_bound = PREEMPTION_BOUND;

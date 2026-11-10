@@ -277,11 +277,8 @@ impl<T: Send + Sync + 'static> WeakVar<T> {
 
     /// Returns the current version of the variable.
     pub fn get_version(&self) -> Option<u64> {
-        if self.is_alive() {
-            Some(self.slot.version.load(Ordering::Acquire))
-        } else {
-            None
-        }
+        let version = self.slot.version.load(Ordering::Acquire);
+        self.is_alive().then_some(version)
     }
 
     /// Returns a read guard to the value if the [`Var`] is alive, marking it as read from.
