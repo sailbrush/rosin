@@ -1193,19 +1193,6 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
         if did_build {
             css::style_pre_pass(&self.temp, &mut self.curr_tree, &mut self.ancestor_classes);
         } else {
-            // mark dirty any nodes with a changed 'enabled' status
-            let mut dynamic_enabled_prev = std::mem::take(&mut self.curr_tree.dynamic_enabled_prev);
-            for (idx, prev) in dynamic_enabled_prev.iter_mut() {
-                if let UIParam::Dynamic(param) = &self.curr_tree.nodes[*idx].enabled {
-                    let curr = param.get_or(true);
-                    if curr != *prev {
-                        *prev = curr;
-                        self.curr_tree.add_dirty_root_by_idx(*idx, css::ENABLED_DIRTY);
-                    }
-                }
-            }
-            self.curr_tree.dynamic_enabled_prev = dynamic_enabled_prev;
-
             // mark dirty any nodes with changed dependencies for on_style callbacks
             for idx in &self.curr_tree.on_style_nodes {
                 if let Some(deps) = self.curr_tree.on_style_deps.get(idx)
@@ -1219,6 +1206,19 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
         // The style pass always runs, and triggers a layout if needed.
         let mut changed_layout = false;
         let style_deps = std::mem::take(&mut self.style_deps).cleared().read_scope(|| {
+            // mark dirty any nodes with a changed 'enabled' status, inside the read scope so the param check itself isn't missed
+            let mut dynamic_enabled_prev = std::mem::take(&mut self.curr_tree.dynamic_enabled_prev);
+            for (idx, prev) in dynamic_enabled_prev.iter_mut() {
+                if let UIParam::Dynamic(param) = &self.curr_tree.nodes[*idx].enabled {
+                    let curr = param.get_or(true);
+                    if curr != *prev {
+                        *prev = curr;
+                        self.curr_tree.add_dirty_root_by_idx(*idx, css::ENABLED_DIRTY);
+                    }
+                }
+            }
+            self.curr_tree.dynamic_enabled_prev = dynamic_enabled_prev;
+
             // this needs to run in the scope so that deps get registered on the first pass
             changed_layout = css::style_pass(
                 &self.temp,
