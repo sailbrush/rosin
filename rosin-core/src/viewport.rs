@@ -846,7 +846,6 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
                 error!("Event callback recursion depth exceeded MAX_EVENT_DEPTH ({MAX_EVENT_DEPTH})");
                 continue;
             }
-
             // If disabled, don't dispatch any events to node, except for lifecycle events.
             if !matches!(qe.event_type, On::Create | On::Destroy) {
                 // Note: only On::Destroy events use indices from prev_tree, so we're ok in this branch.

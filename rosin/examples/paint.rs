@@ -62,7 +62,6 @@ impl Canvas {
                 let Some(pos) = ctx.local_pointer_pos() else {
                     return;
                 };
-
                 if ev.buttons.contains(PointerButton::Primary) {
                     if let Some((_, path)) = s.canvas.lines.write().last_mut() {
                         match path.elements_mut().last_mut() {
