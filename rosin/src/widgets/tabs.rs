@@ -6,7 +6,6 @@ use crate::{
     widgets::widget_styles,
 };
 
-#[cfg_attr(all(feature = "hot-reload", debug_assertions), derive(serde::Deserialize, serde::Serialize, TypeHash), serde(default))]
 #[derive(Default, Debug)]
 pub struct Tabs {
     active_nid: Var<Option<NodeId>>,

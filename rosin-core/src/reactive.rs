@@ -45,13 +45,12 @@
 
 use std::{
     any::Any,
-    cell::{OnceCell, RefCell},
+    cell::RefCell,
     collections::HashMap,
     fmt,
     hash::{Hash, Hasher},
     marker::PhantomData,
     ops::{Deref, DerefMut},
-    rc::Rc,
     sync::OnceLock,
 };
 
@@ -513,12 +512,12 @@ impl DependencyMap {
     /// NOTE: Dependencies are only recorded when a read or write guard drops,
     /// so it's important that guards don't escape the scope.
     pub fn read_scope(self, func: impl FnMut()) -> Self {
-        scopes_with(|stack| stack.borrow_mut().push(self));
+        READ_SCOPES.with(|stack| stack.borrow_mut().push(self));
 
         // If the provided closure panics, clean up so the stack is never in an inconsistent state.
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(func));
 
-        let deps = scopes_with(|stack| stack.borrow_mut().pop().unwrap()); // Unwrap ok: we pushed an element on to the stack, so we know it will be there to pop.
+        let deps = READ_SCOPES.with(|stack| stack.borrow_mut().pop().unwrap()); // Unwrap ok: we pushed an element on to the stack, so we know it will be there to pop.
 
         if let Err(panic) = result {
             std::panic::resume_unwind(panic);
@@ -900,44 +899,22 @@ impl Slot {
 #[cfg(not(loom))]
 std::thread_local! {
     /// A stack of all current read_scopes used by viewports for dependency tracking.
-    static READ_SCOPES: OnceCell<Rc<RefCell<Vec<DependencyMap>>>> = const { OnceCell::new() };
+    static READ_SCOPES: RefCell<Vec<DependencyMap>> = const { RefCell::new(Vec::new()) };
 }
 
 // Loom doesn't support const in thread_local macro
 #[cfg(loom)]
 loom::thread_local! {
-    static READ_SCOPES: OnceCell<Rc<RefCell<Vec<DependencyMap>>>> = OnceCell::new();
+    static READ_SCOPES: RefCell<Vec<DependencyMap>> = RefCell::new(Vec::new());
 }
 
 /// Notify read scopes of a dependency.
 fn notify_scopes(key: VarKey, version: u64) {
-    scopes_with(|stack| {
+    READ_SCOPES.with(|stack| {
         for vars in stack.borrow_mut().iter_mut() {
             vars.record(key, version);
         }
     });
-}
-
-/// Access the thread-local stack of read scopes.
-fn scopes_with<F, R>(f: F) -> R
-where
-    F: FnOnce(&Rc<RefCell<Vec<DependencyMap>>>) -> R,
-{
-    READ_SCOPES.with(|once| f(once.get_or_init(|| Rc::new(RefCell::new(Vec::new())))))
-}
-
-/// Returns a clone of the current thread-local `READ_SCOPES` Rc, initializing it if needed.
-/// This is used internally by the hot-reload feature.
-#[doc(hidden)]
-pub fn read_scopes_rc() -> Rc<RefCell<Vec<DependencyMap>>> {
-    scopes_with(|stack| stack.clone())
-}
-
-/// Tries to initialize the thread-local `READ_SCOPES`, returning `true` if it succeeded.
-/// This is used internally by the hot-reload feature.
-#[doc(hidden)]
-pub fn try_init_read_scopes(rc: Rc<RefCell<Vec<DependencyMap>>>) -> bool {
-    READ_SCOPES.with(|cell| cell.set(rc).is_ok())
 }
 
 /// The container for all reactive variables. Most code won't need to interact with this directly.
@@ -947,7 +924,7 @@ pub struct Registry {
     write_count: AtomicU64,
 }
 
-static GLOBAL_REGISTRY: OnceLock<&'static Registry> = OnceLock::new();
+static GLOBAL_REGISTRY: OnceLock<Registry> = OnceLock::new();
 
 impl Default for Registry {
     fn default() -> Self {
@@ -961,12 +938,7 @@ impl Default for Registry {
 impl Registry {
     /// Gets a reference to the global [`Registry`] instance, initializing it if needed.
     pub fn global() -> &'static Self {
-        GLOBAL_REGISTRY.get_or_init(|| Box::leak(Box::new(Self::default())))
-    }
-
-    /// Initialize the global [`Registry`] instance, if it isn't already.
-    pub fn set_global(&'static self) -> bool {
-        GLOBAL_REGISTRY.set(self).is_ok()
+        GLOBAL_REGISTRY.get_or_init(Self::default)
     }
 
     /// Returns the total number of committed writes for all variables in the registry.

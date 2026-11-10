@@ -21,9 +21,6 @@ pub(crate) struct AppLauncher<S: Sync + 'static> {
     translation_map: Option<TranslationMap>,
     wgpu_config: WgpuConfig,
     state: Option<Rc<RefCell<S>>>,
-
-    #[cfg(all(feature = "hot-reload", debug_assertions))]
-    hot_reloader: RefCell<Option<crate::mac::hot::HotReloader>>,
 }
 
 impl<S: Sync + 'static> AppLauncher<S> {
@@ -33,9 +30,6 @@ impl<S: Sync + 'static> AppLauncher<S> {
             translation_map: None,
             wgpu_config: WgpuConfig::default(),
             state: None,
-
-            #[cfg(all(feature = "hot-reload", debug_assertions))]
-            hot_reloader: RefCell::new(None),
         }
     }
 
@@ -49,64 +43,7 @@ impl<S: Sync + 'static> AppLauncher<S> {
         self
     }
 
-    // No hot-reload, no serde requirement
-    #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
-    pub fn run(self, state: S, translation_map: TranslationMap) -> Result<(), LaunchError> {
-        self.run_impl(state, translation_map, |s| Box::new(s) as Box<dyn AppDelegateTrait>)
-    }
-
-    // Yes hot-reload, yes serde requirement
-    #[cfg(all(feature = "hot-reload", debug_assertions))]
-    pub fn run(mut self, mut state: S, translation_map: TranslationMap) -> Result<(), LaunchError>
-    where
-        S: serde::Serialize + serde::de::DeserializeOwned + crate::typehash::TypeHash + 'static,
-    {
-        use crate::mac::window::*;
-        use std::{env, fs};
-
-        fn resolve(view: &RosinView) -> &ViewIvars {
-            DeclaredClass::ivars(view)
-        }
-        set_ivars_accessor(resolve as *mut ());
-
-        if let Some(loader) = crate::mac::hot::HotReloader::new() {
-            'hot_reload: {
-                if let Ok(snapshot_path) = env::var("ROSIN_HOT_RELOAD_SNAPSHOT") {
-                    let snapshot_json = match fs::read_to_string(&snapshot_path) {
-                        Ok(s) => s,
-                        Err(e) => {
-                            error!("Hot-reload failed to read snapshot file: {e}");
-                            break 'hot_reload;
-                        }
-                    };
-
-                    let snapshot: crate::mac::hot::HotReloadSnapshot<S> =
-                        match crate::reactive::serde_impl::serde_scope(|| serde_json::from_str(&snapshot_json)) {
-                            Ok(s) => s,
-                            Err(e) => {
-                                error!("Hot-reload failed to parse snapshot JSON: {e}");
-                                break 'hot_reload;
-                            }
-                        };
-
-                    state = snapshot.state;
-
-                    self.windows = snapshot.windows.into_iter().map(|w| w.convert::<S>(&loader.lib)).collect();
-                }
-            }
-
-            *self.hot_reloader.borrow_mut() = Some(loader);
-        } else {
-            error!("Hot-reload failed to init.");
-        }
-
-        self.run_impl(state, translation_map, |s| Box::new(s) as Box<dyn AppDelegateTrait>)
-    }
-
-    fn run_impl<F>(mut self, state: S, translation_map: TranslationMap, box_data: F) -> Result<(), LaunchError>
-    where
-        F: FnOnce(AppLauncher<S>) -> Box<dyn AppDelegateTrait>,
-    {
+    pub fn run(mut self, state: S, translation_map: TranslationMap) -> Result<(), LaunchError> {
         if APP_STARTED.set(()).is_err() {
             return Err(LaunchError::AlreadyStarted);
         }
@@ -124,7 +61,7 @@ impl<S: Sync + 'static> AppLauncher<S> {
         self.state = Some(Rc::new(RefCell::new(state)));
         self.translation_map = Some(translation_map);
 
-        let data = box_data(self);
+        let data = Box::new(self);
         let ns_app_delegate: Retained<RosinAppDelegate> = unsafe {
             let delegate = mtm.alloc().set_ivars(AppDelegateIvars { data });
             msg_send![super(delegate), init]
@@ -218,64 +155,16 @@ impl<S: Sync + 'static> AppLauncher<S> {
         for desc in &self.windows {
             window::create_window(mtm, desc, state.clone(), translation_map.clone(), gpu_ctx.clone(), vello_renderer.clone());
         }
-
-        #[cfg(all(feature = "hot-reload", debug_assertions))]
-        {
-            // Don't start the timer if creating the reloader failed.
-            if self.hot_reloader.borrow().is_none() {
-                return;
-            }
-
-            unsafe {
-                objc2_foundation::NSTimer::scheduledTimerWithTimeInterval_target_selector_userInfo_repeats(
-                    1.0 / 5.0,
-                    _delegate,
-                    objc2::sel!(hot_reload_tick),
-                    None,
-                    true,
-                )
-            };
-        }
     }
 }
 
 pub(crate) trait AppDelegateTrait {
     fn application_did_finish_launching(&self, delegate: &RosinAppDelegate);
-    fn terminate(&self) {}
-
-    #[cfg(all(feature = "hot-reload", debug_assertions))]
-    fn hot_reload_tick(&self);
 }
 
-// No hot-reload, no serde requirement
-#[cfg(not(all(feature = "hot-reload", debug_assertions)))]
 impl<S: Sync + 'static> AppDelegateTrait for AppLauncher<S> {
     fn application_did_finish_launching(&self, delegate: &RosinAppDelegate) {
         self.application_did_finish_launching_impl(delegate);
-    }
-}
-
-// Yes hot-reload, yes serde requirement
-#[cfg(all(feature = "hot-reload", debug_assertions))]
-impl<S> AppDelegateTrait for AppLauncher<S>
-where
-    S: Sync + serde::Serialize + crate::typehash::TypeHash + 'static,
-{
-    fn application_did_finish_launching(&self, delegate: &RosinAppDelegate) {
-        self.application_did_finish_launching_impl(delegate);
-    }
-
-    fn hot_reload_tick(&self) {
-        let Some(state_rc) = self.state.as_ref() else {
-            return;
-        };
-        if let Some(hot_reloader) = &mut *self.hot_reloader.borrow_mut() {
-            hot_reloader.reload_if_changed(state_rc);
-        }
-    }
-
-    fn terminate(&self) {
-        *self.hot_reloader.borrow_mut() = None;
     }
 }
 
@@ -291,14 +180,6 @@ define_class!(
     pub(crate) struct RosinAppDelegate;
 
     unsafe impl NSObjectProtocol for RosinAppDelegate {}
-
-    impl RosinAppDelegate {
-        #[cfg(all(feature = "hot-reload", debug_assertions))]
-        #[unsafe(method(hot_reload_tick))]
-        fn __hot_reload_tick(&self) {
-            self.ivars().data.hot_reload_tick();
-        }
-    }
 
     unsafe impl NSApplicationDelegate for RosinAppDelegate {
         /// Returns a Boolean value that indicates if the app terminates once the last window closes.
@@ -321,7 +202,6 @@ define_class!(
             if let Some(mtm) = MainThreadMarker::new() {
                 NSApp(mtm).stop(None);
             }
-            self.ivars().data.terminate();
             false
         }
 

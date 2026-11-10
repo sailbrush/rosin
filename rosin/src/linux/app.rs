@@ -10,9 +10,6 @@ pub(crate) struct AppLauncher<S: Sync + 'static> {
     _translation_map: Option<TranslationMap>,
     wgpu_config: WgpuConfig,
     _state: Option<Rc<RefCell<S>>>,
-
-    #[cfg(all(feature = "hot-reload", debug_assertions))]
-    hot_reloader: RefCell<Option<crate::mac::hot::HotReloader>>,
 }
 
 impl<S: Sync + 'static> AppLauncher<S> {
@@ -22,9 +19,6 @@ impl<S: Sync + 'static> AppLauncher<S> {
             _translation_map: None,
             wgpu_config: WgpuConfig::default(),
             _state: None,
-
-            #[cfg(all(feature = "hot-reload", debug_assertions))]
-            hot_reloader: RefCell::new(None),
         }
     }
 
@@ -38,19 +32,7 @@ impl<S: Sync + 'static> AppLauncher<S> {
         self
     }
 
-    // No hot-reload, no serde requirement
-    #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
     pub fn run(self, _state: S, _translation_map: TranslationMap) -> Result<(), LaunchError> {
-        // TODO
-        Ok(())
-    }
-
-    // Yes hot-reload, yes serde requirement
-    #[cfg(all(feature = "hot-reload", debug_assertions))]
-    pub fn run(mut self, mut _state: S, _translation_map: TranslationMap) -> Result<(), LaunchError>
-    where
-        S: serde::Serialize + serde::de::DeserializeOwned + crate::typehash::TypeHash + 'static,
-    {
         // TODO
         Ok(())
     }

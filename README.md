@@ -16,15 +16,12 @@
 Rosin is a GUI library written in pure Rust with the following goals:
 - Have an intuitive, idiomatic, and well-documented API.
 - Prioritize correctness and reliability.
-- Enable fast development iteration.
 - Achieve high performance.
 - Provide everything needed to build cross-platform, native desktop apps in Rust.
 
 It's being built for use in [Sailbrush](https://ko-fi.com/sailbrush), a 2D animation and compositing program.
 
-It can be used as a framework or a library, and the API is designed to feel like an immediate-mode toolkit. However, when possible it reuses your UI tree behind the scenes to avoid redundant work. Interfaces are styled with CSS, and it supports complex layouts. In debug mode, stylesheets and localization files are automatically reloaded when changed, and the `hot-reload` feature makes it possible to reload Rust code while your application is running.
-
-[Rosin Quickstart](https://github.com/sailbrush/rosin-quickstart) is a repository that's pre-configured to work with the `hot-reload` feature.
+It can be used as a framework or a library, and the API is designed to feel like an immediate-mode toolkit. However, when possible it reuses your UI tree behind the scenes to avoid redundant work. Interfaces are styled with CSS, and it supports complex layouts. In debug mode, stylesheets and localization files are automatically reloaded when changed.
 
 The [Rosin Widget Garden](https://github.com/sailbrush/rosin-widget-garden) is a repository for contributing new widgets.
 

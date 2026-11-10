@@ -5,7 +5,6 @@ use std::sync::Arc;
 use crate::prelude::*;
 
 /// A platform-agnostic definition of a keyboard shortcut.
-#[cfg_attr(feature = "hot-reload", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HotKey {
     pub key: Key,
@@ -39,7 +38,6 @@ impl HotKey {
 }
 
 /// Standard system actions that often have specific platform behavior or icons.
-#[cfg_attr(all(feature = "hot-reload", debug_assertions), derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StandardAction {
     Copy,
@@ -49,7 +47,6 @@ pub enum StandardAction {
 }
 
 /// An entry in a menu.
-#[cfg_attr(all(feature = "hot-reload", debug_assertions), derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
 pub enum MenuItem {
     /// A standard clickable item.
@@ -70,7 +67,6 @@ pub enum MenuItem {
 }
 
 /// A description of a native menu.
-#[cfg_attr(all(feature = "hot-reload", debug_assertions), derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Default)]
 pub struct MenuDesc {
     pub items: Arc<Vec<MenuItem>>,

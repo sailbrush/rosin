@@ -1,7 +1,6 @@
 use crate::{kurbo::Vec2, prelude::*, widgets::widget_styles};
 
 // TODO - scroll bars and stuff
-#[cfg_attr(all(feature = "hot-reload", debug_assertions), derive(serde::Deserialize, serde::Serialize, TypeHash), serde(default))]
 #[derive(Default, Debug)]
 pub struct ScrollArea {
     offset: Var<Vec2>,

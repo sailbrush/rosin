@@ -37,31 +37,10 @@ use crate::{
     vello, wgpu,
 };
 
-#[cfg(all(feature = "hot-reload", debug_assertions))]
-static IVARS_FN: std::sync::atomic::AtomicPtr<()> = std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
-
-#[cfg(all(feature = "hot-reload", debug_assertions))]
-pub(crate) fn set_ivars_accessor(ptr: *mut ()) {
-    IVARS_FN.store(ptr, std::sync::atomic::Ordering::Release);
-}
-
-#[cfg(all(feature = "hot-reload", debug_assertions))]
-pub(crate) fn ivars_accessor_ptr() -> *mut () {
-    IVARS_FN.load(std::sync::atomic::Ordering::Acquire)
-}
-
-#[cfg(not(all(feature = "hot-reload", debug_assertions)))]
 #[inline(always)]
 pub(crate) fn view_ivars(view: &RosinView) -> &ViewIvars {
     use objc2::DeclaredClass;
     view.ivars()
-}
-
-#[cfg(all(feature = "hot-reload", debug_assertions))]
-#[inline(always)]
-pub(crate) fn view_ivars(view: &RosinView) -> &ViewIvars {
-    let f: fn(&RosinView) -> &ViewIvars = unsafe { std::mem::transmute(IVARS_FN.load(std::sync::atomic::Ordering::Acquire)) };
-    f(view)
 }
 
 pub(crate) fn create_window<S: Sync + 'static>(
@@ -333,12 +312,6 @@ pub(crate) trait ViewportTrait {
     fn translation_map(&self) -> TranslationMap;
     fn build_accesskit_update(&mut self) -> Result<TreeUpdate, AccessKitUpdateError>;
     fn accessibility_action_event(&mut self, view: &RosinView, request: ActionRequest);
-
-    #[cfg(all(feature = "hot-reload", debug_assertions))]
-    fn use_library(&mut self, lib: &libloading::Library);
-
-    #[cfg(all(feature = "hot-reload", debug_assertions))]
-    fn serializable_window_desc(&self, view: &RosinView) -> super::hot::SerializableWindowDesc;
 }
 
 impl<'a, S: Sync + 'static> ViewportTrait for ViewportContainer<'a, S> {
@@ -356,19 +329,9 @@ impl<'a, S: Sync + 'static> ViewportTrait for ViewportContainer<'a, S> {
     fn create_window(&mut self, mtm: MainThreadMarker, view: &RosinView, desc: Box<dyn Any + Send + Sync>) {
         let desc: Box<WindowDesc<S>> = match desc.downcast::<WindowDesc<S>>() {
             Ok(desc) => desc,
-            Err(_desc) => {
-                #[cfg(all(feature = "hot-reload", debug_assertions))]
-                {
-                    let raw: *mut (dyn Any + Send + Sync) = Box::into_raw(_desc);
-                    // SAFETY: Assume that layout is the same when hot-reloading.
-                    //         This won't catch misuse of the API.
-                    unsafe { Box::from_raw(raw as *mut () as *mut WindowDesc<S>) }
-                }
-                #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
-                {
-                    error!("Failed to create window: WindowDesc is generic over the wrong type.");
-                    return;
-                }
+            Err(_) => {
+                error!("Failed to create window: WindowDesc is generic over the wrong type.");
+                return;
             }
         };
 
@@ -924,82 +887,9 @@ impl<'a, S: Sync + 'static> ViewportTrait for ViewportContainer<'a, S> {
         self.viewport.queue_accessibility_action_event(request);
         self.dispatch_and_redraw(view);
     }
-
-    #[allow(clippy::type_complexity)]
-    #[cfg(all(feature = "hot-reload", debug_assertions))]
-    fn use_library(&mut self, lib: &libloading::Library) {
-        let symbol = unsafe { lib.get(self.desc.viewfn.symbol) };
-        let func: libloading::Symbol<fn(&S, &mut Ui<S, WindowHandle>)> = match symbol {
-            Ok(s) => s,
-            Err(_) => {
-                error!("Hot-reload: failed to load symbol `{:?}`", self.desc.viewfn.symbol);
-                return;
-            }
-        };
-        self.viewport.set_view_callback(*func);
-
-        if let Some(wgpufn) = self.desc.wgpufn.as_mut() {
-            let symbol = unsafe { lib.get(wgpufn.symbol) };
-            let func: libloading::Symbol<fn(&S, &mut WgpuCtx<'_>)> = match symbol {
-                Ok(s) => s,
-                Err(_) => {
-                    error!("Hot-reload: failed to load symbol `{:?}`", wgpufn.symbol);
-                    return;
-                }
-            };
-            wgpufn.func = *func;
-        }
-    }
-
-    #[cfg(all(feature = "hot-reload", debug_assertions))]
-    fn serializable_window_desc(&self, view: &RosinView) -> super::hot::SerializableWindowDesc {
-        use super::hot::SerializableWindowDesc;
-        use rosin_core::kurbo::{Point, Size};
-
-        let (size, position) = if let Some(win) = view.window() {
-            let frame = win.frame();
-            let content = win.contentRectForFrameRect(frame);
-            (Size::new(content.size.width, content.size.height), Some(Point::new(content.origin.x, content.origin.y)))
-        } else {
-            (self.desc.size, self.desc.position)
-        };
-
-        SerializableWindowDesc {
-            viewfn: self.desc.viewfn.symbol.to_string(),
-            wgpufn: self.desc.wgpufn.as_ref().map(|f| f.symbol.to_string()),
-            title: self.desc.title.as_deref().map(|s| s.to_string()),
-            menu: self.desc.menu.clone(),
-            size,
-            position,
-            min_size: self.desc.min_size,
-            max_size: self.desc.max_size,
-            resizeable: self.desc.resizeable,
-            close_button: self.desc.close_button,
-            minimize_button: self.desc.minimize_button,
-            maximize_button: self.desc.maximize_button,
-        }
-    }
 }
 
 impl RosinView {
-    #[allow(unused)]
-    #[cfg(all(feature = "hot-reload", debug_assertions))]
-    #[deprecated = "Use view_ivars() instead of .ivars(), direct calls can crash under hot-reload"]
-    pub(crate) fn ivars(&self) -> &ViewIvars {
-        panic!("direct .ivars() called in hot-reload build")
-    }
-
-    #[cfg(all(feature = "hot-reload", debug_assertions))]
-    pub fn use_library(&self, new_lib: &libloading::Library) {
-        view_ivars(self).viewport.borrow_mut().use_library(new_lib);
-        self.request_redraw();
-    }
-
-    #[cfg(all(feature = "hot-reload", debug_assertions))]
-    pub fn serializable_window_desc(&self) -> super::hot::SerializableWindowDesc {
-        view_ivars(self).viewport.borrow().serializable_window_desc(self)
-    }
-
     pub(crate) fn set_input_handler(&self, id: Option<NodeId>, handler: Option<Box<dyn InputHandler + Send + Sync>>) {
         view_ivars(self).input_handler_node.set(id);
         *view_ivars(self).input_handler.borrow_mut() = handler;

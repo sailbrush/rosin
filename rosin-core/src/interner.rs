@@ -1,6 +1,4 @@
 //! String interner used by the CSS system.
-//!
-//! This is public because the `hot-reload` feature needs to be able to share an interner with a loaded dynamic library.
 
 use std::fmt::{self, Display};
 use std::sync::OnceLock;
@@ -8,8 +6,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use parking_lot::RwLock;
 
-// This is stored in an Arc so that it can be shared across shared library boundaries.
-static STRING_INTERNER: OnceLock<Arc<RwLock<StringInterner>>> = OnceLock::new();
+static STRING_INTERNER: OnceLock<RwLock<StringInterner>> = OnceLock::new();
 
 /// An identifier for an interned string.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -39,13 +36,8 @@ impl StringInterner {
     }
 
     /// Returns the global string interner, initializing it if needed.
-    pub fn global() -> &'static Arc<RwLock<StringInterner>> {
-        STRING_INTERNER.get_or_init(|| Arc::new(RwLock::new(StringInterner::new())))
-    }
-
-    /// Initialize the global string interner, if it isn't already.
-    pub fn set_global(interner: Arc<RwLock<StringInterner>>) -> bool {
-        STRING_INTERNER.set(interner).is_ok()
+    pub fn global() -> &'static RwLock<StringInterner> {
+        STRING_INTERNER.get_or_init(|| RwLock::new(StringInterner::new()))
     }
 
     /// Returns an existing id or assigns a new one.

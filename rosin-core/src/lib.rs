@@ -6,11 +6,9 @@ mod tests;
 
 mod draw;
 mod hasher;
+mod interner;
 mod sync;
 mod util;
-
-#[doc(hidden)]
-pub mod interner;
 
 pub mod css;
 pub mod data;

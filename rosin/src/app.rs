@@ -39,16 +39,7 @@ impl<S: Sync + 'static> AppLauncher<S> {
     ///
     /// This call blocks the current thread while the application is running.
     /// The event loop stops when all windows have closed or when [`WindowHandle::request_exit`] is called.
-    #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
     pub fn run(self, state: S, translations: TranslationMap) -> Result<(), LaunchError> {
-        self.0.run(state, translations)
-    }
-
-    #[cfg(all(feature = "hot-reload", debug_assertions))]
-    pub fn run(self, state: S, translations: TranslationMap) -> Result<(), LaunchError>
-    where
-        S: serde::Serialize + serde::de::DeserializeOwned + crate::typehash::TypeHash,
-    {
         self.0.run(state, translations)
     }
 }

@@ -108,7 +108,6 @@ pub mod gpu;
 pub mod handle;
 pub mod ime;
 pub mod menu;
-pub mod typehash;
 pub mod widgets;
 
 #[cfg(target_os = "macos")]
@@ -179,10 +178,6 @@ pub mod prelude {
 
     pub use crate::keyboard_types::*;
     pub use crate::parley::editing::Cursor;
-    pub use crate::typehash::TypeHash;
-
-    #[cfg(feature = "hot-reload")]
-    pub use rosin_derive::*;
 
     #[cfg(feature = "icu")]
     pub use crate::time::{Date, OffsetDateTime, Time};
