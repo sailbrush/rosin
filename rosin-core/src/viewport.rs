@@ -940,7 +940,8 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
             // Pointer event callbacks can stop an event from bubbling up
             if ctx.stop_bubbling && qe.event_type.is_pointer() {
                 dispatch_info.bubbling_stopped |= ctx.stop_bubbling;
-                self.event_queue.retain(|event| event.event_id != qe.event_id);
+                self.event_queue
+                    .retain(|event| event.event_id != qe.event_id || event.event_type != qe.event_type);
             }
 
             if qe.event_type == On::WindowClose {
