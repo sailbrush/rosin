@@ -139,7 +139,7 @@ pub(crate) fn draw<S, H>(
                             let bl = (base.bottom_left + spread).max(0.0);
                             let br = (base.bottom_right + spread).max(0.0);
 
-                            let radii = RoundedRectRadii::new(tl, tr, bl, br);
+                            let radii = RoundedRectRadii::new(tl, tr, br, bl);
                             let shadow_rounded_rect = rr.to_rounded_rect(radii);
 
                             scene.fill(fill, shadow_affine, shadow.color.unwrap_or(style.color), None, &shadow_rounded_rect);
