@@ -407,9 +407,13 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
             if !expanded {
                 stack.push((idx, true));
 
-                tree.child_indexes(idx, &mut children);
-                for &c in children.iter() {
-                    stack.push((c, false));
+                if tree.style_cache[idx].display.is_some() {
+                    tree.child_indexes(idx, &mut children);
+                    for &c in children.iter() {
+                        if tree.style_cache[c].display.is_some() {
+                            stack.push((c, false));
+                        }
+                    }
                 }
                 continue;
             }
@@ -521,8 +525,8 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
 
         let focus = self
             .focused_node
-            .filter(|nid| self.curr_tree.nid_map.contains_key(nid))
-            .map(Into::into)
+            .and_then(|nid| tree.nid_map.get(&nid))
+            .and_then(|&idx| emitted_id[idx])
             .unwrap_or(root_ax);
 
         Ok(TreeUpdate {
