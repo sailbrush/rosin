@@ -249,7 +249,7 @@ pub struct WeakVar<T: Send + Sync + 'static> {
     pub(crate) registry: &'static Registry,
     pub(crate) slot: &'static Slot,
     pub(crate) generation: u64,
-    pub(crate) ty: PhantomData<T>,
+    pub(crate) ty: PhantomData<fn(T) -> T>,
 }
 
 // Impl Copy even if `T` doesn't
