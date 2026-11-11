@@ -55,14 +55,12 @@ pub enum On {
 
     /// This event is fired every time a node is added to the tree, even when it's disabled.
     ///
-    /// If a node doesn't have an id, it will be treated as a new node and fire
-    /// every time the tree is rebuilt, which probably isn't what you want.
+    /// This event only fires on nodes with an ID assigned through [`Ui::id`].
     Create,
 
     /// This event is fired every time a node is removed from the tree, even when it's disabled.
     ///
-    /// If a node doesn't have an id, it will be treated as a new node and fire
-    /// every time the tree is rebuilt, which probably isn't what you want.
+    /// This event only fires on nodes with an ID assigned through [`Ui::id`].
     Destroy,
 
     /// This event is fired by the platform after a file dialog closes.
