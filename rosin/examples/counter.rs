@@ -29,7 +29,7 @@ fn main_view(state: &State, ui: &mut Ui<State, WindowHandle>) {
 fn main() {
     env_logger::init();
 
-    let window = WindowDesc::new(callback!(main_view))
+    let window = WindowDesc::new(main_view)
         .title("Counter Example")
         .size(400, 300)
         .min_size(250, 150);

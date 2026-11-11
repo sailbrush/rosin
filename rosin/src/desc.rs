@@ -15,8 +15,8 @@ pub enum WindowState {
 
 /// A description of a window to be created.
 pub struct WindowDesc<S: 'static> {
-    pub(crate) viewfn: ViewFn<S, WindowHandle>,
-    pub(crate) wgpufn: Option<WgpuFn<S>>,
+    pub(crate) viewfn: fn(&S, &mut Ui<S, WindowHandle>),
+    pub(crate) wgpufn: Option<fn(&S, &mut WgpuCtx<'_>)>,
     pub(crate) title: Option<Arc<str>>,
     pub(crate) menu: Option<MenuDesc>,
     pub(crate) size: Size,
@@ -51,17 +51,17 @@ impl<S> Clone for WindowDesc<S> {
 impl<S> WindowDesc<S> {
     /// Creates a new [`WindowDesc`] with the specified view function.
     ///
-    /// Use the [`callback`] macro to convert a function item with the signature `fn(&S, &mut Ui<S, WindowHandle>)`.
+    /// Pass a function item with the signature `fn(&S, &mut Ui<S, WindowHandle>)`.
     ///
     /// **Example:**
     /// ```ignore
     /// fn my_view(state: &State, ui: &mut Ui<State, WindowHandle>) { ... }
     ///
-    /// let desc = WindowDesc::new(callback!(my_view));
+    /// let desc = WindowDesc::new(my_view);
     /// ```
-    pub fn new(viewfn: impl Into<ViewFn<S, WindowHandle>>) -> Self {
+    pub fn new(viewfn: fn(&S, &mut Ui<S, WindowHandle>)) -> Self {
         Self {
-            viewfn: viewfn.into(),
+            viewfn,
             wgpufn: None,
             title: None,
             menu: None,
@@ -78,17 +78,17 @@ impl<S> WindowDesc<S> {
 
     /// The provided function will be called to give the app an opportunity to render to the WGPU surface before the UI.
     ///
-    /// Use the [`callback`] macro to convert a function item with the signature `fn(&S, &mut WgpuCtx<'_>)`.
+    /// Pass a function item with the signature `fn(&S, &mut WgpuCtx<'_>)`.
     ///
     /// **Example:**
     /// ```ignore
     /// fn wgpu_callback(state: &State, ctx: &mut WgpuCtx<'_>) { ... }
     ///
-    /// let desc = WindowDesc::new(callback!(my_view))
-    ///     .wgpu(callback!(wgpu_callback));
+    /// let desc = WindowDesc::new(my_view)
+    ///     .wgpu(wgpu_callback);
     /// ```
-    pub fn wgpu(mut self, wgpufn: impl Into<WgpuFn<S>>) -> Self {
-        self.wgpufn = Some(wgpufn.into());
+    pub fn wgpu(mut self, wgpufn: fn(&S, &mut WgpuCtx<'_>)) -> Self {
+        self.wgpufn = Some(wgpufn);
         self
     }
 

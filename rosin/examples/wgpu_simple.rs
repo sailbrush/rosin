@@ -102,8 +102,8 @@ fn wgpu_callback(state: &State, ctx: &mut WgpuCtx<'_>) {
 fn main() {
     env_logger::init();
 
-    let window = WindowDesc::new(callback!(main_view))
-        .wgpu(callback!(wgpu_callback))
+    let window = WindowDesc::new(main_view)
+        .wgpu(wgpu_callback)
         .title("WGPU Example")
         .size(400, 300)
         .min_size(250, 150);

@@ -57,7 +57,7 @@ fn main() {
 
     env_logger::init();
 
-    let window = WindowDesc::new(callback!(main_view))
+    let window = WindowDesc::new(main_view)
         .title("Layout Stress Test")
         .size(1000, 1000)
         .min_size(250, 250);

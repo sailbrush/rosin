@@ -136,7 +136,7 @@ pub(crate) fn create_window<S: Sync + 'static>(
         a11y_adapter: RefCell::new(None),
         viewport: RefCell::new(Box::new(ViewportContainer {
             desc: desc.clone(),
-            viewport: Viewport::new(desc.viewfn.func, desc.size, Vec2::new(scale, scale), translation_map.clone()),
+            viewport: Viewport::new(desc.viewfn, desc.size, Vec2::new(scale, scale), translation_map.clone()),
             app_state: state,
             surface: None,
             surface_format: None,
@@ -535,7 +535,7 @@ impl<'a, S: Sync + 'static> ViewportTrait for ViewportContainer<'a, S> {
             };
 
             let wgpu_deps = self.wgpu_deps.take().unwrap_or_default().cleared().read_scope(|| {
-                (wgpufn.func)(&mut state, &mut render_ctx);
+                wgpufn(&mut state, &mut render_ctx);
             });
             self.wgpu_deps = Some(wgpu_deps);
 

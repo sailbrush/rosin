@@ -66,7 +66,7 @@ fn main_view(state: &State, ui: &mut Ui<State, WindowHandle>) {
 fn main() {
     env_logger::init();
 
-    let window = WindowDesc::new(callback!(main_view))
+    let window = WindowDesc::new(main_view)
         .title("Text Layout Example")
         .size(1000, 1000);
 

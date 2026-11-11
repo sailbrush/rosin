@@ -77,7 +77,7 @@ fn main() {
             enabled: true,
         });
 
-    let window = WindowDesc::new(callback!(main_view))
+    let window = WindowDesc::new(main_view)
         .menu(main_menu)
         .title("URL Example")
         .size(400, 150)

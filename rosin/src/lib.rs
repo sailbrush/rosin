@@ -68,7 +68,7 @@
 //!     env_logger::init();
 //!
 //!     // describe a simple window
-//!     let window = WindowDesc::new(callback!(main_view))
+//!     let window = WindowDesc::new(main_view)
 //!         .title("Counter Example")
 //!         .size(400, 300)
 //!         .min_size(250, 150);
@@ -101,7 +101,6 @@ pub use rosin_core::vello;
 pub use rosin_core::wgpu;
 
 pub mod app;
-pub mod callbacks;
 pub mod desc;
 pub mod dialog;
 pub mod gpu;
@@ -136,15 +135,11 @@ pub use rosin_core::{id, stylesheet, ui_format};
 
 /// The public API
 pub mod prelude {
-    pub use crate::callback;
     pub use crate::unic_langid::{langid, langids};
     pub use rosin_core::{id, stylesheet, ui_format};
 
     #[doc(inline)]
     pub use crate::app::*;
-
-    #[doc(inline)]
-    pub use crate::callbacks::*;
 
     #[doc(inline)]
     pub use crate::desc::*;
