@@ -226,10 +226,6 @@
 //!
 //! so you can pass them as arguments without adding a direct dependency on the `time` crate.
 //!
-//! ### `serde` feature
-//!
-//! When the `serde` feature is enabled, [`LocalizedString`] can be serialized and deserialized.
-//!
 //! ### Security
 //!
 //! Currently, the fluent crate can be coerced into panicking, so it's not recommended to use untrusted localization files.
@@ -1029,7 +1025,6 @@ impl TranslationFile {
 
 /// A concrete argument type for localization.
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum LocalizedArg {
     ConstString(Cow<'static, str>),
     ConstNumber(f64),
@@ -1358,67 +1353,5 @@ impl LocalizedString {
                 inner.placeholder.as_deref().unwrap_or(inner.key.as_ref())
             }
         })
-    }
-}
-
-#[cfg(feature = "serde")]
-mod serde_impl {
-    use super::*;
-
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
-    #[derive(Serialize, Deserialize)]
-    struct LocalizedStringSerde {
-        key: Cow<'static, str>,
-        placeholder: Option<Cow<'static, str>>,
-        args: Vec<(Cow<'static, str>, LocalizedArg)>,
-    }
-
-    impl Serialize for LocalizedString {
-        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
-        {
-            let inner = self.inner.read();
-
-            let ser = LocalizedStringSerde {
-                key: inner.key.clone(),
-                placeholder: inner.placeholder.clone(),
-                args: inner.args.clone(),
-            };
-
-            ser.serialize(serializer)
-        }
-    }
-
-    impl<'de> Deserialize<'de> for LocalizedString {
-        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where
-            D: Deserializer<'de>,
-        {
-            let de = LocalizedStringSerde::deserialize(deserializer)?;
-
-            // VarKey contains a reference to mutable values
-            // but the Hash and PartialEq impls use pointer values
-            // so it's safe to use as a key in a hashmap.
-            #[allow(clippy::mutable_key_type)]
-            let mut dependencies = DependencyMap::default();
-            for (_, arg) in &de.args {
-                if let (Some(key), Some(version)) = (arg.get_key(), arg.get_version()) {
-                    dependencies.record(key, version);
-                }
-            }
-
-            Ok(LocalizedString {
-                inner: Arc::new(RwLock::new(LocalizedStringInner {
-                    last_loaded: None,
-                    key: de.key,
-                    placeholder: de.placeholder,
-                    args: de.args,
-                    last_locale: None,
-                    resolved_string: None,
-                })),
-            })
-        }
     }
 }

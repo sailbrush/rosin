@@ -244,7 +244,6 @@ impl FileDialogResponse {
 /// An identifier for a command originating in the platform.
 ///
 /// This is typically associated with items in the main menu, context menus, or buttons on modal dialogs.
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CommandId(pub u32);
 
