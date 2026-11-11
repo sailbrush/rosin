@@ -241,7 +241,7 @@ where
         UIString::__deferred_stack(move || {
             let v = var.read()?;
             let mut buf = SmallString::<[u8; 64]>::new();
-            let _ = write!(&mut buf, "{}", &*v);
+            let _ = write!(&mut buf, "{}", *v);
             Some(buf)
         })
     }

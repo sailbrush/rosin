@@ -439,38 +439,32 @@ impl LinearGradient {
                 rad -= TAU;
             }
 
-            let u;
-            let v;
             let hypot = width.hypot(height) / 2.0;
-            if rad < TAU * 0.25 {
+            let (u, v) = if rad < TAU * 0.25 {
                 let theta = (width / height).atan() - rad;
                 let len = theta.cos() * hypot;
                 let x = rad.sin() * len;
                 let y = rad.cos() * len;
-                u = (x / width) + 0.5;
-                v = ((height / 2.0) - y) / height;
+                ((x / width) + 0.5, ((height / 2.0) - y) / height)
             } else if rad < TAU * 0.5 {
                 let theta = rad - (TAU / 4.0) - (height / width).atan();
                 let len = theta.cos() * hypot;
                 let x = rad.sin() * len;
                 let y = rad.cos() * len;
-                u = (x / width) + 0.5;
-                v = ((height / 2.0) - y) / height;
+                ((x / width) + 0.5, ((height / 2.0) - y) / height)
             } else if rad < TAU * 0.75 {
                 let theta = (width / height).atan() - rad;
                 let len = theta.cos() * hypot;
                 let x = rad.sin() * len;
                 let y = rad.cos() * len;
-                u = 0.5 - (x / width);
-                v = 1.0 - ((height / 2.0) - y) / height;
+                (0.5 - (x / width), 1.0 - ((height / 2.0) - y) / height)
             } else {
                 let theta = rad - (3.0 * TAU / 4.0) - (height / width).atan();
                 let len = theta.cos() * hypot;
                 let x = rad.sin() * len;
                 let y = rad.cos() * len;
-                u = 1.0 - ((width / 2.0) - x) / width;
-                v = ((height / 2.0) - y) / height;
-            }
+                (1.0 - ((width / 2.0) - x) / width, ((height / 2.0) - y) / height)
+            };
 
             (Point::new(1.0 - u, 1.0 - v), Point::new(u, v))
         };
