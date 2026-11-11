@@ -299,8 +299,8 @@ impl StretchItem {
             font_size: style.font_size,
             size: axis.pick(style.width, style.height),
             basis: basis.unwrap_or(style.flex_basis.resolve(style.font_size)),
-            min_size,
-            max_size,
+            min_size: (min_size - border_before - border_after).max(0.0),
+            max_size: (max_size - border_before - border_after).max(0.0),
             border_before,
             border_after,
             frozen: false,
@@ -409,14 +409,6 @@ struct LayoutCtx<'a, S: 'static> {
     text_cache: &'a mut HashMap<usize, TextCacheEntry, IdentityBuildHasher>,
 }
 
-#[inline]
-fn resolve_unit(unit: Unit, font_size: f32, pct_base: f32, min: f32, max: f32) -> Option<f32> {
-    match unit {
-        u if u.is_definite() => Some(u.definite_size(font_size, pct_base).min(max).max(min)),
-        _ => None,
-    }
-}
-
 fn collect_single_item_array(style: &Style, parent: &Style, axis: Axis, basis: f32) -> [StretchItem; 3] {
     let mut result = [
         StretchItem::edge_space(axis, Edge::Before, style, parent),
@@ -440,7 +432,7 @@ fn solve(items: &mut [StretchItem], available_space: f32) {
         let (frozen, raw_value) = match item.size {
             Unit::Stretch(_) => (false, item.basis),
             Unit::Auto => (true, item.basis),
-            _ => (true, resolve_unit(item.size, item.font_size, available_space, item.min_size, item.max_size).unwrap_or(item.basis)),
+            _ => (true, item.size.definite_size(item.font_size, available_space) - item.border_before - item.border_after),
         };
 
         item.frozen = frozen;
