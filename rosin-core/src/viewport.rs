@@ -1103,7 +1103,7 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
             dirtied |= self.curr_tree.add_dirty_root_by_nid(self.focused_node, css::FOCUS_DIRTY);
         }
 
-        if dirtied {
+        if dirtied || self.focused_node != start_focused_node || !gained_active.is_empty() || !lost_active.is_empty() {
             // style pass will determine if layout should run
             self.phase.update(Phase::Draw);
         }
