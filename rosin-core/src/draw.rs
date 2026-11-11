@@ -313,7 +313,9 @@ pub(crate) fn draw<S, H>(
                                 scene.fill(fill, affine, style.border_top_color, None, &rect);
                             } else {
                                 let lerp_factor = |a: f64, b: f64, r: f64| {
-                                    if r != 0.0 { ((a / (a + b)) + (a / r) - (b / r)).clamp(0.0, 1.0) } else { 0.0 }
+                                    let weight_a = a * (r - b).max(0.0).powi(2);
+                                    let weight_b = b * (r - a).max(0.0).powi(2);
+                                    weight_a / (weight_a + weight_b).max(f64::MIN_POSITIVE)
                                 };
 
                                 let f1 = lerp_factor(border_left_width, border_top_width, rect.radii().top_left);
