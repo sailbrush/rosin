@@ -49,16 +49,36 @@ use std::{
 
 use crate::sync::*;
 
-fn fmt_var_debug<T: fmt::Debug + Send + Sync + 'static>(slot: &Slot, generation: u64, struct_name: &str, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+fn fmt_var_debug<T: fmt::Debug + Send + Sync + 'static>(var: &WeakVar<T>, struct_name: &str, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     let mut ds = f.debug_struct(struct_name);
 
-    if slot.generation.load(Ordering::Acquire) != generation {
+    if !var.is_alive() {
         return ds.field("status", &"dropped").finish_non_exhaustive();
     }
 
-    let Some(guard) = slot.value.try_read() else {
+    struct CleanupGuard {
+        registry: &'static Registry,
+        slot: &'static Slot,
+    }
+
+    impl Drop for CleanupGuard {
+        fn drop(&mut self) {
+            self.slot.attempt_cleanup(self.registry);
+        }
+    }
+
+    let _cleanup = CleanupGuard {
+        registry: var.registry,
+        slot: var.slot,
+    };
+    let Some(guard) = var.slot.value.try_read() else {
         return ds.field("status", &"locked").finish_non_exhaustive();
     };
+
+    // the slot could have been reused by the time we acquired the lock
+    if !var.is_alive() {
+        return ds.field("status", &"dropped").finish_non_exhaustive();
+    }
 
     if let Some(any_val) = guard.as_ref() {
         if let Some(value) = any_val.downcast_ref::<T>() {
@@ -142,7 +162,7 @@ impl<T: Send + Sync + Default + 'static> Default for Var<T> {
 impl<T: fmt::Debug + Send + Sync + 'static> fmt::Debug for Var<T> {
     /// Debug formatting is side-effect free, so viewports won't register the value as having been read from.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt_var_debug::<T>(self.slot, self.generation, "Var", f)
+        fmt_var_debug(&self.0, "Var", f)
     }
 }
 
@@ -250,7 +270,7 @@ impl<T: Send + Sync + 'static> PartialEq for WeakVar<T> {
 impl<T: fmt::Debug + Send + Sync + 'static> fmt::Debug for WeakVar<T> {
     /// Debug formatting is side-effect free, so viewports won't register the value as having been read from.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt_var_debug::<T>(self.slot, self.generation, "WeakVar", f)
+        fmt_var_debug(self, "WeakVar", f)
     }
 }
 
