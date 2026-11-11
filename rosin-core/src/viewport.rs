@@ -989,7 +989,10 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
                         if let Some(&focused_idx) = self.curr_tree.nid_map.get(&focused_nid) {
                             for i in 1..len {
                                 let idx = (focused_idx + i) % len;
-                                if self.curr_tree.nodes[idx].has_callback(On::Focus) && self.curr_tree.nodes[idx].enabled.get_or(true) {
+                                if self.curr_tree.nodes[idx].has_callback(On::Focus)
+                                    && self.curr_tree.nodes[idx].enabled.get_or(true)
+                                    && self.curr_tree.is_displayed(idx)
+                                {
                                     ctx.focused_node = self.curr_tree.nodes[idx].nid;
                                     break;
                                 }
@@ -997,7 +1000,10 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
                         }
                     } else {
                         for idx in 0..len {
-                            if self.curr_tree.nodes[idx].has_callback(On::Focus) && self.curr_tree.nodes[idx].enabled.get_or(true) {
+                            if self.curr_tree.nodes[idx].has_callback(On::Focus)
+                                && self.curr_tree.nodes[idx].enabled.get_or(true)
+                                && self.curr_tree.is_displayed(idx)
+                            {
                                 ctx.focused_node = self.curr_tree.nodes[idx].nid;
                                 break;
                             }
@@ -1010,7 +1016,10 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
                         if let Some(&focused_idx) = self.curr_tree.nid_map.get(&focused_nid) {
                             for i in 1..len {
                                 let idx = (focused_idx as isize - i as isize).rem_euclid(len as isize) as usize;
-                                if self.curr_tree.nodes[idx].has_callback(On::Focus) && self.curr_tree.nodes[idx].enabled.get_or(true) {
+                                if self.curr_tree.nodes[idx].has_callback(On::Focus)
+                                    && self.curr_tree.nodes[idx].enabled.get_or(true)
+                                    && self.curr_tree.is_displayed(idx)
+                                {
                                     ctx.focused_node = self.curr_tree.nodes[idx].nid;
                                     break;
                                 }
@@ -1018,7 +1027,10 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
                         }
                     } else {
                         for idx in (0..len).rev() {
-                            if self.curr_tree.nodes[idx].has_callback(On::Focus) && self.curr_tree.nodes[idx].enabled.get_or(true) {
+                            if self.curr_tree.nodes[idx].has_callback(On::Focus)
+                                && self.curr_tree.nodes[idx].enabled.get_or(true)
+                                && self.curr_tree.is_displayed(idx)
+                            {
                                 ctx.focused_node = self.curr_tree.nodes[idx].nid;
                                 break;
                             }

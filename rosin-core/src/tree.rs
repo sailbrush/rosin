@@ -224,6 +224,17 @@ impl<S, H> Ui<S, H> {
         self.dirty_roots.push(0);
     }
 
+    /// Returns true if this node and all of its ancestors are displayed.
+    pub(crate) fn is_displayed(&self, mut idx: usize) -> bool {
+        while idx != usize::MAX {
+            if self.style_cache[idx].display.is_none() {
+                return false;
+            }
+            idx = self.nodes[idx].parent;
+        }
+        true
+    }
+
     /// Get a list of children in tree-order
     pub(crate) fn child_indexes(&self, parent: usize, output: &mut BumpVec<usize>) {
         output.clear();
