@@ -979,7 +979,8 @@ pub(crate) fn align_and_position_text(style: &Style, rect: &RoundedRect, layout:
     let left = x_items[0].target;
     let right = x_items[2].target;
     let content_w = (padding_box_w - left - right).max(0.0);
-    layout.break_all_lines(Some(content_w));
+    let wrap_width = if style.text_wrap == TextWrap::Nowrap { None } else { Some(content_w) };
+    layout.break_all_lines(wrap_width);
     layout.align(style.text_align.into(), AlignmentOptions::default());
 
     // Solve Y Axis
