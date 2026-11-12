@@ -723,7 +723,7 @@ pub(crate) fn layout<S, H>(state: &S, temp: &Bump, tree: &mut Ui<S, H>, viewport
                     _ => parent_padding_box_size,
                 };
 
-                measure_node(&mut ctx, tree, idx, max_size, max_size, dir.is_row())
+                measure_node(&mut ctx, tree, idx, max_size, max_size, dir.is_row() && style.position == Position::ParentDirected)
             } else {
                 None
             };
