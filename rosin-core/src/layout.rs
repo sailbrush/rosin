@@ -125,7 +125,7 @@ enum Edge {
 #[inline]
 fn resolve_min_opt(min: Option<Length>, font_size: f32) -> f32 {
     match min {
-        None => 0.0,
+        None => f32::NEG_INFINITY,
         Some(l) => l.resolve(font_size),
     }
 }
@@ -280,7 +280,8 @@ impl StretchItem {
         let min_opt = axis.pick(style.min_width, style.min_height);
         let max_opt = axis.pick(style.max_width, style.max_height);
 
-        let min_size = resolve_min_opt(min_opt, style.font_size);
+        // sizes default to a minimum of zero, even though spacing can go negative
+        let min_size = min_opt.map_or(0.0, |min| min.resolve(style.font_size));
         let max_size = resolve_max_opt(max_opt, style.font_size);
 
         let border_before = match axis {
@@ -340,6 +341,11 @@ impl StretchItem {
         let child_u = axis.space(edge, child);
         let parent_u = axis.child_space(edge, parent);
 
+        let min_child = resolve_min_opt(axis.min_space(edge, child), child.font_size);
+        let min_parent = resolve_min_opt(axis.min_child_space(edge, parent), parent.font_size);
+        let max_child = resolve_max_opt(axis.max_space(edge, child), child.font_size);
+        let max_parent = resolve_max_opt(axis.max_child_space(edge, parent), parent.font_size);
+
         let (unit, font_size) = if child_u != Unit::Auto {
             (child_u, child.font_size)
         } else if parent_u != Unit::Auto {
@@ -347,11 +353,6 @@ impl StretchItem {
         } else {
             (Unit::default(), parent.font_size)
         };
-
-        let min_child = resolve_min_opt(axis.min_space(edge, child), font_size);
-        let min_parent = resolve_min_opt(axis.min_child_space(edge, parent), font_size);
-        let max_child = resolve_max_opt(axis.max_space(edge, child), font_size);
-        let max_parent = resolve_max_opt(axis.max_child_space(edge, parent), font_size);
 
         StretchItem::new_space(unit, min_child.max(min_parent), max_child.min(max_parent), font_size)
     }
@@ -363,6 +364,14 @@ impl StretchItem {
         let next_u = axis.space(Edge::Before, next);
         let parent_u = parent.child_between;
 
+        let min_prev = resolve_min_opt(axis.min_space(Edge::After, prev), prev.font_size);
+        let min_next = resolve_min_opt(axis.min_space(Edge::Before, next), next.font_size);
+        let min_parent = resolve_min_opt(parent.min_child_between, parent.font_size);
+
+        let max_prev = resolve_max_opt(axis.max_space(Edge::After, prev), prev.font_size);
+        let max_next = resolve_max_opt(axis.max_space(Edge::Before, next), next.font_size);
+        let max_parent = resolve_max_opt(parent.max_child_between, parent.font_size);
+
         let (unit, font_size) = if prev_u != Unit::Auto {
             (prev_u, prev.font_size)
         } else if next_u != Unit::Auto {
@@ -372,14 +381,6 @@ impl StretchItem {
         } else {
             (Unit::default(), parent.font_size)
         };
-
-        let min_prev = resolve_min_opt(axis.min_space(Edge::After, prev), font_size);
-        let min_next = resolve_min_opt(axis.min_space(Edge::Before, next), font_size);
-        let min_parent = resolve_min_opt(parent.min_child_between, font_size);
-
-        let max_prev = resolve_max_opt(axis.max_space(Edge::After, prev), font_size);
-        let max_next = resolve_max_opt(axis.max_space(Edge::Before, next), font_size);
-        let max_parent = resolve_max_opt(parent.max_child_between, font_size);
 
         StretchItem::new_space(unit, min_prev.max(min_next).max(min_parent), max_prev.min(max_next).min(max_parent), font_size)
     }
@@ -405,6 +406,7 @@ impl fmt::Debug for TextCacheEntry {
 
 struct LayoutCtx<'a, S: 'static> {
     state: &'a S,
+    scale_x: f64,
     translation_map: &'a TranslationMap,
     text_cache: &'a mut HashMap<usize, TextCacheEntry, IdentityBuildHasher>,
 }
@@ -525,21 +527,31 @@ fn solve_axis(item: &mut StretchItem, style: &Style, parent: &Style, axis: Axis,
 /// max_size refers to the node's border box
 ///
 /// returns padding box
-fn measure_node<S, H>(ctx: &mut LayoutCtx<'_, S>, tree: &'_ Ui<S, H>, idx: usize, max_size: Size, pct_size: Size, intrinsic: bool) -> Option<Size> {
+fn measure_node<S, H>(ctx: &mut LayoutCtx<'_, S>, tree: &'_ Ui<S, H>, idx: usize, max_size: Size, axis: Axis) -> Option<Size> {
     let style = &tree.style_cache[idx];
     if style.width != Unit::Auto && style.height != Unit::Auto {
         return None;
     }
 
-    let parent_width = pct_size.width as f32;
-    let parent_height = pct_size.height as f32;
+    let unconstrained =
+        axis == Axis::X && style.position == Position::ParentDirected && tree.style_cache[tree.nodes[idx].parent].display.is_some_and(|dir| dir.is_row());
 
-    #[inline]
-    fn resolve_pad_for_measure(unit: Unit, font_size: f32, pct_base: f32, min: f32, max: f32) -> f32 {
-        match unit {
-            u if u.is_definite() => u.definite_size(font_size, pct_base).min(max).max(min),
-            _ => min.min(max),
-        }
+    let border_left = style.border_left_width.resolve(style.font_size);
+    let border_right = style.border_right_width.resolve(style.font_size);
+    let border_top = style.border_top_width.resolve(style.font_size);
+    let border_bottom = style.border_bottom_width.resolve(style.font_size);
+
+    let border_width = border_left + border_right;
+    let border_height = border_top + border_bottom;
+    let border_size = Size::new(border_width as f64, border_height as f64);
+
+    if let Some(measure_callback) = &tree.nodes[idx].measure_callback {
+        let measure_ctx = MeasureCtx {
+            style,
+            max_size: (!unconstrained).then_some(max_size),
+        };
+        let border_box = measure_callback(ctx.state, &measure_ctx);
+        return Some(if border_box.is_finite() { border_box } else { max_size } - border_size);
     }
 
     let min_top = resolve_min_opt(style.min_child_top, style.font_size);
@@ -551,25 +563,23 @@ fn measure_node<S, H>(ctx: &mut LayoutCtx<'_, S>, tree: &'_ Ui<S, H>, idx: usize
     let min_bottom = resolve_min_opt(style.min_child_bottom, style.font_size);
     let max_bottom = resolve_max_opt(style.max_child_bottom, style.font_size);
 
-    let pad_top = resolve_pad_for_measure(style.child_top, style.font_size, parent_height, min_top, max_top);
-    let pad_right = resolve_pad_for_measure(style.child_right, style.font_size, parent_width, min_right, max_right);
-    let pad_left = resolve_pad_for_measure(style.child_left, style.font_size, parent_width, min_left, max_left);
-    let pad_bottom = resolve_pad_for_measure(style.child_bottom, style.font_size, parent_height, min_bottom, max_bottom);
+    let pad_top = style.child_top.definite_size(style.font_size, 0.0).min(max_top).max(min_top);
+    let pad_right = style.child_right.definite_size(style.font_size, 0.0).min(max_right).max(min_right);
+    let pad_left = style.child_left.definite_size(style.font_size, 0.0).min(max_left).max(min_left);
+    let pad_bottom = style.child_bottom.definite_size(style.font_size, 0.0).min(max_bottom).max(min_bottom);
 
     let pad_size = Size::new((pad_left + pad_right) as f64, (pad_top + pad_bottom) as f64);
 
-    let border_left = style.border_left_width.resolve(style.font_size);
-    let border_right = style.border_right_width.resolve(style.font_size);
-    let border_top = style.border_top_width.resolve(style.font_size);
-    let border_bottom = style.border_bottom_width.resolve(style.font_size);
-
-    let border_width = border_left + border_right;
-    let border_height = border_top + border_bottom;
-    let border_size = Size::new(border_width as f64, border_height as f64);
-
     let text_size = if let Some(text) = &tree.nodes[idx].text {
         let font_style = style.get_font_layout_style();
-        let max_width = (!intrinsic && style.text_wrap != TextWrap::Nowrap).then(|| (max_size.width as f32 - border_width - pad_left - pad_right).max(0.0));
+        let max_width = if unconstrained || style.text_wrap == TextWrap::Nowrap {
+            None
+        } else if axis == Axis::Y {
+            let width = (max_size.width * ctx.scale_x).floor() / ctx.scale_x;
+            Some(max_content_width(style, &Rect::ZERO.with_size(Size::new(width, max_size.height)).to_rounded_rect(0.0)))
+        } else {
+            Some((max_size.width as f32 - border_width - pad_left - pad_right).max(0.0))
+        };
 
         let mut from_cache: Option<Size> = None;
         if let Some(cache) = ctx.text_cache.get_mut(&idx) {
@@ -621,16 +631,7 @@ fn measure_node<S, H>(ctx: &mut LayoutCtx<'_, S>, tree: &'_ Ui<S, H>, idx: usize
         Size::ZERO
     };
 
-    if let Some(measure_callback) = &tree.nodes[idx].measure_callback {
-        let measure_ctx = MeasureCtx {
-            style,
-            max_size: (!intrinsic).then_some(max_size),
-        };
-        let border_box = measure_callback(ctx.state, &measure_ctx);
-        Some(if border_box.is_finite() { border_box } else { max_size } - border_size)
-    } else {
-        Some(text_size + pad_size + Size::new(1.0, 0.0)) // Add a pixel to text width in case the box shrinks during rounding.
-    }
+    Some(text_size + pad_size + Size::new(1.0, 0.0)) // Add a pixel to text width in case the box shrinks during rounding.
 }
 
 #[inline]
@@ -694,6 +695,7 @@ pub(crate) fn layout<S, H>(state: &S, temp: &Bump, tree: &mut Ui<S, H>, viewport
 
         let mut ctx = LayoutCtx {
             state,
+            scale_x: scale.x,
             translation_map,
             text_cache: &mut text_cache,
         };
@@ -723,7 +725,7 @@ pub(crate) fn layout<S, H>(state: &S, temp: &Bump, tree: &mut Ui<S, H>, viewport
                     _ => parent_padding_box_size,
                 };
 
-                measure_node(&mut ctx, tree, idx, max_size, max_size, dir.is_row() && style.position == Position::ParentDirected)
+                measure_node(&mut ctx, tree, idx, max_size, Axis::X)
             } else {
                 None
             };
@@ -751,7 +753,7 @@ pub(crate) fn layout<S, H>(state: &S, temp: &Bump, tree: &mut Ui<S, H>, viewport
                 // If height is Auto, compute the correct wrapped height basis now.
                 if style.height == Unit::Auto {
                     let constrained = Size::new(item.solved_size.width, parent_padding_box_h as f64);
-                    item.measure = measure_node(&mut ctx, tree, idx, constrained, parent_padding_box_size, false);
+                    item.measure = measure_node(&mut ctx, tree, idx, constrained, Axis::Y);
 
                     if let Some(measured) = item.measure {
                         item.basis = measured.height as f32;
@@ -801,7 +803,7 @@ pub(crate) fn layout<S, H>(state: &S, temp: &Bump, tree: &mut Ui<S, H>, viewport
                     if style.height == Unit::Auto {
                         // Re-measure if needed
                         let constrained = Size::new(item.solved_size.width, parent_padding_box_h as f64);
-                        item.measure = measure_node(&mut ctx, tree, idx, constrained, parent_padding_box_size, false);
+                        item.measure = measure_node(&mut ctx, tree, idx, constrained, Axis::Y);
                     }
 
                     // Cross axis
@@ -816,7 +818,7 @@ pub(crate) fn layout<S, H>(state: &S, temp: &Bump, tree: &mut Ui<S, H>, viewport
                     if style.height == Unit::Auto {
                         // Re-measure if needed
                         let constrained = Size::new(item.solved_size.width, parent_padding_box_h as f64);
-                        item.measure = measure_node(&mut ctx, tree, idx, constrained, parent_padding_box_size, false);
+                        item.measure = measure_node(&mut ctx, tree, idx, constrained, Axis::Y);
                     }
 
                     // Cross Axis
@@ -831,7 +833,7 @@ pub(crate) fn layout<S, H>(state: &S, temp: &Bump, tree: &mut Ui<S, H>, viewport
                     if style.height == Unit::Auto {
                         // Re-measure if needed
                         let constrained = Size::new(item.solved_size.width, viewport_size.height);
-                        item.measure = measure_node(&mut ctx, tree, idx, constrained, viewport_size, false);
+                        item.measure = measure_node(&mut ctx, tree, idx, constrained, Axis::Y);
                     }
 
                     // Cross Axis
@@ -899,7 +901,20 @@ pub(crate) fn layout<S, H>(state: &S, temp: &Bump, tree: &mut Ui<S, H>, viewport
         // Apply offset to children, clamped to children_bounds
         if let Some(node_offset) = tree.nodes[parent_idx].offset.as_mut() {
             node_offset.with_mut(|offset| {
-                if let Some(children_bounds) = children_bounds {
+                if let Some(mut children_bounds) = children_bounds {
+                    let leading_space = stretch_items.iter().find(|item| item.idx.is_none()).map_or(0.0, |item| item.target);
+                    let trailing_space = stretch_items.last().filter(|item| item.idx.is_none()).map_or(0.0, |item| item.target);
+                    let (start, end) = match main_axis {
+                        Axis::X => (&mut children_bounds.x0, &mut children_bounds.x1),
+                        Axis::Y => (&mut children_bounds.y0, &mut children_bounds.y1),
+                    };
+                    if leading_space > 0.0 {
+                        *start = start.min(main_axis.pick(initial_pos.x, initial_pos.y));
+                    }
+                    if trailing_space > 0.0 {
+                        *end = end.max(main_axis.pick(current_pos.x, current_pos.y));
+                    }
+
                     let content_x0 = parent_rect.origin().x + parent_border_left as f64;
                     let content_y0 = parent_rect.origin().y + parent_border_top as f64;
                     let content_x1 = content_x0 + parent_padding_box_w as f64;
@@ -1011,32 +1026,17 @@ pub(crate) fn padding_box(style: &Style, rect: &RoundedRect) -> Rect {
 }
 
 pub(crate) fn max_content_width(style: &Style, rect: &RoundedRect) -> f32 {
-    let width = rect.width() as f32;
-    let font_size = style.font_size;
+    let width = padding_box(style, rect).width() as f32;
 
-    let border_left = style.border_left_width.resolve(font_size);
-    let border_right = style.border_right_width.resolve(font_size);
+    let min_l = resolve_min_opt(style.min_child_left, style.font_size);
+    let max_l = resolve_max_opt(style.max_child_left, style.font_size);
+    let min_r = resolve_min_opt(style.min_child_right, style.font_size);
+    let max_r = resolve_max_opt(style.max_child_right, style.font_size);
 
-    let min_l = resolve_min_opt(style.min_child_left, font_size);
-    let max_l = resolve_max_opt(style.max_child_left, font_size);
-    let min_r = resolve_min_opt(style.min_child_right, font_size);
-    let max_r = resolve_max_opt(style.max_child_right, font_size);
+    let left = style.child_left.definite_size(style.font_size, width).min(max_l).max(min_l);
+    let right = style.child_right.definite_size(style.font_size, width).min(max_r).max(min_r);
 
-    let left = match style.child_left {
-        u if u.is_definite() => u.definite_size(font_size, width),
-        _ => 0.0,
-    }
-    .min(max_l)
-    .max(min_l);
-
-    let right = match style.child_right {
-        u if u.is_definite() => u.definite_size(font_size, width),
-        _ => 0.0,
-    }
-    .min(max_r)
-    .max(min_r);
-
-    (width - border_left - border_right - left - right).max(0.0)
+    (width - left - right).max(0.0)
 }
 
 // output must be sorted
