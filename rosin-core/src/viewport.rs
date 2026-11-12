@@ -407,9 +407,13 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
             if !expanded {
                 stack.push((idx, true));
 
-                tree.child_indexes(idx, &mut children);
-                for &c in children.iter() {
-                    stack.push((c, false));
+                if tree.style_cache[idx].display.is_some() {
+                    tree.child_indexes(idx, &mut children);
+                    for &c in children.iter() {
+                        if tree.style_cache[c].display.is_some() {
+                            stack.push((c, false));
+                        }
+                    }
                 }
                 continue;
             }
@@ -521,8 +525,8 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
 
         let focus = self
             .focused_node
-            .filter(|nid| self.curr_tree.nid_map.contains_key(nid))
-            .map(Into::into)
+            .and_then(|nid| tree.nid_map.get(&nid))
+            .and_then(|&idx| emitted_id[idx])
             .unwrap_or(root_ax);
 
         Ok(TreeUpdate {
@@ -733,22 +737,14 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
         std::mem::swap(&mut self.curr_hot_indexes, &mut self.prev_hot_indexes);
         self.update_hot_indexes_at(last_event_pos);
 
-        let capture_idx = self.capture.and_then(|nid| self.curr_tree.nid_map.get(&nid).copied());
-
         self.queue_pointer_leave_enter_events(EventInfo::Pointer(*event), pointer_delta);
 
         let event_id = self.next_event_id();
 
-        if let Some(idx) = capture_idx {
-            // While captured, always dispatch to the captured node.
+        // PointerDown, PointerMove, PointerUp, and PointerWheel are all sent to the frontmost nodes first
+        for &idx in self.curr_hot_indexes.iter().rev() {
             self.event_queue
                 .push_back(QueuedEvent::new(idx, event_id, event_type, EventInfo::Pointer(*event)).with_pointer_delta(pointer_delta));
-        } else {
-            // PointerDown, PointerMove, PointerUp, and PointerWheel are all sent to the frontmost nodes first
-            for &idx in self.curr_hot_indexes.iter().rev() {
-                self.event_queue
-                    .push_back(QueuedEvent::new(idx, event_id, event_type, EventInfo::Pointer(*event)).with_pointer_delta(pointer_delta));
-            }
         }
     }
 
@@ -839,10 +835,26 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
 
         let mut dispatch_info = DispatchInfo::default();
 
-        while let Some(qe) = self.event_queue.pop_front() {
+        while let Some(mut qe) = self.event_queue.pop_front() {
             if qe.depth >= MAX_EVENT_DEPTH {
                 error!("Event callback recursion depth exceeded MAX_EVENT_DEPTH ({MAX_EVENT_DEPTH})");
                 continue;
+            }
+
+            // retarget events when the pointer is captured
+            // TODO - it feels weird to modify events after they've entered the queue, so probably need to rethink this
+            //        could expand a queued event into multiple once we know the capture state, but that would probably require hit-testing during dispatch
+            if let Some(idx) = self.capture.and_then(|nid| self.curr_tree.nid_map.get(&nid).copied()) {
+                match qe.event_type {
+                    On::PointerEnter | On::PointerLeave => continue, // these events don't get delivered to a captured node
+                    On::PointerDown | On::PointerMove | On::PointerUp | On::PointerWheel => {
+                        qe.idx = idx;
+                        // delete events that are now duplicates post-retargeting
+                        self.event_queue
+                            .retain(|event| event.event_id != qe.event_id || event.event_type != qe.event_type);
+                    }
+                    _ => {}
+                }
             }
 
             // If disabled, don't dispatch any events to node, except for lifecycle events.

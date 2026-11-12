@@ -139,7 +139,7 @@ pub(crate) fn draw<S, H>(
                             let bl = (base.bottom_left + spread).max(0.0);
                             let br = (base.bottom_right + spread).max(0.0);
 
-                            let radii = RoundedRectRadii::new(tl, tr, bl, br);
+                            let radii = RoundedRectRadii::new(tl, tr, br, bl);
                             let shadow_rounded_rect = rr.to_rounded_rect(radii);
 
                             scene.fill(fill, shadow_affine, shadow.color.unwrap_or(style.color), None, &shadow_rounded_rect);
@@ -209,12 +209,15 @@ pub(crate) fn draw<S, H>(
                     // ---------- Outline ----------
                     let outline_width: f64 = style.outline_width.resolve(style.font_size) as f64;
                     if outline_width > 0.0 {
-                        let outline_color = style.outline_color;
-                        let offset: f64 = style.outline_offset.resolve(style.font_size) as f64;
-                        let bounding_box = rect.rect();
-                        let size = bounding_box.size().to_vec2() + Vec2::new(1.0 + offset, 1.0 + offset);
-                        let outline = Rect::from_center_size(bounding_box.center(), size.to_size()).to_rounded_rect(rect.radii());
-                        scene.stroke(&Stroke::new(outline_width), affine, outline_color, None, &outline);
+                        let inflation = style.outline_offset.resolve(style.font_size) as f64 + outline_width / 2.0;
+                        let radii = RoundedRectRadii::new(
+                            (rect.radii().top_left + inflation).max(0.0),
+                            (rect.radii().top_right + inflation).max(0.0),
+                            (rect.radii().bottom_right + inflation).max(0.0),
+                            (rect.radii().bottom_left + inflation).max(0.0),
+                        );
+                        let outline = rect.rect().inflate(inflation, inflation).to_rounded_rect(radii);
+                        scene.stroke(&Stroke::new(outline_width), affine, style.outline_color, None, &outline);
                     }
 
                     // ---------- Background Gradients ----------
