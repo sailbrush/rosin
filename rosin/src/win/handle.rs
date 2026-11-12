@@ -141,9 +141,29 @@ impl WindowHandle {
 
     pub fn create_window<S: Any + Sync + 'static>(&self, _desc: &WindowDesc<S>) {}
 
-    pub fn request_close(&self) {}
+    pub fn request_close(&self) {
+        use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_CLOSE};
+        use windows::Win32::Foundation::{WPARAM, LPARAM};
 
-    pub fn request_exit(&self) {}
+        self.view.queue_on_thread(move |view|
+            { unsafe {
+                let res = PostMessageW(
+                    Some(view.hwnd()),
+                    WM_CLOSE,
+                    WPARAM(0),
+                    LPARAM(0)
+                );
+
+                #[cfg(debug_assertions)]
+                println!("requested close with result {:?}", res);
+            }}
+        )
+    }
+
+    pub fn request_exit(&self) {
+        use windows::Win32::UI::WindowsAndMessaging::{PostQuitMessage};
+        self.view.queue_on_thread(move |_|{ unsafe {PostQuitMessage(0);}})
+    }
 
     pub fn set_max_size(&self, size: Option<impl Into<Size>>) {
         let size = size.map(Into::into);
@@ -280,7 +300,16 @@ impl WindowHandle {
 
     // NOTE: maybe add a `set_position_and_size` method for microptimizations?
 
-    pub fn set_title(&self, _title: impl Into<String>) {}
+    pub fn set_title(&self, title: impl Into<String>) {
+        let title = title.into();
+        unsafe {
+            self.view.queue_on_thread(move |view|{
+                let res = windows::Win32::UI::WindowsAndMessaging::SetWindowTextW(view.hwnd(), &windows::core::HSTRING::from(&title));
+                #[cfg(debug_assertions)]
+                println!("set title {0} with result {1:?}", title , res)
+            })
+        }
+    }
 
     pub fn minimize(&self) {
         unsafe {
@@ -551,11 +580,27 @@ impl WindowHandle {
 
     pub fn save_file_dialog(&self, _node: Option<NodeId>, _options: FileDialogOptions) {}
 
+    pub fn send_command(&self, _node: Option<NodeId>, _command: CommandId) {}
+
     pub fn timer(&self, _node: Option<NodeId>, _delay: Duration) {}
 
-    pub fn alert<C>(&self, _node: Option<NodeId>, _png_bytes: Option<&'static [u8]>, _title: &str, _details: &str, _options: &[(&'static str, C)])
+    pub fn alert<C>(&self, _node: Option<NodeId>, _png_bytes: Option<&'static [u8]>, title: &str, details: &str, _options: &[(&'static str, C)])
     where
         C: Into<CommandId> + Copy,
     {
+        use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_OK};
+        use windows::core::HSTRING;
+
+        let title = String::from(title);
+        let details = String::from(details);
+
+        self.view.queue_on_thread(move |view| unsafe {
+            let _ = MessageBoxW(
+                Some(view.hwnd()),
+                &HSTRING::from(details),
+                &HSTRING::from(title),
+                MB_OK
+            );
+        });
     }
 }
