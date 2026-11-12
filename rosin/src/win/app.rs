@@ -81,6 +81,12 @@ impl<S: Sync + 'static> AppLauncher<S> {
             .map(crate::platform::handle::WindowHandle::new)
             .collect();
 
+        #[cfg(debug_assertions)]
+        if let Some(handle) = _window_handles.first() {
+            //test windowhandles here
+            handle.alert::<CommandId>(None, None, "helo", "testing", &[]);
+        }
+
         let mut message = MSG::default();
 
         #[cfg(false)] println!("\nStarting Rosin Loop...");
@@ -96,7 +102,7 @@ impl<S: Sync + 'static> AppLauncher<S> {
             if result.0 <= 0 {
                 #[cfg(false)] eprintln!("WARNING: The current implementation may stop the loop and may stop the program once one window closes");
                 match result.0 {
-                    0 => println!("\nStoping Rosin Loop..."),
+                    0 => println!("\nStopping Rosin Loop..."),
                     code => {
                         let err = windows::core::Error::from_thread();
                         println!("Crashing Rosin Loop `{code:4X}` \"{err}\":\n - {err:#?}")
