@@ -257,10 +257,14 @@ pub(crate) fn draw<S, H>(
                             let br: Vec2 = (rect.width(), rect.height()).into();
                             let bl: Vec2 = (0.0, rect.height()).into();
 
+                            let inner_width = (rect.width() - border_left_width - border_right_width).max(0.0);
+                            let inner_height = (rect.height() - border_top_width - border_bottom_width).max(0.0);
+                            let radius_x = |r: f64, w: f64| r.max(w).min(w + inner_width);
+                            let radius_y = |r: f64, w: f64| r.max(w).min(w + inner_height);
                             let ctrl_points = |outer_radius: f64, h_width: f64, v_width: f64| {
-                                let k = 0.552_228_45;
-                                let pv: Vec2 = (h_width, (outer_radius.max(v_width) - v_width) * (1.0 - k) + v_width).into();
-                                let ph: Vec2 = ((outer_radius.max(h_width) - h_width) * (1.0 - k) + h_width, v_width).into();
+                                let k = 0.551_914_96; // https://math.stackexchange.com/questions/2337392/minimizing-error-in-bézier-circle-approximation
+                                let pv: Vec2 = (h_width, (radius_y(outer_radius, v_width) - v_width) * (1.0 - k) + v_width).into();
+                                let ph: Vec2 = ((radius_x(outer_radius, h_width) - h_width) * (1.0 - k) + h_width, v_width).into();
                                 (pv, ph)
                             };
 
@@ -275,36 +279,36 @@ pub(crate) fn draw<S, H>(
                             border_mask.line_to((tl + Vec2::new(border_left_width, rect.height() / 2.0)).to_point());
 
                             // Top left corner
-                            let p1: Vec2 = tl + Vec2::new(border_left_width, rect.radii().top_left.max(border_top_width));
+                            let p1: Vec2 = tl + Vec2::new(border_left_width, radius_y(rect.radii().top_left, border_top_width));
                             let (p2, p3) = ctrl_points(rect.radii().top_left, border_left_width, border_top_width);
-                            let p4: Vec2 = tl + Vec2::new(rect.radii().top_left.max(border_left_width), border_top_width);
+                            let p4: Vec2 = tl + Vec2::new(radius_x(rect.radii().top_left, border_left_width), border_top_width);
                             border_mask.line_to(p1.to_point());
                             border_mask.curve_to(p2.to_point(), p3.to_point(), p4.to_point());
 
                             // Top right corner
-                            let p5: Vec2 = tr + Vec2::new(-rect.radii().top_right.max(border_right_width), border_top_width);
+                            let p5: Vec2 = tr + Vec2::new(-radius_x(rect.radii().top_right, border_right_width), border_top_width);
                             let (p7, p6) = ctrl_points(rect.radii().top_right, border_right_width, border_top_width);
                             let p6: Vec2 = tr + Vec2::new(-p6.x, p6.y);
                             let p7: Vec2 = tr + Vec2::new(-p7.x, p7.y);
-                            let p8: Vec2 = tr + Vec2::new(-border_right_width, rect.radii().top_right.max(border_top_width));
+                            let p8: Vec2 = tr + Vec2::new(-border_right_width, radius_y(rect.radii().top_right, border_top_width));
                             border_mask.line_to(p5.to_point());
                             border_mask.curve_to(p6.to_point(), p7.to_point(), p8.to_point());
 
                             // Bottom right corner
-                            let p9: Vec2 = br - (border_right_width, rect.radii().bottom_right.max(border_bottom_width)).into();
+                            let p9: Vec2 = br - (border_right_width, radius_y(rect.radii().bottom_right, border_bottom_width)).into();
                             let (p10, p11) = ctrl_points(rect.radii().bottom_right, border_right_width, border_bottom_width);
                             let p10: Vec2 = br - p10;
                             let p11: Vec2 = br - p11;
-                            let p12: Vec2 = br - (rect.radii().bottom_right.max(border_right_width), border_bottom_width).into();
+                            let p12: Vec2 = br - (radius_x(rect.radii().bottom_right, border_right_width), border_bottom_width).into();
                             border_mask.line_to(p9.to_point());
                             border_mask.curve_to(p10.to_point(), p11.to_point(), p12.to_point());
 
                             // Bottom left corner
-                            let p13: Vec2 = bl + Vec2::new(rect.radii().bottom_left.max(border_left_width), -border_bottom_width);
+                            let p13: Vec2 = bl + Vec2::new(radius_x(rect.radii().bottom_left, border_left_width), -border_bottom_width);
                             let (p15, p14) = ctrl_points(rect.radii().bottom_left, border_left_width, border_bottom_width);
                             let p14: Vec2 = bl + Vec2::new(p14.x, -p14.y);
                             let p15: Vec2 = bl + Vec2::new(p15.x, -p15.y);
-                            let p16: Vec2 = bl + Vec2::new(border_left_width, -rect.radii().bottom_left.max(border_bottom_width));
+                            let p16: Vec2 = bl + Vec2::new(border_left_width, -radius_y(rect.radii().bottom_left, border_bottom_width));
                             border_mask.line_to(p13.to_point());
                             border_mask.curve_to(p14.to_point(), p15.to_point(), p16.to_point());
                             border_mask.close_path();
@@ -315,16 +319,16 @@ pub(crate) fn draw<S, H>(
                             if same_colors {
                                 scene.fill(fill, affine, style.border_top_color, None, &rect);
                             } else {
-                                let lerp_factor = |a: f64, b: f64, r: f64| {
-                                    let weight_a = a * (r - b).max(0.0).powi(2);
-                                    let weight_b = b * (r - a).max(0.0).powi(2);
+                                let lerp_factor = |a: f64, b: f64, r: f64, max_a: f64, max_b: f64| {
+                                    let weight_a = a * (r - b).clamp(0.0, max_b).powi(2);
+                                    let weight_b = b * (r - a).clamp(0.0, max_a).powi(2);
                                     weight_a / (weight_a + weight_b).max(f64::MIN_POSITIVE)
                                 };
 
-                                let f1 = lerp_factor(border_left_width, border_top_width, rect.radii().top_left);
-                                let f2 = lerp_factor(border_top_width, border_right_width, rect.radii().top_right);
-                                let f3 = lerp_factor(border_right_width, border_bottom_width, rect.radii().bottom_right);
-                                let f4 = lerp_factor(border_bottom_width, border_left_width, rect.radii().bottom_left);
+                                let f1 = lerp_factor(border_left_width, border_top_width, rect.radii().top_left, inner_width, inner_height);
+                                let f2 = lerp_factor(border_top_width, border_right_width, rect.radii().top_right, inner_height, inner_width);
+                                let f3 = lerp_factor(border_right_width, border_bottom_width, rect.radii().bottom_right, inner_width, inner_height);
+                                let f4 = lerp_factor(border_bottom_width, border_left_width, rect.radii().bottom_left, inner_height, inner_width);
 
                                 // Corner points that mark the boundaries between border colors
                                 let c1 = p1.lerp(p4, f1);
