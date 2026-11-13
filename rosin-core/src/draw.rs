@@ -262,7 +262,7 @@ pub(crate) fn draw<S, H>(
                             let radius_x = |r: f64, w: f64| r.max(w).min(w + inner_width);
                             let radius_y = |r: f64, w: f64| r.max(w).min(w + inner_height);
                             let ctrl_points = |outer_radius: f64, h_width: f64, v_width: f64| {
-                                let k = 0.551_914_96; // https://math.stackexchange.com/questions/2337392/minimizing-error-in-bézier-circle-approximation
+                                let k = 0.551_914_96; // https://math.stackexchange.com/questions/2337392
                                 let pv: Vec2 = (h_width, (radius_y(outer_radius, v_width) - v_width) * (1.0 - k) + v_width).into();
                                 let ph: Vec2 = ((radius_x(outer_radius, h_width) - h_width) * (1.0 - k) + h_width, v_width).into();
                                 (pv, ph)
