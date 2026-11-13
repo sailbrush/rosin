@@ -535,7 +535,7 @@ impl<'a, S: Sync + 'static> ViewportTrait for ViewportContainer<'a, S> {
             };
 
             let wgpu_deps = self.wgpu_deps.take().unwrap_or_default().cleared().read_scope(|| {
-                wgpufn(&mut state, &mut render_ctx);
+                wgpufn(&state, &mut render_ctx);
             });
             self.wgpu_deps = Some(wgpu_deps);
 

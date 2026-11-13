@@ -5,7 +5,6 @@ authors = ["TimTom <timtom.business@gmail.com>"]
 edition = "2024"
 description = "Rosin is a GUI library that aims to be extremely easy to use."
 documentation = "https://docs.rs/rosin/latest/rosin-core/"
-homepage = "https://github.com/sailbrush/rosin"
 repository = "https://github.com/sailbrush/rosin"
 readme = "../README.md"
 keywords = ["GUI"]
