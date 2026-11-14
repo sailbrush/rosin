@@ -120,14 +120,14 @@ pub(crate) unsafe extern "system" fn proc(hwnd: HWND, msg: u32, w_param: WPARAM,
                 view_state.as_ref()
             };
 
-            #[cfg(debug_assertions)]
+            /*#[cfg(debug_assertions)]
             println!(
                 "CURRENT MIN/MAX SIZE:\n\tmax.x = {max_x}\n\tmax.y = {max_y}\n\tmin.x = {min_x}\n\tmin.y = {min_y}",
                 max_x = minmaxinfo.ptMaxTrackSize.x,
                 max_y = minmaxinfo.ptMaxTrackSize.y,
                 min_y = minmaxinfo.ptMinTrackSize.y,
                 min_x = minmaxinfo.ptMinTrackSize.x,
-            );
+            );*/
 
             minmaxinfo.ptMaxTrackSize.x = view_state.size_bounds.max.x;
             minmaxinfo.ptMaxTrackSize.y = view_state.size_bounds.max.y;

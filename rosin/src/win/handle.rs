@@ -139,7 +139,13 @@ impl WindowHandle {
 
     pub fn show_context_menu(&self, _node: Option<NodeId>, _menu: MenuDesc, _pos: Point) {}
 
-    pub fn create_window<S: Any + Sync + 'static>(&self, _desc: &WindowDesc<S>) {}
+    pub fn create_window<S: Any + Sync + 'static>(&self, desc: &WindowDesc<S>) {
+        let desc2 = desc.clone();
+        self.view.queue_on_thread(move |_| {
+            // TODO: get this fixed
+            std::mem::forget(RosinView::from_new_window(&desc2, None, None, &TranslationMap::default()));
+        });
+    }
 
     pub fn request_close(&self) {
         use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_CLOSE};
