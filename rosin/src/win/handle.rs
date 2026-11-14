@@ -353,54 +353,52 @@ impl WindowHandle {
         }
     }
 
+    // todo: make cursor persist
     pub fn set_cursor(&self, cursor: CursorType) {
-        use windows::Win32::UI::WindowsAndMessaging::{HCURSOR, SetCursor};
+        use windows::Win32::UI::WindowsAndMessaging::*;
 
         self.view.queue_on_thread(
             move |_| {
-                let handle_cursor: Option<HCURSOR> = match cursor {
-                    CursorType::Default => None,
-
-                    /*
-                    CursorType::ContextMenu => ...,
-                    CursorType::Help => ...,
-                    CursorType::Pointer => ...,
-
-                    CursorType::Cell => ...,
-                    CursorType::Crosshair => ...,
-                    CursorType::Text => ...,
-                    CursorType::VerticalText => ...,
-
-                    CursorType::Alias => ...,
-                    CursorType::Copy => ...,
-                    CursorType::Move => ...,
-                    CursorType::NotAllowed => ...,
-                    CursorType::Grab => ...,
-                    CursorType::Grabbing => ...,
-
-                    CursorType::ColResize => ...,
-                    CursorType::RowResize => ...,
-                    CursorType::NResize => ...,
-                    CursorType::EResize => ...,
-                    CursorType::SResize => ...,
-                    CursorType::WResize => ...,
-                    CursorType::NEResize => ...,
-                    CursorType::NWResize => ...,
-                    CursorType::SEResize => ...,
-                    CursorType::SWResize => ...,
-                    CursorType::EWResize => ...,
-                    CursorType::NSResize => ...,
-                    CursorType::NESWResize => ...,
-                    CursorType::NWSEResize => ...,
-
-                    CursorType::ZoomIn => ...,
-                    CursorType::ZoomOut => ...,
-                    */
-
-                    _ => todo!("handling the {cursor:?} cursor type."),
-                };
-
                 unsafe {
+                    // the none can be replaced later for custom cursors
+                    let handle_cursor: Option<HCURSOR> = LoadCursorW(None,match cursor {
+                        CursorType::Default => IDC_ARROW,
+
+                        CursorType::ContextMenu => IDC_ARROW,
+                        CursorType::Help => IDC_HELP,
+                        CursorType::Pointer => IDC_HAND,
+
+                        CursorType::Cell => IDC_CROSS,
+                        CursorType::Crosshair => IDC_CROSS,
+                        CursorType::Text => IDC_IBEAM,
+                        CursorType::VerticalText => IDC_IBEAM,
+
+                        CursorType::Alias => IDC_ARROW,
+                        CursorType::Copy => IDC_ARROW,
+                        CursorType::Move => IDC_SIZEALL,
+                        CursorType::NotAllowed => IDC_NO,
+                        CursorType::Grab => IDC_HAND,
+                        CursorType::Grabbing => IDC_HAND,
+
+                        CursorType::ColResize => IDC_SIZEWE,
+                        CursorType::RowResize => IDC_SIZENS,
+                        CursorType::NResize => IDC_SIZENS,
+                        CursorType::EResize => IDC_SIZEWE,
+                        CursorType::SResize => IDC_SIZENS,
+                        CursorType::WResize => IDC_SIZEWE,
+                        CursorType::NEResize => IDC_SIZENESW,
+                        CursorType::NWResize => IDC_SIZENWSE,
+                        CursorType::SEResize => IDC_SIZENWSE,
+                        CursorType::SWResize => IDC_SIZENESW,
+                        CursorType::EWResize => IDC_SIZEWE,
+                        CursorType::NSResize => IDC_SIZENS,
+                        CursorType::NESWResize => IDC_SIZENESW,
+                        CursorType::NWSEResize => IDC_SIZENWSE,
+
+                        CursorType::ZoomIn => IDC_ARROW,
+                        CursorType::ZoomOut => IDC_ARROW,
+                    }).ok();
+
                     SetCursor(handle_cursor);
                 }
             }
