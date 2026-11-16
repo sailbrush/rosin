@@ -2,7 +2,9 @@ use std::ptr::NonNull;
 
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::Graphics::Gdi::{BeginPaint, COLOR_WINDOW, EndPaint, FillRect, HBRUSH, HDC, /* InvalidateRect, */ PAINTSTRUCT};
-use windows::Win32::UI::WindowsAndMessaging::{DefWindowProcW, PostQuitMessage, MINMAXINFO, WM_DESTROY, WM_NCCREATE, WM_PAINT, /* WM_SIZE, */ WM_GETMINMAXINFO};
+use windows::Win32::UI::WindowsAndMessaging::{
+    DefWindowProcW, MINMAXINFO, PostQuitMessage, WM_DESTROY, /* WM_SIZE, */ WM_GETMINMAXINFO, WM_NCCREATE, WM_PAINT,
+};
 use windows::core::{Error, PCWSTR, w};
 
 use crate::platform::view::{ViewState, get_view_state};
@@ -16,11 +18,7 @@ pub(crate) unsafe extern "system" fn proc(hwnd: HWND, msg: u32, w_param: WPARAM,
     let view_state = match msg {
         WM_NCCREATE => {
             return unsafe {
-                use windows::Win32::UI::WindowsAndMessaging::{
-                    CREATESTRUCTW,
-                    SetWindowLongPtrW,
-                    GWLP_USERDATA,
-                };
+                use windows::Win32::UI::WindowsAndMessaging::{CREATESTRUCTW, GWLP_USERDATA, SetWindowLongPtrW};
                 #[cfg(debug_assertions)]
                 println!("Creating window `{hwnd:?}`");
 
@@ -34,17 +32,19 @@ pub(crate) unsafe extern "system" fn proc(hwnd: HWND, msg: u32, w_param: WPARAM,
                 DefWindowProcW(hwnd, msg, w_param, l_param)
             };
         }
- 
-        _ => if cfg!(debug_assertions) && hwnd.is_invalid() {
-            eprintln!("window handle `{hwnd:?}` is invalid!");
-            None
-        } else {
-            unsafe {
-                // SAFETY:
-                //  - hwnd is a valid handle
-                get_view_state(hwnd)
+
+        _ => {
+            if cfg!(debug_assertions) && hwnd.is_invalid() {
+                eprintln!("window handle `{hwnd:?}` is invalid!");
+                None
+            } else {
+                unsafe {
+                    // SAFETY:
+                    //  - hwnd is a valid handle
+                    get_view_state(hwnd)
+                }
             }
-        },
+        }
     };
 
     match msg {
@@ -75,13 +75,13 @@ pub(crate) unsafe extern "system" fn proc(hwnd: HWND, msg: u32, w_param: WPARAM,
                 Err(_) => LRESULT(-1),
             }
         }
-        #[cfg(false)] 
+        #[cfg(false)]
         WM_SIZE => {
             let Some(view_state) = view_state else {
                 return unsafe {
                     // SAFETY: parameters are given as is => they are all valid
                     DefWindowProcW(hwnd, msg, w_param, l_param)
-                }
+                };
             };
 
             let resize = match w_param.0.max(10) as u32 {

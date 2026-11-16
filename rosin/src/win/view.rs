@@ -1,4 +1,3 @@
-
 use std::{any::Any, collections::VecDeque, sync::Mutex};
 
 use windows::Win32::Foundation::RECT;
@@ -8,10 +7,7 @@ use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::Win32::UI::WindowsAndMessaging::{GetClientRect, GetDesktopWindow, GetWindowRect, GetWindowThreadProcessId, SW_NORMAL, ShowWindowAsync};
 use windows::core::Error;
 
-use crate::{
-    kurbo::Size,
-    prelude::*,
-};
+use crate::{kurbo::Size, prelude::*};
 
 use crate::desc::WindowDesc;
 
@@ -19,18 +15,16 @@ use crate::desc::WindowDesc;
 // to not cause a mem leak and to break apart the "expensive part" and the "cheep part"
 
 /// Converts a utf8 str to a utf16 vector
-/// 
+///
 /// Allocates and copies the data
 pub(crate) fn utf8_to_utf16(string: &str) -> Vec<u16> {
     let os_str = AsRef::<std::ffi::OsStr>::as_ref(string);
 
-    std::os::windows::ffi::OsStrExt::encode_wide(os_str)
-        .chain(std::iter::once(0))
-        .collect()
+    std::os::windows::ffi::OsStrExt::encode_wide(os_str).chain(std::iter::once(0)).collect()
 }
 
 /// Casts a rust utf16 slice to a win32 utf16 string
-/// 
+///
 /// Is close to a noop
 pub(crate) fn utf16_as_pcwstr(slice: &[u16]) -> windows::core::PCWSTR {
     windows::core::PCWSTR::from_raw(slice.as_ptr())
@@ -85,12 +79,7 @@ impl ThreadLockedView {
             view,
 
             action_queue: Mutex::new(VecDeque::with_capacity(DEFAULT_CAPACITY)),
-            action_blocks: Mutex::new(
-                VecDeque::from_iter(
-                    std::iter::repeat_with(|| ActionBlock::Empty)
-                        .take(DEFAULT_CAPACITY)
-                )
-            ),
+            action_blocks: Mutex::new(VecDeque::from_iter(std::iter::repeat_with(|| ActionBlock::Empty).take(DEFAULT_CAPACITY))),
         }
     }
 
@@ -141,7 +130,7 @@ impl ThreadLockedView {
 
             for action in blocks.iter_mut() {
                 if !action.is_uncalled() {
-                    continue
+                    continue;
                 };
                 let ActionBlock::Uncalled(thread_id, func) = std::mem::replace(action, ActionBlock::Empty) else {
                     unreachable!("`block_on_thread`: We already sucsesfully checked that action is uncalled")
@@ -172,7 +161,7 @@ impl ThreadLockedView {
         if self.thread_id == current_id {
             for action in blocks.iter_mut() {
                 if !action.is_uncalled() {
-                    continue
+                    continue;
                 };
                 let ActionBlock::Uncalled(thread_id, func) = std::mem::replace(action, ActionBlock::Empty) else {
                     unreachable!("`block_on_thread`: We already sucsesfully checked that action is uncalled")
@@ -194,29 +183,23 @@ impl ThreadLockedView {
             return f(&self.view);
         } else {
             let uncalled_action = ActionBlock::Uncalled(current_id, Box::new(|view| Box::new(f(view))));
-            let action = blocks
-                .iter_mut()
-                .find(|block| block.is_empty());
+            let action = blocks.iter_mut().find(|block| block.is_empty());
 
             match action {
                 Some(action) => {
                     *action = uncalled_action;
                 }
-                None => {
-                    blocks.push_back(uncalled_action)
-                }
+                None => blocks.push_back(uncalled_action),
             }
 
             eprintln!("Warning `block_on_thread`: The block check is likely a vary bad impl that should be replaced");
             loop {
                 for block in blocks.iter_mut() {
                     {
-                        let ActionBlock::Called(thread_id, _) = block else {
-                            continue
-                        };
+                        let ActionBlock::Called(thread_id, _) = block else { continue };
 
                         if *thread_id != current_id {
-                            continue
+                            continue;
                         }
                     }
 
@@ -253,23 +236,10 @@ pub(crate) fn f64_to_i32(f: f64) -> i32 {
 /// Unsure if this is correct. I highly recommend just deleting this function
 #[cfg(false)]
 fn menu(desc: &MenuDesc, translation_map: &TranslationMap) -> Result<HMENU, Error> {
-    use crate::menu::{
-        MenuItem,
-
-        StandardAction,
-    };
+    use crate::menu::{MenuItem, StandardAction};
 
     // use windows::core::Free;
-    use windows::Win32::UI::WindowsAndMessaging::{
-        MENUITEMINFOW,
-        CreateMenu,
-        InsertMenuItemW,
-        
-        MFT_SEPARATOR,
-
-        MIIM_STRING,
-        MIIM_SUBMENU,
-    };
+    use windows::Win32::UI::WindowsAndMessaging::{CreateMenu, InsertMenuItemW, MENUITEMINFOW, MFT_SEPARATOR, MIIM_STRING, MIIM_SUBMENU};
 
     let menu = unsafe {
         // SAFETY: No inputs => all inputs are valid (yipee)
@@ -285,7 +255,7 @@ fn menu(desc: &MenuDesc, translation_map: &TranslationMap) -> Result<HMENU, Erro
             fMask: MIIM_STRING | MIIM_SUBMENU,
             ..Default::default()
         };
-        
+
         match item {
             MenuItem::Action {
                 title,
@@ -303,19 +273,19 @@ fn menu(desc: &MenuDesc, translation_map: &TranslationMap) -> Result<HMENU, Erro
                 data.hSubMenu = self::menu(menu, translation_map)?;
             }
 
-            MenuItem::Standard( standard ) => {
+            MenuItem::Standard(standard) => {
                 match standard {
-                    StandardAction::Copy      => {
+                    StandardAction::Copy => {
                         title_utf16 = utf8_to_utf16("menu.copy");
                         eprintln!("Only english supported for `Copy` in the menu");
                         // todo!("adding a standard copy action within a menu")
                     }
 
-                    StandardAction::Cut       => {
+                    StandardAction::Cut => {
                         todo!("adding a standard cut action within a menu")
                     }
 
-                    StandardAction::Paste     => {
+                    StandardAction::Paste => {
                         todo!("adding a standard paste action within a menu")
                     }
 
@@ -333,14 +303,7 @@ fn menu(desc: &MenuDesc, translation_map: &TranslationMap) -> Result<HMENU, Erro
         data.dwTypeData = windows::core::PWSTR(title_utf16.as_mut_ptr());
         data.cch = title_utf16.len() as u32;
 
-        unsafe {
-            InsertMenuItemW(
-                menu,
-                pos as u32,
-                true,
-                &raw const data,
-            )?
-        }
+        unsafe { InsertMenuItemW(menu, pos as u32, true, &raw const data)? }
     }
 
     Ok(menu)
@@ -352,17 +315,10 @@ impl RosinView {
         desc: &WindowDesc<S>,
         instance: Option<HINSTANCE>,
         parent: Option<WindowHandle>,
-        _translation_map: &TranslationMap
+        _translation_map: &TranslationMap,
     ) -> Result<RosinView, Error> {
-        use windows::Win32::UI::WindowsAndMessaging::{
-            WS_EX_OVERLAPPEDWINDOW,
-            WS_CAPTION,
-            WS_SYSMENU,
-            WS_SIZEBOX,
-            WS_MINIMIZEBOX,
-            WS_MAXIMIZEBOX,
-        };
-        
+        use windows::Win32::UI::WindowsAndMessaging::{WS_CAPTION, WS_EX_OVERLAPPEDWINDOW, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_SIZEBOX, WS_SYSMENU};
+
         println!("Initializing rosin view");
 
         let desktop = unsafe { GetDesktopWindow() };
@@ -398,11 +354,7 @@ impl RosinView {
         let view_state = Box::new(ViewState::new(desc.min_size, desc.max_size));
 
         #[cfg(false)]
-        let menu = desc
-            .menu
-            .as_ref()
-            .map(|desc| menu(desc, translation_map))
-            .transpose()?;
+        let menu = desc.menu.as_ref().map(|desc| menu(desc, translation_map)).transpose()?;
 
         let window_style = {
             let mut window_style = WS_CAPTION | WS_SYSMENU;
@@ -438,12 +390,7 @@ impl RosinView {
                     WS_EX_OVERLAPPEDWINDOW,
                     crate::platform::proc_fn::ROSIN_CLASS,
                     // TODO check: From my testing this "clones" the string; Not 100% sure if it's sound or UB though
-                    desc.title
-                        .as_deref()
-                        .map(utf8_to_utf16)
-                        .as_deref()
-                        .map(utf16_as_pcwstr)
-                        .as_ref(),
+                    desc.title.as_deref().map(utf8_to_utf16).as_deref().map(utf16_as_pcwstr).as_ref(),
                     window_style,
                     x,
                     y,
@@ -499,7 +446,6 @@ impl Drop for RosinView {
     }
 }
 
-
 #[derive(Clone, Copy)]
 pub(crate) struct ViewStateSize {
     pub x: i32,
@@ -513,13 +459,10 @@ impl ViewStateSize {
             y: f64_to_i32(size.height),
         }
     }
-    
+
     pub fn default_max() -> Self {
         // I did not verify if these are the actual values.
-        ViewStateSize {
-            x: i32::MAX,
-            y: i32::MAX,
-        }
+        ViewStateSize { x: i32::MAX, y: i32::MAX }
     }
 
     pub fn default_min() -> Self {
@@ -557,13 +500,11 @@ impl ViewState {
             max: max_size.map(ViewStateSize::from_size).unwrap_or_else(ViewStateSize::default_max),
         };
 
-        Ok(
-            ViewState {
-                factory,
-                render_target: None,
-                size_bounds: size_bounds,
-            }
-        )
+        Ok(ViewState {
+            factory,
+            render_target: None,
+            size_bounds,
+        })
     }
 
     /// Initalizes all the state
@@ -639,10 +580,7 @@ fn size_of_rect(rect: RECT) -> D2D_SIZE_U {
 
 /// SAFETY: hwnd must be a handle to a valid window
 pub unsafe fn get_view_state(hwnd: HWND) -> Option<std::ptr::NonNull<ViewState>> {
-    use windows::Win32::UI::WindowsAndMessaging::{
-        GetWindowLongPtrW,
-        GWLP_USERDATA,
-    };
+    use windows::Win32::UI::WindowsAndMessaging::{GWLP_USERDATA, GetWindowLongPtrW};
 
     unsafe {
         // SAFETY: hwnd is valid

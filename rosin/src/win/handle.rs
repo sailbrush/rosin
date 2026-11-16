@@ -1,11 +1,13 @@
 use std::{any::Any, num::NonZeroIsize, sync::Arc, time::Duration};
 
 use raw_window_handle::{DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawWindowHandle, Win32WindowHandle, WindowHandle as RWHWindowHandle};
+use windows::Win32::UI::Shell::Common::COMDLG_FILTERSPEC;
 
 use crate::{
     kurbo::{Point, Size},
     platform::view::{RosinView, ThreadLockedView},
-    prelude::*, win::view::f64_to_i32,
+    prelude::*,
+    win::view::f64_to_i32,
 };
 
 pub(crate) struct WindowHandle {
@@ -50,23 +52,19 @@ impl WindowHandle {
     pub fn set_input_handler(&self, _id: Option<NodeId>, _handler: Option<Box<dyn InputHandler + Send + Sync>>) {}
 
     pub fn get_logical_size(&self) -> Size {
-        use windows::Win32::UI::WindowsAndMessaging::GetWindowRect;
-        use windows::Win32::UI::WindowsAndMessaging::GetDesktopWindow;
-        use windows::Win32::UI::HiDpi::GetDpiForWindow;
         use windows::Win32::Foundation::RECT;
+        use windows::Win32::UI::HiDpi::GetDpiForWindow;
+        use windows::Win32::UI::WindowsAndMessaging::GetDesktopWindow;
+        use windows::Win32::UI::WindowsAndMessaging::GetWindowRect;
 
         self.view.block_on_thread(
             // uses the formula `DIPs = pixels / (DPI / USER_DEFAULT_SCREEN_DPI)` but refactored a bit
             |view| {
                 let mut rect: RECT = Default::default();
 
-                let desktop_dpi = unsafe {
-                    GetDpiForWindow(GetDesktopWindow()) as f64
-                };
+                let desktop_dpi = unsafe { GetDpiForWindow(GetDesktopWindow()) as f64 };
 
-                let view_dpi = unsafe {
-                    GetDpiForWindow(view.hwnd()) as f64
-                };
+                let view_dpi = unsafe { GetDpiForWindow(view.hwnd()) as f64 };
 
                 let scale_factor = desktop_dpi / view_dpi;
 
@@ -79,37 +77,29 @@ impl WindowHandle {
                     }
                 }
 
-                Size::new(
-                    (rect.right - rect.left) as f64 * scale_factor,
-                    (rect.bottom - rect.top) as f64 * scale_factor,
-                )
-            }
+                Size::new((rect.right - rect.left) as f64 * scale_factor, (rect.bottom - rect.top) as f64 * scale_factor)
+            },
         )
     }
 
     pub fn get_physical_size(&self) -> Size {
-        use windows::Win32::UI::WindowsAndMessaging::GetWindowRect;
         use windows::Win32::Foundation::RECT;
+        use windows::Win32::UI::WindowsAndMessaging::GetWindowRect;
 
-        self.view.block_on_thread(
-            |view| {
-                let mut rect: RECT = Default::default();
+        self.view.block_on_thread(|view| {
+            let mut rect: RECT = Default::default();
 
-                unsafe {
-                    // SAFETY:
-                    //  - view.hwnd() is a valid window handle
-                    //  - &raw mut is a poitner to a valid RECT position in memory
-                    if let Err(err) = GetWindowRect(view.hwnd(), &raw mut rect) {
-                        eprintln!("`get_logical_size` {err}: {err:#?}");
-                    }
+            unsafe {
+                // SAFETY:
+                //  - view.hwnd() is a valid window handle
+                //  - &raw mut is a poitner to a valid RECT position in memory
+                if let Err(err) = GetWindowRect(view.hwnd(), &raw mut rect) {
+                    eprintln!("`get_logical_size` {err}: {err:#?}");
                 }
-
-                Size::new(
-                    (rect.right - rect.left) as f64,
-                    (rect.bottom - rect.top) as f64,
-                )
             }
-        )
+
+            Size::new((rect.right - rect.left) as f64, (rect.bottom - rect.top) as f64)
+        })
     }
 
     pub fn get_position(&self) -> Point {
@@ -148,81 +138,68 @@ impl WindowHandle {
     }
 
     pub fn request_close(&self) {
+        use windows::Win32::Foundation::{LPARAM, WPARAM};
         use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_CLOSE};
-        use windows::Win32::Foundation::{WPARAM, LPARAM};
 
-        self.view.queue_on_thread(move |view|
-            { unsafe {
-                let res = PostMessageW(
-                    Some(view.hwnd()),
-                    WM_CLOSE,
-                    WPARAM(0),
-                    LPARAM(0)
-                );
+        self.view.queue_on_thread(move |view| unsafe {
+            let res = PostMessageW(Some(view.hwnd()), WM_CLOSE, WPARAM(0), LPARAM(0));
 
-                #[cfg(debug_assertions)]
-                println!("requested close with result {:?}", res);
-            }}
-        )
+            #[cfg(debug_assertions)]
+            println!("requested close with result {:?}", res);
+        })
     }
 
     pub fn request_exit(&self) {
-        use windows::Win32::UI::WindowsAndMessaging::{PostQuitMessage};
-        self.view.queue_on_thread(move |_|{ unsafe {PostQuitMessage(0);}})
+        use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
+        self.view.queue_on_thread(move |_| unsafe {
+            PostQuitMessage(0);
+        })
     }
 
     pub fn set_max_size(&self, size: Option<impl Into<Size>>) {
         let size = size.map(Into::into);
 
-        self.view.queue_on_thread(
-            move |view| {
-                use crate::platform::view::ViewStateSize;
+        self.view.queue_on_thread(move |view| {
+            use crate::platform::view::ViewStateSize;
 
-                let Some(view_state) = view.get_view_state() else {
-                    return
-                };
+            let Some(view_state) = view.get_view_state() else { return };
 
-                let max_size = match size {
-                    Some(size) => ViewStateSize {
-                        x: f64_to_i32(size.width),
-                        y: f64_to_i32(size.height),
-                    },
-                    None => ViewStateSize::default_max(),
-                };
+            let max_size = match size {
+                Some(size) => ViewStateSize {
+                    x: f64_to_i32(size.width),
+                    y: f64_to_i32(size.height),
+                },
+                None => ViewStateSize::default_max(),
+            };
 
-                unsafe {
-                    // SAFETY: view_state points to a valid ViewState
-                    (*view_state.as_ptr()).size_bounds.max = max_size
-                }
+            unsafe {
+                // SAFETY: view_state points to a valid ViewState
+                (*view_state.as_ptr()).size_bounds.max = max_size
             }
-        )
+        })
     }
 
     pub fn set_min_size(&self, size: Option<impl Into<Size>>) {
         let size = size.map(Into::into);
 
-        self.view.queue_on_thread(
-            move |view| {
-                use crate::platform::view::ViewStateSize;
+        self.view.queue_on_thread(move |view| {
+            use crate::platform::view::ViewStateSize;
 
-                let Some(view_state) = view.get_view_state() else {
-                    return
-                };
+            let Some(view_state) = view.get_view_state() else { return };
 
-                let min_size = match size {
-                    Some(size) => ViewStateSize {
-                        x: f64_to_i32(size.width),
-                        y: f64_to_i32(size.height),
-                    },
-                    None => ViewStateSize::default_min(),
-                };
+            let min_size = match size {
+                Some(size) => ViewStateSize {
+                    x: f64_to_i32(size.width),
+                    y: f64_to_i32(size.height),
+                },
+                None => ViewStateSize::default_min(),
+            };
 
-                unsafe {
-                    // SAFETY: view_state points to a valid ViewState
-                    (*view_state.as_ptr()).size_bounds.min = min_size
-                }
+            unsafe {
+                // SAFETY: view_state points to a valid ViewState
+                (*view_state.as_ptr()).size_bounds.min = min_size
             }
-        )
+        })
     }
 
     pub fn set_position(&self, position: impl Into<Point>) {
@@ -239,14 +216,8 @@ impl WindowHandle {
                 //  - view.hwnd() is a valid handle
                 //  - None is a valid optional handle
                 //  - SWP_ASYNCWINDOWPOS, SWP_NOSIZE and SWP_NOZORDER are a valid value when xor'ed
-                let _res = SetWindowPos(
-                    view.hwnd(),
-                    None,
-                    f64_to_i32(position.x),
-                    f64_to_i32(position.y),
-                    0, 0,
-                    SWP_ASYNCWINDOWPOS | SWP_NOSIZE | SWP_NOZORDER
-                );
+                let _res =
+                    SetWindowPos(view.hwnd(), None, f64_to_i32(position.x), f64_to_i32(position.y), 0, 0, SWP_ASYNCWINDOWPOS | SWP_NOSIZE | SWP_NOZORDER);
 
                 #[cfg(debug_assertions)]
                 if let Err(err) = _res {
@@ -257,25 +228,18 @@ impl WindowHandle {
     }
 
     pub fn set_resizable(&self, resizeable: bool) {
-        use windows::Win32::UI::WindowsAndMessaging::{
-            SetWindowLongPtrW,
-            GetWindowLongPtrW,
-            GWL_STYLE,
-            WS_SIZEBOX,
-        };
+        use windows::Win32::UI::WindowsAndMessaging::{GWL_STYLE, GetWindowLongPtrW, SetWindowLongPtrW, WS_SIZEBOX};
 
         unsafe {
             // TEMP SAFETY: read the **WIN32 THREAD SAFETY** comment from `.../rosin/src/win/mod.rs`
-            self.view.try_on_trust(
-                move |view| {
-                    let style = GetWindowLongPtrW(view.hwnd(), GWL_STYLE);
-                    
-                    match resizeable {
-                        true => SetWindowLongPtrW(view.hwnd(), GWL_STYLE, style | WS_SIZEBOX.0 as isize),
-                        false => SetWindowLongPtrW(view.hwnd(), GWL_STYLE, style & !(WS_SIZEBOX.0 as isize)),
-                    };
-                }
-            )
+            self.view.try_on_trust(move |view| {
+                let style = GetWindowLongPtrW(view.hwnd(), GWL_STYLE);
+
+                match resizeable {
+                    true => SetWindowLongPtrW(view.hwnd(), GWL_STYLE, style | WS_SIZEBOX.0 as isize),
+                    false => SetWindowLongPtrW(view.hwnd(), GWL_STYLE, style & !(WS_SIZEBOX.0 as isize)),
+                };
+            })
         }
     }
 
@@ -309,53 +273,44 @@ impl WindowHandle {
     pub fn set_title(&self, title: impl Into<String>) {
         let title = title.into();
         unsafe {
-            self.view.queue_on_thread(move |view|{
+            self.view.queue_on_thread(move |view| {
                 let res = windows::Win32::UI::WindowsAndMessaging::SetWindowTextW(view.hwnd(), &windows::core::HSTRING::from(&title));
                 #[cfg(debug_assertions)]
-                println!("set title {0} with result {1:?}", title , res)
+                println!("set title {0} with result {1:?}", title, res)
             })
         }
     }
 
     pub fn minimize(&self) {
         unsafe {
-            self.view
-                .try_on_trust(
-                    |view| {
-                        use windows::Win32::UI::WindowsAndMessaging::SW_MINIMIZE;
-    
-                        // SAFETY: all given values are valid
-                        let _ = windows::Win32::UI::WindowsAndMessaging::ShowWindowAsync(view.hwnd(), SW_MINIMIZE);
-                    }
-                );
+            self.view.try_on_trust(|view| {
+                use windows::Win32::UI::WindowsAndMessaging::SW_MINIMIZE;
+
+                // SAFETY: all given values are valid
+                let _ = windows::Win32::UI::WindowsAndMessaging::ShowWindowAsync(view.hwnd(), SW_MINIMIZE);
+            });
         }
     }
 
     pub fn maximize(&self) {
         unsafe {
-            self.view
-                .try_on_trust(
-                    |view| {
-                        use windows::Win32::UI::WindowsAndMessaging::SW_MAXIMIZE;
+            self.view.try_on_trust(|view| {
+                use windows::Win32::UI::WindowsAndMessaging::SW_MAXIMIZE;
 
-                        // SAFETY: all given values are valid
-                        let _ = windows::Win32::UI::WindowsAndMessaging::ShowWindowAsync(view.hwnd(), SW_MAXIMIZE);
-                    }
-                );
+                // SAFETY: all given values are valid
+                let _ = windows::Win32::UI::WindowsAndMessaging::ShowWindowAsync(view.hwnd(), SW_MAXIMIZE);
+            });
         }
     }
 
     pub fn restore(&self) {
         unsafe {
-            self.view
-                .try_on_trust(
-                    |view| {
-                        use windows::Win32::UI::WindowsAndMessaging::SW_RESTORE;
+            self.view.try_on_trust(|view| {
+                use windows::Win32::UI::WindowsAndMessaging::SW_RESTORE;
 
-                        // SAFETY: all given values are valid
-                        let _ = windows::Win32::UI::WindowsAndMessaging::ShowWindowAsync(view.hwnd(), SW_RESTORE);
-                    }
-                );
+                // SAFETY: all given values are valid
+                let _ = windows::Win32::UI::WindowsAndMessaging::ShowWindowAsync(view.hwnd(), SW_RESTORE);
+            });
         }
     }
 
@@ -363,11 +318,12 @@ impl WindowHandle {
     pub fn set_cursor(&self, cursor: CursorType) {
         use windows::Win32::UI::WindowsAndMessaging::*;
 
-        self.view.queue_on_thread(
-            move |_| {
-                unsafe {
-                    // the none can be replaced later for custom cursors
-                    let handle_cursor: Option<HCURSOR> = LoadCursorW(None,match cursor {
+        self.view.queue_on_thread(move |_| {
+            unsafe {
+                // the none can be replaced later for custom cursors
+                let handle_cursor: Option<HCURSOR> = LoadCursorW(
+                    None,
+                    match cursor {
                         CursorType::Default => IDC_ARROW,
 
                         CursorType::ContextMenu => IDC_ARROW,
@@ -403,32 +359,29 @@ impl WindowHandle {
 
                         CursorType::ZoomIn => IDC_ARROW,
                         CursorType::ZoomOut => IDC_ARROW,
-                    }).ok();
+                    },
+                )
+                .ok();
 
-                    SetCursor(handle_cursor);
-                }
+                SetCursor(handle_cursor);
             }
-        )
+        })
     }
 
     pub fn hide_cursor(&self) {
         use windows::Win32::UI::WindowsAndMessaging::ShowCursor;
 
-        self.view.queue_on_thread(
-            |_| unsafe {
-                ShowCursor(false);
-            }
-        )
+        self.view.queue_on_thread(|_| unsafe {
+            ShowCursor(false);
+        })
     }
 
     pub fn unhide_cursor(&self) {
         use windows::Win32::UI::WindowsAndMessaging::ShowCursor;
 
-        self.view.queue_on_thread(
-            |_| unsafe {
-                ShowCursor(true);
-            }
-        )
+        self.view.queue_on_thread(|_| unsafe {
+            ShowCursor(true);
+        })
     }
 
     pub fn set_clipboard_text(&self, _text: &str) {
@@ -472,117 +425,285 @@ impl WindowHandle {
 
     pub fn get_clipboard_text(&self) -> Option<String> {
         use windows::Win32::System::{
-            DataExchange::{
-                OpenClipboard,
-                CloseClipboard,
-                GetClipboardData,
-            },
-
+            DataExchange::{CloseClipboard, GetClipboardData, OpenClipboard},
             Ole::CF_UNICODETEXT,
         };
 
-        self.view.block_on_thread(
-            move |view| {
-                unsafe {
-                    OpenClipboard(Some(view.hwnd())).ok()?
-                }
+        self.view.block_on_thread(move |view| {
+            unsafe { OpenClipboard(Some(view.hwnd())).ok()? }
 
-                let handle = unsafe {
-                    GetClipboardData(CF_UNICODETEXT.0 as u32).ok()?
-                };
+            let handle = unsafe { GetClipboardData(CF_UNICODETEXT.0 as u32).ok()? };
 
-                let mut got_carrige_feed = false;
-                let mut idx = 0;
-                let win32_str = handle.0 as *mut u16;
+            let mut got_carrige_feed = false;
+            let mut idx = 0;
+            let win32_str = handle.0 as *mut u16;
 
-                let mut string = String::new();
+            let mut string = String::new();
 
-                while unsafe { *win32_str.add(idx) } != 0 {
-                    let c = unsafe {
-                        char::from_u32_unchecked(*win32_str.add(idx) as u32)
-                    };
+            while unsafe { *win32_str.add(idx) } != 0 {
+                let c = unsafe { char::from_u32_unchecked(*win32_str.add(idx) as u32) };
 
-                    match c {
-                        '\r' => got_carrige_feed = true,
-                        '\n' => {
-                            got_carrige_feed = false;
-                            string.push('\n');
-                        }
-                        c => {
-                            if got_carrige_feed {
-                                string.push('\r');
-                                got_carrige_feed = false;
-                            }
-                            string.push(c);
-                        },
+                match c {
+                    '\r' => got_carrige_feed = true,
+                    '\n' => {
+                        got_carrige_feed = false;
+                        string.push('\n');
                     }
-
-                    idx += 1;
+                    c => {
+                        if got_carrige_feed {
+                            string.push('\r');
+                            got_carrige_feed = false;
+                        }
+                        string.push(c);
+                    }
                 }
 
-                unsafe {
-                    CloseClipboard().ok()?
-                }
-
-                Some(string)
+                idx += 1;
             }
-        )
+
+            unsafe { CloseClipboard().ok()? }
+
+            Some(string)
+        })
     }
 
     pub fn open_url(&self, url: &str) {
         use windows::{
+            Win32::UI::{Shell::ShellExecuteW, WindowsAndMessaging::SW_NORMAL},
             core::w,
-
-            Win32::UI::{
-                WindowsAndMessaging::SW_NORMAL,
-                Shell::ShellExecuteW,
-            },
         };
 
-        use super::view::{
-            utf8_to_utf16,
-            utf16_as_pcwstr,
-        };
+        use super::view::{utf8_to_utf16, utf16_as_pcwstr};
 
         let url_utf16 = utf8_to_utf16(url);
 
-        self.view.queue_on_thread(
-            move |view| {
-                let result = unsafe {
-                    ShellExecuteW(
-                        Some(view.hwnd()),
-                        w!("open"),
-                        utf16_as_pcwstr(&url_utf16),
-                        None,
-                        None,
-                        SW_NORMAL,
-                    )  
-                };
+        self.view.queue_on_thread(move |view| {
+            let result = unsafe { ShellExecuteW(Some(view.hwnd()), w!("open"), utf16_as_pcwstr(&url_utf16), None, None, SW_NORMAL) };
 
-                // incase error handling is ever added this link lists all the error codes
-                // https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shellexecutew
-                match result.0 as usize {
-                    0..=32 => {
-                        let err = unsafe {
-                            // SAFETY: The ShellExecuteW function guarantees that
-                            //   an error did not occur only if the return code is > 32
-                            windows::Win32::Foundation::GetLastError()
-                        };
-                        eprintln!("`open_url` An error occured! #{code:p} {err:#?}", code = result.0);
-                    },
-                    33.. => (),
+            // incase error handling is ever added this link lists all the error codes
+            // https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shellexecutew
+            match result.0 as usize {
+                0..=32 => {
+                    let err = unsafe {
+                        // SAFETY: The ShellExecuteW function guarantees that
+                        //   an error did not occur only if the return code is > 32
+                        windows::Win32::Foundation::GetLastError()
+                    };
+                    eprintln!("`open_url` An error occured! #{code:p} {err:#?}", code = result.0);
                 }
+                33.. => (),
             }
-        )
+        })
 
         // https://learn.microsoft.com/en-us/windows/win32/winhttp/iwinhttprequest-open
         // https://learn.microsoft.com/en-us/windows/win32/winhttp/winhttprequest
         // https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Networking/WinHttp/struct.IWinHttpRequest.html
     }
 
-    pub fn open_file_dialog(&self, _node: Option<NodeId>, _options: FileDialogOptions) {}
+    pub fn open_file_dialog(&self, _node: Option<NodeId>, options: FileDialogOptions) {
+        use std::path::*;
+        use windows::Win32::System::Com::*;
+        use windows::Win32::UI::Shell::*;
+        use windows::core::{HSTRING, PCWSTR};
 
-    pub fn save_file_dialog(&self, _node: Option<NodeId>, _options: FileDialogOptions) {}
+        let options = options.clone();
+
+        self.view.queue_on_thread(move |view| unsafe {
+            let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+
+            let dialog: IFileOpenDialog =
+                CoCreateInstance(&FileOpenDialog, None, CLSCTX_ALL).expect("open-file-dialog-opening-failed--rosin/src/win/handle.rs--open_file_dialog()");
+
+            {
+                if let Some(title) = &options.title {
+                    let _ = dialog.SetTitle(&HSTRING::from(title));
+                }
+
+                if let Some(label) = &options.submit_label {
+                    let _ = dialog.SetOkButtonLabel(&HSTRING::from(label));
+                }
+
+                if let Some(path) = &options.initial_path {
+                    let dir: &Path;
+                    if path.is_file() {
+                        dir = path.parent().unwrap_or(path);
+                    } else {
+                        dir = path;
+                    }
+
+                    let hstringpath = HSTRING::from(dir);
+
+                    if let Ok(item) = SHCreateItemFromParsingName::<_, _, IShellItem>(&hstringpath, None) {
+                        let _ = dialog.SetFolder(&item);
+                    }
+                }
+
+                let mut flags = dialog.GetOptions().unwrap_or_default();
+                if options.pick_folders {
+                    flags |= FOS_PICKFOLDERS;
+                }
+
+                if options.allow_multiple {
+                    flags |= FOS_ALLOWMULTISELECT;
+                }
+
+                if options.show_hidden {
+                    flags |= FOS_FORCESHOWHIDDEN;
+                }
+
+                let _ = dialog.SetOptions(flags);
+
+                let mut names: Vec<HSTRING> = Vec::new();
+                let mut exts: Vec<HSTRING> = Vec::new();
+                if let Some(types) = &options.allowed_types {
+                    if !options.pick_folders && !types.iter().any(|filedesc| filedesc.extensions.contains(&"*")) {
+
+                        for filedesc in types {
+                            let name = HSTRING::from(filedesc.name);
+                            names.push(name);
+
+                            let extensions = filedesc.extensions.iter()
+                                .map(|ext|{format!("*.{ext}")}).collect::<Vec<_>>().join(";");
+                            exts.push(HSTRING::from(extensions));
+                        }
+                    }
+                }
+                let filter = names.iter().zip(exts.iter())
+                    .map(|(name, ext)| COMDLG_FILTERSPEC {
+                        pszName: PCWSTR(name.as_ptr()), pszSpec: PCWSTR(ext.as_ptr())
+                    }).collect::<Vec<_>>();
+
+                if !filter.is_empty() {
+                    let _ = dialog.SetFileTypes(&filter);
+                    let _ = dialog.SetFileTypeIndex(1);
+                }
+
+                if dialog.Show(Some(view.hwnd())).is_err() {
+                    CoUninitialize();
+                    return;
+                }
+
+                let items = dialog.GetResults().expect("failed-get-results--rosin/src/win/handle.rs--open_file_dialog()");
+                let count = items.GetCount().expect("failed-get-count--rosin/src/win/handle.rs--open_file_dialog()");
+
+                let mut paths: Vec<String> = Vec::new();
+
+                for i in 0..count {
+                    let item = items.GetItemAt(i).expect("failed-get-item-at--rosin/src/win/handle.rs--open_file_dialog()");
+
+                    let name = item
+                        .GetDisplayName(SIGDN_FILESYSPATH)
+                        .expect("failed-get-displayname--rosin/src/win/handle.rs--open_file_dialog()");
+
+                    let path = name.to_string().expect("failed-get-path--rosin/src/win/handle.rs--open_file_dialog()");
+                    paths.push(path);
+                }
+                println!("paths: {:?}", paths);
+            }
+
+            CoUninitialize();
+        });
+    }
+
+    //TODO: use the _node
+    pub fn save_file_dialog(&self, _node: Option<NodeId>, options: FileDialogOptions) {
+        use std::path::*;
+        use windows::Win32::System::Com::*;
+        use windows::Win32::UI::Shell::*;
+        use windows::core::{HSTRING, PCWSTR};
+
+        let options = options.clone();
+
+        self.view.queue_on_thread(move |view| unsafe {
+            let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+
+            let dialog: IFileSaveDialog =
+                CoCreateInstance(&FileSaveDialog, None, CLSCTX_ALL).expect("save-file-dialog-open-failed--rosin/src/win/handle.rs--save_file_dialog()");
+
+            {
+                // TODO: shared options handlers?
+                if let Some(title) = &options.title {
+                    let _ = dialog.SetTitle(&HSTRING::from(title));
+                }
+
+                if let Some(label) = &options.submit_label {
+                    let _ = dialog.SetOkButtonLabel(&HSTRING::from(label));
+                }
+
+                if let Some(name) = &options.initial_name {
+                    let _ = dialog.SetFileName(&HSTRING::from(name));
+                }
+
+                if let Some(label) = &options.filename_label {
+                    let _ = dialog.SetFileNameLabel(&HSTRING::from(label));
+                }
+
+                if let Some(path) = &options.initial_path {
+                    let dir: &Path;
+                    if path.is_file() {
+                        dir = path.parent().unwrap_or(path);
+                    } else {
+                        dir = path;
+                    }
+
+                    let hstringpath = HSTRING::from(dir);
+
+                    if let Ok(item) = SHCreateItemFromParsingName::<_, _, IShellItem>(&hstringpath, None) {
+                        let _ = dialog.SetFolder(&item);
+                    }
+                }
+
+                let mut flags = dialog.GetOptions().unwrap_or_default();
+
+                if options.show_hidden {
+                    flags |= FOS_FORCESHOWHIDDEN;
+                }
+
+                let _ = dialog.SetOptions(flags);
+
+                let mut names: Vec<HSTRING> = Vec::new();
+                let mut exts: Vec<HSTRING> = Vec::new();
+                if let Some(types) = &options.allowed_types {
+                    if !options.pick_folders && !types.iter().any(|filedesc| filedesc.extensions.contains(&"*")) {
+
+                        for filedesc in types {
+                            let name = HSTRING::from(filedesc.name);
+                            names.push(name);
+
+                            let extensions = filedesc.extensions.iter()
+                                .map(|ext|{format!("*.{ext}")}).collect::<Vec<_>>().join(";");
+                            exts.push(HSTRING::from(extensions));
+                        }
+                    }
+                }
+                let filter = names.iter().zip(exts.iter())
+                    .map(|(name, ext)| COMDLG_FILTERSPEC {
+                        pszName: PCWSTR(name.as_ptr()), pszSpec: PCWSTR(ext.as_ptr())
+                    }).collect::<Vec<_>>();
+
+                if !filter.is_empty() {
+                    let _ = dialog.SetFileTypes(&filter);
+                    let _ = dialog.SetFileTypeIndex(1);
+                }
+
+                if dialog.Show(Some(view.hwnd())).is_err() {
+                    CoUninitialize();
+                    return;
+                }
+
+                // TODO: remove expect()s?
+                let item = dialog.GetResult().expect("failed-get-result--rosin/src/win/handle.rs--save_file_dialog()");
+                let name = item
+                    .GetDisplayName(SIGDN_FILESYSPATH)
+                    .expect("failed-get-display-name--rosin/src/win/handle.rs--save_file_dialog()");
+                let path = name.to_string().expect("failed-name-to-string--rosin/src/win/handle.rs--save_file_dialog()");
+                CoTaskMemFree(Some(name.0 as _)); // cleanup
+                println!("saved to: {path}");
+            }
+
+            CoUninitialize();
+        });
+    }
 
     pub fn send_command(&self, _node: Option<NodeId>, _command: CommandId) {}
 
@@ -592,19 +713,14 @@ impl WindowHandle {
     where
         C: Into<CommandId> + Copy,
     {
-        use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_OK};
+        use windows::Win32::UI::WindowsAndMessaging::{MB_OK, MessageBoxW};
         use windows::core::HSTRING;
 
         let title = String::from(title);
         let details = String::from(details);
 
         self.view.queue_on_thread(move |view| unsafe {
-            let _ = MessageBoxW(
-                Some(view.hwnd()),
-                &HSTRING::from(details),
-                &HSTRING::from(title),
-                MB_OK
-            );
+            let _ = MessageBoxW(Some(view.hwnd()), &HSTRING::from(details), &HSTRING::from(title), MB_OK);
         });
     }
 }
