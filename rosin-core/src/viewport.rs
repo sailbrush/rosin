@@ -1002,6 +1002,7 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
                             for i in 1..len {
                                 let idx = (focused_idx + i) % len;
                                 if self.curr_tree.nodes[idx].has_callback(On::Focus)
+                                    && self.curr_tree.nodes[idx].nid.is_some()
                                     && self.curr_tree.nodes[idx].enabled.get_or(true)
                                     && self.curr_tree.is_displayed(idx)
                                 {
@@ -1013,6 +1014,7 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
                     } else {
                         for idx in 0..len {
                             if self.curr_tree.nodes[idx].has_callback(On::Focus)
+                                && self.curr_tree.nodes[idx].nid.is_some()
                                 && self.curr_tree.nodes[idx].enabled.get_or(true)
                                 && self.curr_tree.is_displayed(idx)
                             {
@@ -1029,6 +1031,7 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
                             for i in 1..len {
                                 let idx = (focused_idx as isize - i as isize).rem_euclid(len as isize) as usize;
                                 if self.curr_tree.nodes[idx].has_callback(On::Focus)
+                                    && self.curr_tree.nodes[idx].nid.is_some()
                                     && self.curr_tree.nodes[idx].enabled.get_or(true)
                                     && self.curr_tree.is_displayed(idx)
                                 {
@@ -1040,6 +1043,7 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
                     } else {
                         for idx in (0..len).rev() {
                             if self.curr_tree.nodes[idx].has_callback(On::Focus)
+                                && self.curr_tree.nodes[idx].nid.is_some()
                                 && self.curr_tree.nodes[idx].enabled.get_or(true)
                                 && self.curr_tree.is_displayed(idx)
                             {
