@@ -1,9 +1,10 @@
 use std::ptr::NonNull;
+use std::cell::Cell;
 
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::Graphics::Gdi::{BeginPaint, COLOR_WINDOW, EndPaint, FillRect, HBRUSH, HDC, /* InvalidateRect, */ PAINTSTRUCT};
 use windows::Win32::UI::WindowsAndMessaging::{
-    DefWindowProcW, MINMAXINFO, PostQuitMessage, WM_DESTROY, /* WM_SIZE, */ WM_GETMINMAXINFO, WM_NCCREATE, WM_PAINT,
+    DefWindowProcW, MINMAXINFO, PostQuitMessage, SetCursor, WM_DESTROY, WM_GETMINMAXINFO, WM_NCCREATE, WM_PAINT, WM_SETCURSOR, HTCLIENT, HCURSOR,
 };
 use windows::core::{Error, PCWSTR, w};
 
@@ -12,6 +13,10 @@ use crate::platform::view::{ViewState, get_view_state};
 /// The main class of all windows on windows_os in rosin
 pub(crate) const ROSIN_CLASS: PCWSTR = w!("RosinGUI Windows Class");
 const OK: LRESULT = LRESULT(0);
+
+thread_local! {
+    pub(crate) static CURSOR: Cell<Option<HCURSOR>> = Cell::new(None);
+}
 
 /// The main procedrual fuction for handling messages in rosin on windows
 pub(crate) unsafe extern "system" fn proc(hwnd: HWND, msg: u32, w_param: WPARAM, l_param: LPARAM) -> LRESULT {
@@ -120,6 +125,7 @@ pub(crate) unsafe extern "system" fn proc(hwnd: HWND, msg: u32, w_param: WPARAM,
                 view_state.as_ref()
             };
 
+            // this is very annoying but I should probably keep it around :(
             /*#[cfg(debug_assertions)]
             println!(
                 "CURRENT MIN/MAX SIZE:\n\tmax.x = {max_x}\n\tmax.y = {max_y}\n\tmin.x = {min_x}\n\tmin.y = {min_y}",
@@ -135,6 +141,19 @@ pub(crate) unsafe extern "system" fn proc(hwnd: HWND, msg: u32, w_param: WPARAM,
             minmaxinfo.ptMinTrackSize.x = view_state.size_bounds.min.x;
 
             OK
+        }
+        WM_SETCURSOR => {
+            unsafe {
+                if (l_param.0 & 0xFFFF) as u32 == HTCLIENT {
+                    let curr = CURSOR.with(|c|{c.get()});
+                    if let Some(cursor) = curr {
+                        let _ = SetCursor(Some(cursor));
+                        return LRESULT(1);
+                    }
+                }
+                // default
+                DefWindowProcW(hwnd, msg, w_param, l_param)
+            }
         }
         WM_DESTROY => {
             unsafe {
@@ -159,18 +178,19 @@ pub(crate) unsafe extern "system" fn proc(hwnd: HWND, msg: u32, w_param: WPARAM,
 ///  - `paint_struct` must be from the `hwnd` handle
 ///  - `state` must point to the memory addres of the `hwnd`s state
 ///  - `state` must be initialized
-#[allow(unsafe_op_in_unsafe_fn)]
 unsafe fn paint(hwnd: HWND, hdc: HDC, mut paint_struct: PAINTSTRUCT, mut state: NonNull<ViewState>) -> Result<(), Error> {
-    debug_assert!(!hwnd.is_invalid(), "`hwnd` at this point should be a valid window handle");
+    unsafe {
+        debug_assert!(!hwnd.is_invalid(), "`hwnd` at this point should be a valid window handle");
 
-    let _ = FillRect(hdc, &raw mut paint_struct.rcPaint, HBRUSH(COLOR_WINDOW.0 as *mut _));
+        let _ = FillRect(hdc, &raw mut paint_struct.rcPaint, HBRUSH(COLOR_WINDOW.0 as *mut _));
 
-    // SAFETY:
-    //  - `as_mut`: state is a valid ViewState
-    //  - `init_graphics`: hwnd is a valid handle
-    state.as_mut().init_graphics(hwnd)?;
+        // SAFETY:
+        //  - `as_mut`: state is a valid ViewState
+        //  - `init_graphics`: hwnd is a valid handle
+        state.as_mut().init_graphics(hwnd)?;
 
-    Ok(())
+        Ok(())
+    }
 }
 
 /*

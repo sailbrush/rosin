@@ -362,6 +362,7 @@ impl WindowHandle {
                     },
                 )
                 .ok();
+                super::proc_fn::CURSOR.with(|c|{c.set(handle_cursor)});
 
                 SetCursor(handle_cursor);
             }
