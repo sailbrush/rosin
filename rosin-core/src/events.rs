@@ -172,7 +172,8 @@ impl<'a> CanvasCtx<'a> {
     #[inline]
     pub fn draw_text(&mut self, text: &str) {
         let max_width = layout::max_content_width(self.style, self.rect);
-        let mut layout = text::layout_text(&self.style.get_font_layout_style(), Some(max_width), text);
+        let wrap_width = if self.style.text_wrap == TextWrap::Nowrap { None } else { Some(max_width) };
+        let mut layout = text::layout_text(&self.style.get_font_layout_style(), wrap_width, text);
         let origin = layout::align_and_position_text(self.style, self.rect, &mut layout);
         text::draw_text(self.scene, self.style, origin, &layout);
     }
