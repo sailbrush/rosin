@@ -319,7 +319,8 @@ impl RosinView {
     ) -> Result<RosinView, Error> {
         use windows::Win32::UI::WindowsAndMessaging::{WS_CAPTION, WS_EX_OVERLAPPEDWINDOW, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_SIZEBOX, WS_SYSMENU};
 
-        println!("Initializing rosin view");
+        #[cfg(debug_assertions)]
+        println!("Initializing Rosin view");
 
         let desktop = unsafe { GetDesktopWindow() };
 

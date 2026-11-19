@@ -1,10 +1,7 @@
 use std::sync::OnceLock;
 use std::{cell::RefCell, rc::Rc};
 
-use crate::{
-    platform::view::RosinView,
-    prelude::*,
-};
+use crate::{platform::view::RosinView, prelude::*};
 
 static APP_STARTED: OnceLock<()> = OnceLock::new();
 
@@ -69,38 +66,41 @@ impl<S: Sync + 'static> AppLauncher<S> {
         self.translation_map = Some(translation_map);
 
         // temp fix
-        let translation_map_ref = self
-            .translation_map
-            .as_ref()
-            .expect("We set it to Some on the line above");
+        let translation_map_ref = self.translation_map.as_ref().expect("We set it to Some on the line above");
 
         let _window_handles: Vec<_> = self
             .windows
             .iter()
-            .map(|window_desc| RosinView::from_new_window(window_desc, Some(instance), None, translation_map_ref).unwrap_or_else(|err| todo!("Failed to create window: \"{err}\"")))
+            .map(|window_desc| {
+                RosinView::from_new_window(window_desc, Some(instance), None, translation_map_ref)
+                    .unwrap_or_else(|err| todo!("Failed to create window: \"{err}\""))
+            })
             .map(crate::platform::handle::WindowHandle::new)
             .collect();
 
         #[cfg(debug_assertions)]
-        if let Some(handle) = _window_handles.first() {
+        if let Some(_handle) = _window_handles.first() {
             //test windowhandles here
-            handle.alert::<CommandId>(None, None, "helo", "testing", &[]);
         }
 
         let mut message = MSG::default();
 
-        #[cfg(false)] println!("\nStarting Rosin Loop...");
+        #[cfg(false)]
+        println!("\nStarting Rosin Loop...");
 
         // TODO decide: how threading works here (since windows *can* come from diferent threads)
         loop {
-            #[cfg(false)] println!("\nInitializing new message...");
+            #[cfg(false)]
+            println!("\nInitializing new message...");
 
             let result = unsafe { GetMessageW(&raw mut message, None, 0, 0) };
 
-            #[cfg(false)] println!("{result:?}; {message:?}");
+            #[cfg(false)]
+            println!("{result:?}; {message:?}");
 
             if result.0 <= 0 {
-                #[cfg(false)] eprintln!("WARNING: The current implementation may stop the loop and may stop the program once one window closes");
+                #[cfg(false)]
+                eprintln!("WARNING: The current implementation may stop the loop and may stop the program once one window closes");
                 match result.0 {
                     0 => println!("\nStopping Rosin Loop..."),
                     code => {
