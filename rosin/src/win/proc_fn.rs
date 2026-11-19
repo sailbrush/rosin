@@ -1,14 +1,16 @@
 use std::ptr::NonNull;
-use std::cell::Cell;
+use std::collections::HashMap;
+use std::cell::{Cell, RefCell};
 
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::Graphics::Gdi::{BeginPaint, COLOR_WINDOW, EndPaint, FillRect, HBRUSH, HDC, /* InvalidateRect, */ PAINTSTRUCT};
 use windows::Win32::UI::WindowsAndMessaging::{
-    DefWindowProcW, MINMAXINFO, PostQuitMessage, SetCursor, WM_DESTROY, WM_GETMINMAXINFO, WM_NCCREATE, WM_PAINT, WM_SETCURSOR, HTCLIENT, HCURSOR,
+    DefWindowProcW, HCURSOR, HTCLIENT, KillTimer, MINMAXINFO, PostQuitMessage, SetCursor, WM_DESTROY, WM_GETMINMAXINFO, WM_NCCREATE, WM_PAINT, WM_SETCURSOR, WM_TIMER,
 };
 use windows::core::{Error, PCWSTR, w};
 
 use crate::platform::view::{ViewState, get_view_state};
+use crate::nodeid::NodeId;
 
 /// The main class of all windows on windows_os in rosin
 pub(crate) const ROSIN_CLASS: PCWSTR = w!("RosinGUI Windows Class");
@@ -16,6 +18,8 @@ const OK: LRESULT = LRESULT(0);
 
 thread_local! {
     pub(crate) static CURSOR: Cell<Option<HCURSOR>> = Cell::new(None);
+    pub(crate) static TIMERS: RefCell<HashMap<usize, NodeId>> = RefCell::new(HashMap::new());
+    pub(crate) static NEXT_TIMERID: Cell<usize> = Cell::new(0);
 }
 
 /// The main procedrual fuction for handling messages in rosin on windows
@@ -154,6 +158,12 @@ pub(crate) unsafe extern "system" fn proc(hwnd: HWND, msg: u32, w_param: WPARAM,
                 // default
                 DefWindowProcW(hwnd, msg, w_param, l_param)
             }
+        }
+        WM_TIMER => unsafe {
+            let _ = KillTimer(Some(hwnd), w_param.0);
+            let node = TIMERS.with(|cell|{cell.borrow_mut().remove(&w_param.0)});
+            if let Some(nodeid) = node {println!("todo: return an On::Timer to the node id {nodeid:?}")}
+            return OK;
         }
         WM_DESTROY => {
             unsafe {

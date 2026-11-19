@@ -708,7 +708,23 @@ impl WindowHandle {
 
     pub fn send_command(&self, _node: Option<NodeId>, _command: CommandId) {}
 
-    pub fn timer(&self, _node: Option<NodeId>, _delay: Duration) {}
+    pub fn timer(&self, node: Option<NodeId>, delay: Duration) {
+        use windows::Win32::UI::WindowsAndMessaging::SetTimer;
+
+        if let Some(node) = node {
+            let ms = delay.as_millis().min(u32::MAX as u128) as u32;
+
+            self.view.queue_on_thread(move |view| unsafe {
+                let sz = super::proc_fn::NEXT_TIMERID.with(|cell|cell.replace(cell.get() + 1)) + 1;
+
+                super::proc_fn::TIMERS.with(|cell|{
+                    cell.borrow_mut().insert(sz, node);
+                });
+
+                SetTimer(Some(view.hwnd()), sz, ms, None);
+            });
+        } else {return};
+    }
 
     pub fn alert<C>(&self, _node: Option<NodeId>, _png_bytes: Option<&'static [u8]>, title: &str, details: &str, _options: &[(&'static str, C)])
     where
