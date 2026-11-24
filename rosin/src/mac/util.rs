@@ -64,7 +64,7 @@ pub(crate) fn convert_pointer_event(ns_event: &NSEvent, ns_view: &NSView) -> Poi
         Vec2::ZERO
     };
 
-    let button = match event_type {
+    let (button, is_mouse_event) = match event_type {
         NSEventType::LeftMouseDown
         | NSEventType::RightMouseDown
         | NSEventType::OtherMouseDown
@@ -73,8 +73,9 @@ pub(crate) fn convert_pointer_event(ns_event: &NSEvent, ns_view: &NSView) -> Poi
         | NSEventType::OtherMouseUp
         | NSEventType::LeftMouseDragged
         | NSEventType::RightMouseDragged
-        | NSEventType::OtherMouseDragged => (ns_event.buttonNumber() + 1).into(),
-        _ => PointerButton::None,
+        | NSEventType::OtherMouseDragged => ((ns_event.buttonNumber() + 1).into(), true),
+        NSEventType::MouseMoved => (PointerButton::None, true),
+        _ => (PointerButton::None, false),
     };
 
     let count = match event_type {
@@ -92,8 +93,7 @@ pub(crate) fn convert_pointer_event(ns_event: &NSEvent, ns_view: &NSView) -> Poi
     let tilt;
     let twist;
     let pointer_type;
-    let subtype = ns_event.subtype();
-    if matches!(subtype, NSEventSubtype::TabletPoint | NSEventSubtype::TabletProximity) && event_type != NSEventType::ScrollWheel {
+    if is_mouse_event && matches!(ns_event.subtype(), NSEventSubtype::TabletPoint | NSEventSubtype::TabletProximity) {
         pressure = ns_event.pressure();
         tangential_pressure = ns_event.tangentialPressure();
         let ns_tilt = ns_event.tilt();
