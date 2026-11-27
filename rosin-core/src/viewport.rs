@@ -844,6 +844,8 @@ impl<S: Sync, H: Clone> Viewport<S, H> {
             // retarget events when the pointer is captured
             // TODO - it feels weird to modify events after they've entered the queue, so probably need to rethink this
             //        could expand a queued event into multiple once we know the capture state, but that would probably require hit-testing during dispatch
+            //        On::Blur should also be dispatched to focused nodes before On::Destroy so that removed textboxes don't receive hidden edits,
+            //        which I think can also be implemented by decoupling queuing events from dispatching them.
             if let Some(idx) = self.capture.and_then(|nid| self.curr_tree.nid_map.get(&nid).copied()) {
                 match qe.event_type {
                     On::PointerEnter | On::PointerLeave => continue, // these events don't get delivered to a captured node

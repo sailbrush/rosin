@@ -37,11 +37,13 @@ struct TextInputHandler {
 
 impl InputHandler for TextInputHandler {
     fn len(&self) -> usize {
-        self.editor.read().unwrap().raw_text().len()
+        self.editor.read().map_or(0, |editor| editor.raw_text().len())
     }
 
     fn slice<'a>(&'a self, range: Range<usize>) -> Cow<'a, str> {
-        let editor = self.editor.read().unwrap();
+        let Some(editor) = self.editor.read() else {
+            return Cow::Borrowed("");
+        };
         let raw = editor.raw_text();
         if range.end <= raw.len() && raw.is_char_boundary(range.start) && raw.is_char_boundary(range.end) {
             Cow::Owned(raw[range].to_string())
@@ -51,7 +53,7 @@ impl InputHandler for TextInputHandler {
     }
 
     fn selection(&self) -> Range<usize> {
-        self.editor.read().unwrap().raw_selection().text_range()
+        self.editor.read().map_or(0..0, |editor| editor.raw_selection().text_range())
     }
 
     fn set_selection(&mut self, range: Range<usize>) {
@@ -95,7 +97,7 @@ impl InputHandler for TextInputHandler {
     }
 
     fn bounding_box_for_range(&self, range: Range<usize>) -> Option<Rect> {
-        let mut editor = self.editor.write().unwrap();
+        let mut editor = self.editor.write()?;
         let mut font = global_font_ctx().write();
         let mut layout = global_text_layout_ctx().write();
         editor.refresh_layout(&mut font, &mut *layout);
@@ -158,7 +160,7 @@ impl InputHandler for TextInputHandler {
     }
 
     fn hit_test_point(&self, point: Point) -> Option<Cursor> {
-        let mut editor = self.editor.write().unwrap();
+        let mut editor = self.editor.write()?;
         let mut font = global_font_ctx().write();
         let mut layout = global_text_layout_ctx().write();
 
@@ -190,7 +192,9 @@ impl InputHandler for TextInputHandler {
             }
         }
 
-        let mut editor = self.editor.write().unwrap();
+        let Some(mut editor) = self.editor.write() else {
+            return false;
+        };
         let mut font = global_font_ctx().write();
         let mut layout = global_text_layout_ctx().write();
         let mut driver = editor.driver(&mut font, &mut *layout);
