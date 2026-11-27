@@ -392,9 +392,10 @@ impl TextBox {
                     return;
                 }
 
-                let Some(pos) = ctx.local_pointer_pos() else {
+                let Some(pointer) = ctx.pointer() else {
                     return;
                 };
+                let pos = pointer.viewport_pos;
 
                 if let Some(mut editor) = editor_var.write() {
                     let mut font_ctx = global_font_ctx().write();
@@ -483,7 +484,7 @@ impl TextBox {
                     ctx.style.child_top.definite_size(ctx.style.font_size, bounds.height() as f32).into(),
                 );
 
-                origin_var.set(local_origin);
+                origin_var.set(ctx.rect.origin() + local_origin.to_vec2());
 
                 // Sync text on version change
                 let is_composing = composition_var.get().unwrap_or(None).is_some();
