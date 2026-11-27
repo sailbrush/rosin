@@ -20,7 +20,6 @@ use crate::{
 };
 
 // TODO - blinks when composing
-//      - scroll offset remains when the text doesn't extend out of the box any more
 //      - selection-color
 
 struct TextInputHandler {
@@ -547,14 +546,9 @@ impl TextBox {
                 }
 
                 let layout_ref = driver.layout();
-
-                let total_width = layout_ref.width();
+                let total_width = layout_ref.full_width().max(target_x);
                 let max_scroll = (total_width - visible_width + padding).max(0.0);
-
-                if scroll_offset > max_scroll && target_x < max_scroll {
-                    scroll_offset = max_scroll;
-                }
-
+                scroll_offset = scroll_offset.min(max_scroll);
                 scroll_offset_var.set(scroll_offset);
 
                 // ---------- Render ----------
