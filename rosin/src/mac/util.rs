@@ -1,9 +1,8 @@
 use std::{
     ffi::{CStr, OsString},
     ops::Range,
-    os::unix::ffi::{OsStrExt, OsStringExt},
+    os::unix::ffi::OsStringExt,
     path::PathBuf,
-    ptr::NonNull,
 };
 
 use objc2::{
@@ -466,15 +465,6 @@ pub(crate) fn nsurl_to_pathbuf(url: &NSURL) -> Option<PathBuf> {
         }
         let bytes = CStr::from_ptr(c_path).to_bytes();
         Some(PathBuf::from(OsString::from_vec(bytes.to_vec())))
-    }
-}
-
-pub(crate) fn path_to_nsurl(path: &std::path::Path, is_dir: bool) -> Option<Retained<NSURL>> {
-    let ptr = path.as_os_str().as_bytes().as_ptr() as *mut i8;
-
-    unsafe {
-        let bytes = NonNull::new_unchecked(ptr);
-        Some(NSURL::initFileURLWithFileSystemRepresentation_isDirectory_relativeToURL(NSURL::alloc(), bytes, is_dir, None))
     }
 }
 

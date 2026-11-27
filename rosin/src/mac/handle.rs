@@ -2,6 +2,7 @@ use std::{
     any::Any,
     cell::OnceCell,
     ffi::c_void,
+    path::Path,
     ptr::NonNull,
     sync::{Arc, mpsc},
     time::Duration,
@@ -689,16 +690,14 @@ fn apply_common_dialog_options(panel: &NSSavePanel, options: &FileDialogOptions)
         panel.setPrompt(Some(&NSString::from_str(prompt)));
     }
 
-    if let Some(dir) = &options.initial_path {
-        // If the caller accidentally passes a file path, fall back to its parent directory.
-        let dir = if dir.is_dir() {
-            dir.clone()
-        } else {
-            dir.parent().unwrap_or(dir).to_path_buf()
-        };
+    let Some(path) = options.initial_path.as_deref() else {
+        return;
+    };
+    let path = Path::new(".").join(path);
 
-        if let Some(url) = util::path_to_nsurl(&dir, true) {
-            panel.setDirectoryURL(Some(&url));
-        }
+    // If the caller accidentally passes a file path, fall back to its parent directory.
+    let dir = if path.is_dir() { path.as_path() } else { path.parent().unwrap_or(&path) };
+    if let Some(url) = NSURL::from_directory_path(dir) {
+        panel.setDirectoryURL(Some(&url));
     }
 }
