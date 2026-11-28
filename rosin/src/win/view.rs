@@ -1,5 +1,8 @@
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::{any::Any, collections::VecDeque, sync::Mutex};
 
+use rosin_core::vello;
 use windows::Win32::Foundation::RECT;
 use windows::Win32::Foundation::{HINSTANCE, HWND};
 use windows::Win32::Graphics::Direct2D::Common::D2D_SIZE_U;
@@ -7,6 +10,7 @@ use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::Win32::UI::WindowsAndMessaging::{GetClientRect, GetDesktopWindow, GetWindowRect, GetWindowThreadProcessId, SW_NORMAL, ShowWindowAsync};
 use windows::core::Error;
 
+use crate::win::viewport::{ViewportContainer, ViewportTrait};
 use crate::{kurbo::Size, prelude::*};
 
 use crate::desc::WindowDesc;
@@ -311,11 +315,14 @@ fn menu(desc: &MenuDesc, translation_map: &TranslationMap) -> Result<HMENU, Erro
 
 // TODO: implement all the unused (menu) stuff
 impl RosinView {
-    pub fn from_new_window<S: 'static>(
+    pub fn from_new_window<S: Sync + 'static>(
         desc: &WindowDesc<S>,
         instance: Option<HINSTANCE>,
         parent: Option<WindowHandle>,
-        _translation_map: &TranslationMap,
+        translation_map: &TranslationMap,
+        app_state: Rc<RefCell<S>>,
+        gpu_ctx: Rc<GpuCtx>,
+        vello_renderer: Rc<RefCell<vello::Renderer>>,
     ) -> Result<RosinView, Error> {
         use windows::Win32::UI::WindowsAndMessaging::{WS_CAPTION, WS_EX_OVERLAPPEDWINDOW, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_SIZEBOX, WS_SYSMENU};
 
@@ -352,7 +359,8 @@ impl RosinView {
             (x, y)
         };
 
-        let view_state = Box::new(ViewState::new(desc.min_size, desc.max_size));
+        let container = ViewportContainer::new(desc, app_state, translation_map.clone(), gpu_ctx.clone(), vello_renderer.clone());
+        let view_state = Box::new(ViewState::new(desc.min_size, desc.max_size, Box::new(container))?);
 
         #[cfg(false)]
         let menu = desc.menu.as_ref().map(|desc| menu(desc, translation_map)).transpose()?;
@@ -487,10 +495,12 @@ pub(crate) struct ViewState {
     pub factory: ID2D1Factory8,
     pub render_target: Option<ID2D1HwndRenderTarget>,
     pub size_bounds: ViewStateSizeBounds,
+    pub viewport: Box<dyn ViewportTrait>,
+    pub handle: Option<WindowHandle>,
 }
 
 impl ViewState {
-    fn new(min_size: Option<Size>, max_size: Option<Size>) -> Result<Self, Error> {
+    fn new(min_size: Option<Size>, max_size: Option<Size>, viewport: Box<dyn ViewportTrait>) -> Result<Self, Error> {
         let factory = unsafe {
             // SAFETY: all inputs are valid
             D2D1CreateFactory(D2D1_FACTORY_TYPE_MULTI_THREADED, None)?
@@ -505,6 +515,8 @@ impl ViewState {
             factory,
             render_target: None,
             size_bounds,
+            viewport,
+            handle: None,
         })
     }
 

@@ -1,7 +1,9 @@
 use std::sync::OnceLock;
 use std::{cell::RefCell, rc::Rc};
 
-use crate::{platform::view::RosinView, prelude::*};
+use pollster::FutureExt;
+
+use crate::{platform::view::RosinView, prelude::*, vello, wgpu};
 
 static APP_STARTED: OnceLock<()> = OnceLock::new();
 
@@ -46,7 +48,7 @@ impl<S: Sync + 'static> AppLauncher<S> {
         println!("Running {}", self.windows.first().unwrap().title.as_deref().unwrap_or("rosin app")); // TODO remove
 
         let instance = unsafe {
-            // TODO: failiure to create a window should **not** cause a crash
+            // TODO: failure to create a window should **not** cause a crash
             // doing it this way so it's not ignored
             windows::Win32::System::LibraryLoader::GetModuleHandleW(None)
                 .unwrap_or_else(|err| panic!("Failed to get windows instance: \"{err}\""))
@@ -62,24 +64,117 @@ impl<S: Sync + 'static> AppLauncher<S> {
 
         let _class_atom = unsafe { windows::Win32::UI::WindowsAndMessaging::RegisterClassW(&raw const wc) };
 
+        let wgpu_instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
+        let adapter = match wgpu_instance
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: self.wgpu_config.power_preference,
+                force_fallback_adapter: false,
+                compatible_surface: None,
+                apply_limit_buckets: false,
+            })
+            .block_on()
+        {
+            Ok(adapter) => adapter,
+            Err(e) => todo!("Failed to request a WGPU adapter; err info: {e:?}"),
+        };
+
+        if let Some(on_adapter_init) = self.wgpu_config.on_adapter_init {
+            on_adapter_init(&adapter);
+        }
+
+        println!("GPU: {}", adapter.get_info().name);
+
+        let (device, queue) = match adapter
+            .request_device(&wgpu::DeviceDescriptor {
+                label: Some("RosinDevice"),
+                required_features: self.wgpu_config.features,
+                required_limits: self.wgpu_config.limits.clone(),
+                memory_hints: self.wgpu_config.memory_hints.clone(),
+                trace: wgpu::Trace::Off,
+                experimental_features: wgpu::ExperimentalFeatures::disabled(),
+            })
+            .block_on()
+        {
+            Ok((device, queue)) => (device, queue),
+            Err(e) => todo!("Failed to create a WGPU device; err info: {e:?}"),
+        };
+
+        if let Some(on_device_init) = self.wgpu_config.on_device_init {
+            on_device_init(&device);
+        }
+
+        let compositor = Compositor {
+            blitter: RefCell::new(None),
+            custom: RefCell::new(None),
+        };
+
+        let vello_renderer = {
+            let renderer = match vello::Renderer::new(
+                &device,
+                vello::RendererOptions {
+                    use_cpu: false,
+                    antialiasing_support: vello::AaSupport::all(),
+                    num_init_threads: None,
+                    pipeline_cache: None,
+                },
+            ) {
+                Ok(r) => r,
+                Err(e) => todo!("failed to create vello renderer; error info: {e:?}"),
+            };
+
+            Rc::new(RefCell::new(renderer))
+        };
+
+        let gpu_ctx = Rc::new(GpuCtx {
+            instance: wgpu_instance,
+            adapter,
+            device,
+            queue,
+            compositor,
+        });
+
         self._state = Some(Rc::new(RefCell::new(state)));
         self.translation_map = Some(translation_map);
 
         // temp fix
         let translation_map_ref = self.translation_map.as_ref().expect("We set it to Some on the line above");
 
-        let _window_handles: Vec<_> = self
+        let window_handles: Vec<_> = self
             .windows
             .iter()
             .map(|window_desc| {
-                RosinView::from_new_window(window_desc, Some(instance), None, translation_map_ref)
-                    .unwrap_or_else(|err| todo!("Failed to create window: \"{err}\""))
+                RosinView::from_new_window(
+                    window_desc,
+                    Some(instance),
+                    None,
+                    translation_map_ref,
+                    self._state.clone().unwrap(),
+                    gpu_ctx.clone(),
+                    vello_renderer.clone(),
+                )
+                .unwrap_or_else(|err| todo!("Failed to create window: \"{err}\""))
             })
-            .map(crate::platform::handle::WindowHandle::new)
+            .map(|view| {
+                let platformhandle = crate::platform::handle::WindowHandle::new(view);
+                let rosinhandle = crate::handle::WindowHandle(platformhandle.clone());
+
+                let state = platformhandle.view.try_on_thread(|view| {
+                    return view.get_view_state();
+                });
+
+                let mut nonnull = state.unwrap().unwrap();
+
+                let viewstate = unsafe { nonnull.as_mut() };
+
+                viewstate.handle = Some(rosinhandle.clone());
+                viewstate.viewport.init_viewport(&rosinhandle);
+
+                platformhandle
+            })
             .collect();
 
         #[cfg(debug_assertions)]
-        if let Some(_handle) = _window_handles.first() {
+        if let Some(_handle) = window_handles.first() {
             //test windowhandles here
         }
 

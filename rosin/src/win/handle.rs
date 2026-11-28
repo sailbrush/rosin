@@ -1,7 +1,7 @@
 use std::{any::Any, num::NonZeroIsize, sync::Arc, time::Duration};
 
 use raw_window_handle::{DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawWindowHandle, Win32WindowHandle, WindowHandle as RWHWindowHandle};
-use windows::Win32::UI::Shell::Common::COMDLG_FILTERSPEC;
+use windows::Win32::{System::LibraryLoader::GetModuleHandleW, UI::Shell::Common::COMDLG_FILTERSPEC};
 
 use crate::{
     kurbo::{Point, Size},
@@ -28,7 +28,10 @@ impl HasWindowHandle for WindowHandle {
         self.view
             .try_on_thread(|view| {
                 let raw_ptr = view.hwnd().0;
-                let handle = Win32WindowHandle::new(NonZeroIsize::new(raw_ptr as isize).ok_or(HandleError::Unavailable)?);
+                let mut handle = Win32WindowHandle::new(NonZeroIsize::new(raw_ptr as isize).ok_or(HandleError::Unavailable)?);
+
+                let mod_handle = unsafe { GetModuleHandleW(None).map_err(|_| HandleError::Unavailable)? };
+                handle.hinstance = NonZeroIsize::new(mod_handle.0 as isize);
 
                 unsafe { Ok(RWHWindowHandle::borrow_raw(RawWindowHandle::Win32(handle))) }
             })
@@ -130,10 +133,10 @@ impl WindowHandle {
     pub fn show_context_menu(&self, _node: Option<NodeId>, _menu: MenuDesc, _pos: Point) {}
 
     pub fn create_window<S: Any + Sync + 'static>(&self, desc: &WindowDesc<S>) {
-        let desc2 = desc.clone();
+        let _desc2 = desc.clone();
         self.view.queue_on_thread(move |_| {
             // TODO: get this fixed
-            std::mem::forget(RosinView::from_new_window(&desc2, None, None, &TranslationMap::default()));
+            //std::mem::forget(RosinView::from_new_window(&desc2, None, None, &TranslationMap::default(), *state*, *gpu_ctx*, *vello_renderer*)); // TODO: add state, gpuctx and vello renderer
         });
     }
 
@@ -314,7 +317,6 @@ impl WindowHandle {
         }
     }
 
-    // todo: make cursor persist
     pub fn set_cursor(&self, cursor: CursorType) {
         use windows::Win32::UI::WindowsAndMessaging::*;
 
@@ -362,7 +364,7 @@ impl WindowHandle {
                     },
                 )
                 .ok();
-                super::proc_fn::CURSOR.with(|c|{c.set(handle_cursor)});
+                super::proc_fn::CURSOR.with(|c| c.set(handle_cursor));
 
                 SetCursor(handle_cursor);
             }
@@ -558,21 +560,23 @@ impl WindowHandle {
                 let mut exts: Vec<HSTRING> = Vec::new();
                 if let Some(types) = &options.allowed_types {
                     if !options.pick_folders && !types.iter().any(|filedesc| filedesc.extensions.contains(&"*")) {
-
                         for filedesc in types {
                             let name = HSTRING::from(filedesc.name);
                             names.push(name);
 
-                            let extensions = filedesc.extensions.iter()
-                                .map(|ext|{format!("*.{ext}")}).collect::<Vec<_>>().join(";");
+                            let extensions = filedesc.extensions.iter().map(|ext| format!("*.{ext}")).collect::<Vec<_>>().join(";");
                             exts.push(HSTRING::from(extensions));
                         }
                     }
                 }
-                let filter = names.iter().zip(exts.iter())
+                let filter = names
+                    .iter()
+                    .zip(exts.iter())
                     .map(|(name, ext)| COMDLG_FILTERSPEC {
-                        pszName: PCWSTR(name.as_ptr()), pszSpec: PCWSTR(ext.as_ptr())
-                    }).collect::<Vec<_>>();
+                        pszName: PCWSTR(name.as_ptr()),
+                        pszSpec: PCWSTR(ext.as_ptr()),
+                    })
+                    .collect::<Vec<_>>();
 
                 if !filter.is_empty() {
                     let _ = dialog.SetFileTypes(&filter);
@@ -666,21 +670,23 @@ impl WindowHandle {
                 let mut exts: Vec<HSTRING> = Vec::new();
                 if let Some(types) = &options.allowed_types {
                     if !options.pick_folders && !types.iter().any(|filedesc| filedesc.extensions.contains(&"*")) {
-
                         for filedesc in types {
                             let name = HSTRING::from(filedesc.name);
                             names.push(name);
 
-                            let extensions = filedesc.extensions.iter()
-                                .map(|ext|{format!("*.{ext}")}).collect::<Vec<_>>().join(";");
+                            let extensions = filedesc.extensions.iter().map(|ext| format!("*.{ext}")).collect::<Vec<_>>().join(";");
                             exts.push(HSTRING::from(extensions));
                         }
                     }
                 }
-                let filter = names.iter().zip(exts.iter())
+                let filter = names
+                    .iter()
+                    .zip(exts.iter())
                     .map(|(name, ext)| COMDLG_FILTERSPEC {
-                        pszName: PCWSTR(name.as_ptr()), pszSpec: PCWSTR(ext.as_ptr())
-                    }).collect::<Vec<_>>();
+                        pszName: PCWSTR(name.as_ptr()),
+                        pszSpec: PCWSTR(ext.as_ptr()),
+                    })
+                    .collect::<Vec<_>>();
 
                 if !filter.is_empty() {
                     let _ = dialog.SetFileTypes(&filter);
@@ -715,15 +721,17 @@ impl WindowHandle {
             let ms = delay.as_millis().min(u32::MAX as u128) as u32;
 
             self.view.queue_on_thread(move |view| unsafe {
-                let sz = super::proc_fn::NEXT_TIMERID.with(|cell|cell.replace(cell.get() + 1)) + 1;
+                let sz = super::proc_fn::NEXT_TIMERID.with(|cell| cell.replace(cell.get() + 1)) + 1;
 
-                super::proc_fn::TIMERS.with(|cell|{
+                super::proc_fn::TIMERS.with(|cell| {
                     cell.borrow_mut().insert(sz, node);
                 });
 
                 SetTimer(Some(view.hwnd()), sz, ms, None);
             });
-        } else {return};
+        } else {
+            return;
+        };
     }
 
     pub fn alert<C>(&self, _node: Option<NodeId>, _png_bytes: Option<&'static [u8]>, title: &str, details: &str, _options: &[(&'static str, C)])

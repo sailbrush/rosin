@@ -1,16 +1,17 @@
-use std::ptr::NonNull;
-use std::collections::HashMap;
 use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
+use std::ptr::NonNull;
 
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
-use windows::Win32::Graphics::Gdi::{BeginPaint, COLOR_WINDOW, EndPaint, FillRect, HBRUSH, HDC, /* InvalidateRect, */ PAINTSTRUCT};
+use windows::Win32::Graphics::Gdi::{BeginPaint, EndPaint, PAINTSTRUCT};
 use windows::Win32::UI::WindowsAndMessaging::{
-    DefWindowProcW, HCURSOR, HTCLIENT, KillTimer, MINMAXINFO, PostQuitMessage, SetCursor, WM_DESTROY, WM_GETMINMAXINFO, WM_NCCREATE, WM_PAINT, WM_SETCURSOR, WM_TIMER,
+    DefWindowProcW, HCURSOR, HTCLIENT, KillTimer, MINMAXINFO, PostQuitMessage, SetCursor, WM_DESTROY, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_NCCREATE, WM_PAINT,
+    WM_SETCURSOR, WM_TIMER,
 };
-use windows::core::{Error, PCWSTR, w};
+use windows::core::{PCWSTR, w};
 
-use crate::platform::view::{ViewState, get_view_state};
 use crate::nodeid::NodeId;
+use crate::platform::view::get_view_state;
 
 /// The main class of all windows on windows_os in rosin
 pub(crate) const ROSIN_CLASS: PCWSTR = w!("RosinGUI Windows Class");
@@ -58,20 +59,20 @@ pub(crate) unsafe extern "system" fn proc(hwnd: HWND, msg: u32, w_param: WPARAM,
 
     match msg {
         WM_PAINT => {
+            let view_state = unsafe { get_view_state(hwnd) };
             let mut paint_struct = PAINTSTRUCT::default();
 
-            let hdc = unsafe {
+            unsafe {
                 // SAFETY: all given inputs point to valid data
-                BeginPaint(hwnd, &raw mut paint_struct)
+                let _ = BeginPaint(hwnd, &raw mut paint_struct);
             };
 
-            let result = if let Some(state) = view_state {
-                unsafe {
-                    // SAFETY: all given inputs point to valid data
-                    paint(hwnd, hdc, paint_struct, state)
+            if let Some(mut ptr) = view_state {
+                let vs = unsafe { ptr.as_mut() };
+                let handle = vs.handle.clone();
+                if let Some(handle) = handle {
+                    vs.viewport.render(&handle);
                 }
-            } else {
-                Ok(())
             };
 
             unsafe {
@@ -79,10 +80,7 @@ pub(crate) unsafe extern "system" fn proc(hwnd: HWND, msg: u32, w_param: WPARAM,
                 let _ = EndPaint(hwnd, &raw mut paint_struct);
             }
 
-            match result {
-                Ok(()) => OK,
-                Err(_) => LRESULT(-1),
-            }
+            OK
         }
         #[cfg(false)]
         WM_SIZE => {
@@ -149,7 +147,7 @@ pub(crate) unsafe extern "system" fn proc(hwnd: HWND, msg: u32, w_param: WPARAM,
         WM_SETCURSOR => {
             unsafe {
                 if (l_param.0 & 0xFFFF) as u32 == HTCLIENT {
-                    let curr = CURSOR.with(|c|{c.get()});
+                    let curr = CURSOR.with(|c| c.get());
                     if let Some(cursor) = curr {
                         let _ = SetCursor(Some(cursor));
                         return LRESULT(1);
@@ -161,10 +159,12 @@ pub(crate) unsafe extern "system" fn proc(hwnd: HWND, msg: u32, w_param: WPARAM,
         }
         WM_TIMER => unsafe {
             let _ = KillTimer(Some(hwnd), w_param.0);
-            let node = TIMERS.with(|cell|{cell.borrow_mut().remove(&w_param.0)});
-            if let Some(nodeid) = node {println!("todo: return an On::Timer to the node id {nodeid:?}")}
+            let node = TIMERS.with(|cell| cell.borrow_mut().remove(&w_param.0));
+            if let Some(nodeid) = node {
+                println!("todo: return an On::Timer to the node id {nodeid:?}")
+            }
             return OK;
-        }
+        },
         WM_DESTROY => {
             unsafe {
                 // SAFETY: the window is getting distroyed here
@@ -173,33 +173,11 @@ pub(crate) unsafe extern "system" fn proc(hwnd: HWND, msg: u32, w_param: WPARAM,
                 return OK;
             }
         }
+        WM_ERASEBKGND => LRESULT(1),
         _ => unsafe {
             // SAFETY: parameters are given as is => they are all valid
             DefWindowProcW(hwnd, msg, w_param, l_param)
         },
-    }
-}
-
-/// Ment to run when paining a portion of a window (usually on a WM_PAINT message)
-///
-/// SAFETY:
-///  - `hwnd` must be a valid handle
-///  - `hdc` must be from the `hwnd` handle
-///  - `paint_struct` must be from the `hwnd` handle
-///  - `state` must point to the memory addres of the `hwnd`s state
-///  - `state` must be initialized
-unsafe fn paint(hwnd: HWND, hdc: HDC, mut paint_struct: PAINTSTRUCT, mut state: NonNull<ViewState>) -> Result<(), Error> {
-    unsafe {
-        debug_assert!(!hwnd.is_invalid(), "`hwnd` at this point should be a valid window handle");
-
-        let _ = FillRect(hdc, &raw mut paint_struct.rcPaint, HBRUSH(COLOR_WINDOW.0 as *mut _));
-
-        // SAFETY:
-        //  - `as_mut`: state is a valid ViewState
-        //  - `init_graphics`: hwnd is a valid handle
-        state.as_mut().init_graphics(hwnd)?;
-
-        Ok(())
     }
 }
 

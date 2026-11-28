@@ -9,7 +9,7 @@
 //
 // This does not mean I can guarantee safety though, so I personally do not think this deserves to be
 // within a stable version of eather Rosin nor Sailbrush, in my opinion at least.
-// 
+//
 // Why am I not implementing my own safety system? Because I'd a lil scared of it being slow + it's
 // easyer to do it this wai for the meantime. I tried making an abstraction that is similar to how
 // it's done on the MacOs port tho + should be easely changable to a custom made thread safety system
@@ -30,3 +30,4 @@ pub mod handle;
 
 mod proc_fn;
 mod view;
+mod viewport;
